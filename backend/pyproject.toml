@@ -34,7 +34,6 @@ dev = [
     "ruff==0.1.8",
     "isort==5.13.2",
     "mypy==1.7.1",
-    "types-python-dotenv",
 ]
 
 test = [
@@ -42,6 +41,7 @@ test = [
     "pytest-asyncio==0.21.1",
     "pytest-cov==4.1.0",
     "freezegun==1.4.0",
+    "aiosqlite==0.20.0",
 ]
 
 [tool.black]

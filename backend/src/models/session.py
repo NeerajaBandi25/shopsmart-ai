@@ -4,7 +4,6 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
-    INET,
     Boolean,
     DateTime,
     ForeignKey,
@@ -12,6 +11,7 @@ from sqlalchemy import (
     String,
     func,
 )
+from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import BaseModel
@@ -33,7 +33,7 @@ class Session(BaseModel):
         server_default=func.now(),
     )
     ip_address: Mapped[str] = mapped_column(
-        INET,
+        INET().with_variant(String(45), "sqlite"),
         nullable=False,
     )
     user_agent: Mapped[str] = mapped_column(

@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.api.v1 import auth_routes
 from src.core.config import settings
 from src.core.exceptions import AppException
 from src.database import close_db, init_db
@@ -84,6 +85,10 @@ async def readiness_check():
     """Readiness check endpoint."""
     # TODO: Check database connectivity
     return {"status": "ready"}
+
+
+# Include API routes
+app.include_router(auth_routes.router, prefix="/api/v1")
 
 
 if __name__ == "__main__":

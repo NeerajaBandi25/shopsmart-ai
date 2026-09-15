@@ -145,24 +145,24 @@
 
 **Unit Tests: `backend/tests/unit/test_auth_service.py`**
 
-- [ ] T028 [P] [US1] Test registration validation: email format validation per RFC 5322, reject invalid formats
-- [ ] T029 [P] [US1] Test password strength enforcement: minimum 8 characters, require uppercase, lowercase, digit, special character; reject weak passwords
-- [ ] T030 [P] [US1] Test duplicate email prevention: second registration with same email returns ConflictError (409)
-- [ ] T031 [P] [US1] Test password hashing: registered password is hashed with bcrypt, never stored plaintext; `verify_password()` returns True for correct password, False for incorrect
+- [x] T028 [P] [US1] Test registration validation: email format validation per RFC 5322, reject invalid formats
+- [x] T029 [P] [US1] Test password strength enforcement: minimum 8 characters, require uppercase, lowercase, digit, special character; reject weak passwords
+- [x] T030 [P] [US1] Test duplicate email prevention: second registration with same email returns ConflictError (409)
+- [x] T031 [P] [US1] Test password hashing: registered password is hashed with bcrypt, never stored plaintext; `verify_password()` returns True for correct password, False for incorrect
 
 **Integration Tests: `backend/tests/integration/test_auth_endpoints.py`**
 
-- [ ] T032 [P] [US1] Test registration endpoint: POST /api/v1/auth/register with valid email/password returns 201 with user_id, email, created_at; User record exists in database; frontend displays "Account created successfully — please log in" and redirects to /auth/login
-- [ ] T033 [P] [US1] Test registration error cases: invalid email returns 400, weak password returns 400, duplicate email returns 409, validation errors include error_code field
-- [ ] T034 [P] [US1] Test immediate login after registration: registered user can log in with provided credentials and receive session
+- [x] T032 [P] [US1] Test registration endpoint: POST /api/v1/auth/register with valid email/password returns 201 with user_id, email, created_at; User record exists in database; frontend displays "Account created successfully — please log in" and redirects to /auth/login
+- [x] T033 [P] [US1] Test registration error cases: invalid email returns 400, weak password returns 400, duplicate email returns 409, validation errors include error_code field
+- [x] T034 [P] [US1] Test immediate login after registration: registered user can log in with provided credentials and receive session
 
 **Contract Tests: `backend/tests/contract/test_auth_api.py`**
 
-- [ ] T035 [P] [US1] Verify registration endpoint contract per contracts/auth-api.md: POST /api/v1/auth/register accepts {email, password}, returns {user_id, email, created_at} or error envelope
+- [x] T035 [P] [US1] Verify registration endpoint contract per contracts/auth-api.md: POST /api/v1/auth/register accepts {email, password}, returns {user_id, email, created_at} or error envelope
 
 ### Implementation for User Story 1
 
-- [ ] T036 Create User registration service: `backend/src/services/auth_service.py`
+- [x] T036 Create User registration service: `backend/src/services/auth_service.py`
   - Method `register_user(email: str, password: str) -> dict`
   - Validates email format (RFC 5322 compliant), password strength (≥8 chars, uppercase, lowercase, digit, special char)
   - Checks for duplicate email (email uniqueness)
@@ -170,25 +170,25 @@
   - Returns user_id, email, created_at
   - Raises ValidationError (400), ConflictError (409)
   - Per FR-001, FR-002, FR-003, FR-004
-- [ ] T037 Create registration endpoint: `backend/src/api/v1/auth_routes.py`
+- [x] T037 Create registration endpoint: `backend/src/api/v1/auth_routes.py`
   - `POST /api/v1/auth/register` → { email, password } → { user_id, email, created_at } (201) or error (400/409)
   - Input validation via Pydantic models
   - HTTPS required (enforced at deployment)
   - Per FR-001, FR-002, FR-003, FR-004
-- [ ] T038 [P] Create registration form component: `frontend/src/components/registration-form.tsx`
+- [x] T038 [P] Create registration form component: `frontend/src/components/registration-form.tsx`
   - Email input (with validation display)
   - Password input (with strength indicator per FR-003: ≥8 chars, uppercase, lowercase, digit, special char)
   - Submit button, error/success messages
   - Client-side validation matches backend (email format, password strength)
-- [ ] T039 [P] Create registration page: `frontend/src/app/auth/register/page.tsx`
+- [x] T039 [P] Create registration page: `frontend/src/app/auth/register/page.tsx`
   - Route: /auth/register (public, no auth required)
   - Renders RegistrationForm component
   - On success: Navigate to /auth/login with message "Account created successfully"
-- [ ] T040 [P] Create API client for registration: `frontend/src/lib/api-client.ts`
+- [x] T040 [P] Create API client for registration: `frontend/src/lib/api-client.ts`
   - Function `register(email: string, password: string)` calls POST /api/v1/auth/register
   - Handles errors, returns response or throws
   - Per Correction #4: Use credentials: 'include' for cross-site cookie handling
-- [ ] T041 Add logging for registration: `backend/src/services/auth_service.py`
+- [x] T041 Add logging for registration: `backend/src/services/auth_service.py`
   - Log registration attempts (success/failure) with email (not password), timestamp
   - Log validation errors (weak password, invalid email, duplicate email)
 
