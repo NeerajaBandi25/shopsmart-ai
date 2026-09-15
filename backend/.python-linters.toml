@@ -1,0 +1,45 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "N", "W", "UP", "B", "C90", "ISC", "PIE"]
+ignore = ["E501"]  # line too long (handled by black)
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "dist",
+    "build",
+    "*.egg-info"
+]
+
+[tool.ruff.isort]
+profile = "black"
+line-length = 100
+known-first-party = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\.pyi?$'
+exclude = '''
+/(
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | build
+  | dist
+  | __pycache__
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line-length = 100
+multi_line_mode = 3
+include_trailing_comma = true
+known_first_party = ["src"]
