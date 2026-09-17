@@ -5,7 +5,7 @@ tools:
     input_schema: read_file_input.yaml
     output_schema: read_file_output.yaml
     resource_scope:
-      allow: ["backend/**", "frontend/**", "specs/**", "**/*.md", "**/*.txt", "**/*.yaml", "**/*.yml"]
+      allow: ["backend/**", "frontend/**", "specs/**", ".harness/lib/**", ".harness/hooks/**", ".harness/tests/**", ".claude/**", "**/*.md", "**/*.txt", "**/*.yaml", "**/*.yml"]
       deny: [".harness/policies/trusted/**", ".harness/state/**", ".git/**"]
     timeout_ms: 5000
     retry_policy:
@@ -23,7 +23,7 @@ tools:
     input_schema: search_files_input.yaml
     output_schema: search_files_output.yaml
     resource_scope:
-      allow: ["backend/**", "frontend/**", "specs/**", "**/*.md", "**/*.txt", "**/*.yaml", "**/*.yml"]
+      allow: ["backend/**", "frontend/**", "specs/**", ".harness/lib/**", ".harness/hooks/**", ".harness/tests/**", ".claude/**", "**/*.md", "**/*.txt", "**/*.yaml", "**/*.yml"]
       deny: [".harness/policies/trusted/**", ".harness/state/**", ".git/**"]
     timeout_ms: 10000
     retry_policy:
