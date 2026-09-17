@@ -1,0 +1,2 @@
+.harness/policies/trusted/
+CLAUDE.md

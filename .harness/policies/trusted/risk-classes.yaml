@@ -1,0 +1,24 @@
+risk_classes:
+  READ_ONLY:
+    description: "Actions that only read data with no side effects"
+    examples: ["read_file", "list_directory", "search_files", "git_diff"]
+    side_effects: "none"
+    persistence: "none"
+  
+  DRAFT:
+    description: "Actions that create temporary or discardable state"
+    examples: ["create_temp_file", "run_test_in_memory", "compile_code"]
+    side_effects: "temporary state only"
+    persistence: "none (state discarded after action)"
+  
+  WRITE:
+    description: "Actions that persistently modify protected resources"
+    examples: ["edit_file", "apply_patch", "create_file", "git_commit", "database_update"]
+    side_effects: "persistent resource modification"
+    persistence: "yes (changes survive action completion)"
+  
+  DESTRUCTIVE:
+    description: "Actions that permanently remove protected resources"
+    examples: ["delete_file", "git_reset_hard", "database_record_delete", "resource_purge"]
+    side_effects: "permanent resource removal"
+    persistence: "yes (irreversible changes)"

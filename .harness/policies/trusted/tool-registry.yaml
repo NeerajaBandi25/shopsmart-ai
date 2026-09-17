@@ -1,0 +1,73 @@
+tools:
+  read_file:
+    risk_class: READ_ONLY
+    operation_type: READ
+    input_schema: read_file_input.yaml
+    output_schema: read_file_output.yaml
+    resource_scope:
+      allow: ["backend/**", "frontend/**", "specs/**", "**/*.md", "**/*.txt", "**/*.yaml", "**/*.yml"]
+      deny: [".harness/policies/trusted/**", ".harness/state/**", ".git/**"]
+    timeout_ms: 5000
+    retry_policy:
+      max_attempts: 1
+      backoff_strategy: "linear"
+      jitter: false
+    audit_policy:
+      log_input: true
+      log_output: false
+      redact_patterns: []
+
+  search_files:
+    risk_class: READ_ONLY
+    operation_type: READ
+    input_schema: search_files_input.yaml
+    output_schema: search_files_output.yaml
+    resource_scope:
+      allow: ["backend/**", "frontend/**", "specs/**", "**/*.md", "**/*.txt", "**/*.yaml", "**/*.yml"]
+      deny: [".harness/policies/trusted/**", ".harness/state/**", ".git/**"]
+    timeout_ms: 10000
+    retry_policy:
+      max_attempts: 3
+      backoff_strategy: "exponential"
+      jitter: true
+    audit_policy:
+      log_input: true
+      log_output: false
+      redact_patterns: []
+
+  apply_patch:
+    risk_class: WRITE
+    operation_type: WRITE
+    input_schema: apply_patch_input.yaml
+    output_schema: apply_patch_output.yaml
+    resource_scope:
+      allow: ["backend/**", "frontend/**", "specs/**"]
+      deny: [".harness/policies/trusted/**", ".harness/state/**", ".git/**", "backend/src/main.py", "frontend/src/lib/api-client.ts"]
+    timeout_ms: 30000
+    retry_policy:
+      max_attempts: 1
+      backoff_strategy: "linear"
+      jitter: false
+    audit_policy:
+      log_input: true
+      log_output: true
+      redact_patterns: ["password", "secret", "key", "token"]
+
+  run_test:
+    risk_class: DRAFT
+    operation_type: EXECUTE
+    input_schema: run_test_input.yaml
+    output_schema: run_test_output.yaml
+    resource_scope:
+      allow: ["backend/tests/**", "frontend/tests/**", "specs/**", "tmp/**"]
+      deny: ["src/**", "frontend/src/**", ".harness/**", ".git/**"]
+    timeout_ms: 60000
+    retry_policy:
+      max_attempts: 1
+      backoff_strategy: "exponential"
+      jitter: true
+    audit_policy:
+      log_input: true
+      log_output: true
+      redact_patterns: ["password", "secret"]
+    # REQUIRES PHASE 1 VERIFICATION EXECUTOR AND COMMAND ALLOWLIST - NOT EXECUTABLE YET
