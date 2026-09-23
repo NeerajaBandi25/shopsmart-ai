@@ -40,8 +40,15 @@ def event_loop() -> Generator:
 
 
 @pytest_asyncio.fixture
-async def test_db() -> AsyncGenerator[AsyncSession, None]:
-    """Create test database session."""
+async def test_engine():
+    """Create test engine (SQLite in-memory).
+
+    NOTE: SQLite is used here for fast unit-level coverage only. It is
+    explicitly NOT proof of PostgreSQL transaction/locking behavior
+    (FOR UPDATE, READ COMMITTED, cross-session visibility). PG-backed
+    integration tests in tests/integration/test_transaction_persistence.py
+    provide that proof with independent sessions per request.
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         echo=False,
@@ -52,17 +59,34 @@ async def test_db() -> AsyncGenerator[AsyncSession, None]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    async_session = sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-
-    async with async_session() as session:
-        yield session
+    yield engine
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def test_db(test_engine) -> AsyncGenerator[AsyncSession, None]:
+    """Create test database session (primary request session)."""
+    async_session = sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with async_session() as session:
+        yield session
+
+
+@pytest_asyncio.fixture
+async def fresh_test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
+    """Yield a fresh, independent DB session for verification reads.
+
+    This is a NEW AsyncSession from the same engine — not the shared
+    ``test_db`` object — so data is only visible here if the service
+    actually committed it (catches missing-commit regressions).
+    """
+    async_session = sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        yield session
 
 
 @pytest.fixture

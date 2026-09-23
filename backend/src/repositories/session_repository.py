@@ -24,6 +24,7 @@ class SessionRepository:
         user_id: UUID,
         ip_address: str,
         user_agent: str,
+        csrf_token: str,
     ) -> Session:
         """Create new session.
 
@@ -31,6 +32,7 @@ class SessionRepository:
             user_id: User ID
             ip_address: Client IP address
             user_agent: Client user agent
+            csrf_token: DB-backed CSRF token for this session
 
         Returns:
             Session: Created session object
@@ -40,6 +42,7 @@ class SessionRepository:
             ip_address=ip_address,
             user_agent=user_agent,
             is_active=True,
+            csrf_token=csrf_token,
         )
         self.db.add(session)
         await self.db.flush()

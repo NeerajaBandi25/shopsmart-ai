@@ -19,6 +19,9 @@ export default function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const router = useRouter();
 
   // Profile loading
@@ -50,27 +53,34 @@ export default function AccountPage() {
     setPasswordChangeLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const currentPassword = formData.get('currentPassword') as string;
-    const newPassword = formData.get('newPassword') as string;
-    const confirmPassword = formData.get('confirmPassword') as string;
+    // Controlled state is the source of truth (inputs also carry `name`
+    // attributes so FormData works); fall back to FormData if needed.
+    const currentPasswordValue =
+      currentPassword || (formData.get('currentPassword') as string);
+    const newPasswordValue = newPassword || (formData.get('newPassword') as string);
+    const confirmPasswordValue =
+      confirmPassword || (formData.get('confirmPassword') as string);
+    const currentPasswordLocal = currentPasswordValue;
+    const newPasswordLocal = newPasswordValue;
+    const confirmPasswordLocal = confirmPasswordValue;
 
     // Client-side validation
-    if (!currentPassword) {
+    if (!currentPasswordLocal) {
       setError('Current password is required');
       setPasswordChangeLoading(false);
       return;
     }
-    if (!newPassword) {
+    if (!newPasswordLocal) {
       setError('New password is required');
       setPasswordChangeLoading(false);
       return;
     }
-    if (newPassword.length < 8) {
+    if (newPasswordLocal.length < 8) {
       setError('New password must be at least 8 characters');
       setPasswordChangeLoading(false);
       return;
     }
-    if (newPassword !== confirmPassword) {
+    if (newPasswordLocal !== confirmPasswordLocal) {
       setError('New passwords do not match');
       setPasswordChangeLoading(false);
       return;
@@ -78,11 +88,14 @@ export default function AccountPage() {
 
     try {
       // Call the password change API
-      await changePassword(currentPassword, newPassword);
+      await changePassword(currentPasswordLocal, newPasswordLocal);
 
       // Success: show success message, then logout
       setSuccess('Password changed successfully. You will be logged out.');
       e.currentTarget.reset();
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
 
       // Logout after a short delay to let the user see the message
       setTimeout(async () => {
@@ -167,12 +180,13 @@ export default function AccountPage() {
             {/* Current Password */}
             <Input
               label="Current Password"
-              value=""
-              onChange={() => {}} // handled via formdata
+              value={currentPassword}
+              onChange={setCurrentPassword}
               error={error ? 'Current password is required' : undefined}
               inputProps={{
                 type: 'password',
                 id: 'currentPassword',
+                name: 'currentPassword',
                 autoComplete: 'current-password',
                 required: true,
               }}
@@ -181,8 +195,8 @@ export default function AccountPage() {
             {/* New Password */}
             <Input
               label="New Password"
-              value=""
-              onChange={() => {}} // handled via formdata
+              value={newPassword}
+              onChange={setNewPassword}
               error={
                 error &&
                 (error.includes('New password') || error.includes('Passwords do not match'))
@@ -192,6 +206,7 @@ export default function AccountPage() {
               inputProps={{
                 type: 'password',
                 id: 'newPassword',
+                name: 'newPassword',
                 autoComplete: 'new-password',
                 required: true,
                 minLength: 8,
@@ -201,8 +216,8 @@ export default function AccountPage() {
             {/* Confirm New Password */}
             <Input
               label="Confirm New Password"
-              value=""
-              onChange={() => {}} // handled via formdata
+              value={confirmPassword}
+              onChange={setConfirmPassword}
               error={
                 error && error.includes('Passwords do not match')
                   ? error
@@ -211,6 +226,7 @@ export default function AccountPage() {
               inputProps={{
                 type: 'password',
                 id: 'confirmPassword',
+                name: 'confirmPassword',
                 autoComplete: 'new-password',
                 required: true,
               }}
