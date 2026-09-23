@@ -12,18 +12,14 @@ interface LogoutButtonProps {
 export function LogoutButton({ onSuccess, className }: LogoutButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
   const handleClick = async () => {
-    setError('');
     setLoading(true);
 
     try {
       await logout();
       onSuccess?.();
       router.push('/auth/login');
-    } catch (err: any) {
-      setError(err.message || 'Logout failed');
+    } catch (err) {
       console.error('Logout error:', err);
     } finally {
       setLoading(false);

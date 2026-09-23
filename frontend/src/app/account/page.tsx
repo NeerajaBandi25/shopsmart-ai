@@ -29,8 +29,8 @@ export default function AccountPage() {
         const data = await getProfile();
         setProfile(data);
         setError(null);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load profile');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load profile');
         router.push('/auth/login');
       } finally {
         setLoading(false);
@@ -93,8 +93,12 @@ export default function AccountPage() {
         }
         router.push('/auth/login');
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'An error occurred. Please try again.');
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'An error occurred. Please try again.'
+      );
     } finally {
       setPasswordChangeLoading(false);
     }
@@ -164,7 +168,7 @@ export default function AccountPage() {
             <Input
               label="Current Password"
               value=""
-              onChange={(e) => {}} // handled via formdata
+              onChange={() => {}} // handled via formdata
               error={error ? 'Current password is required' : undefined}
               inputProps={{
                 type: 'password',
@@ -178,7 +182,7 @@ export default function AccountPage() {
             <Input
               label="New Password"
               value=""
-              onChange={(e) => {}} // handled via formdata
+              onChange={() => {}} // handled via formdata
               error={
                 error &&
                 (error.includes('New password') || error.includes('Passwords do not match'))
@@ -198,7 +202,7 @@ export default function AccountPage() {
             <Input
               label="Confirm New Password"
               value=""
-              onChange={(e) => {}} // handled via formdata
+              onChange={() => {}} // handled via formdata
               error={
                 error && error.includes('Passwords do not match')
                   ? error

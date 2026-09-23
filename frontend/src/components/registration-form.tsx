@@ -76,8 +76,8 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     }
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/auth/register`,
+      // Same-origin call — proxied to the backend by next.config.mjs.
+      const response = await fetch('/api/v1/auth/register',
         {
           method: 'POST',
           headers: {
@@ -106,8 +106,23 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     }
   };
 
+  // Premium field styling applied through the existing Input component's
+  // extension points (className wrapper + inputProps classes). ui/Input.tsx
+  // itself remains frozen.
+  const fieldClassName = 'premium-field';
+  const fieldInputClasses =
+    'border-ink-100! bg-white! rounded-tile! shadow-tile! focus:ring-accent-500! focus-visible:ring-accent-500! transition-shadow!';
+
+  const strengthItems = [
+    { ok: passwordStrength.length, label: 'At least 8 characters' },
+    { ok: passwordStrength.uppercase, label: 'Uppercase letter' },
+    { ok: passwordStrength.lowercase, label: 'Lowercase letter' },
+    { ok: passwordStrength.digit, label: 'Number' },
+    { ok: passwordStrength.special, label: 'Special character' },
+  ];
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-md">
+    <form onSubmit={handleSubmit} className="space-y-5 w-full max-w-md">
       {/* Global messages */}
       {error && (
         <Alert variant="error" message={error} />
@@ -116,16 +131,18 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
         <Alert variant="success" message={success} />
       )}
 
-      {/* Email input */}
+      {/* Email input — real errors are shown in the Alert above; do not
+          stamp misleading per-field messages for server-side errors. */}
       <Input
         label="Email"
         value={email}
         onChange={setEmail}
-        error={error ? 'Invalid email' : undefined}
+        className={fieldClassName}
         inputProps={{
           type: 'email',
           autoComplete: 'email',
           placeholder: 'you@example.com',
+          className: fieldInputClasses,
         }}
         inputRef={emailRef}
       />
@@ -138,51 +155,31 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
           setPassword(value);
           validatePasswordStrength(value);
         }}
-        error={error ? 'Invalid password' : undefined}
+        className={fieldClassName}
         inputProps={{
           type: 'password',
           autoComplete: 'new-password',
           placeholder: 'Enter strong password',
+          className: fieldInputClasses,
         }}
       />
 
       {/* Password strength indicator */}
-      <div className="mt-2 text-sm space-y-1">
-        <div
-          className={`flex items-center ${
-            passwordStrength.length ? 'text-green-600' : 'text-gray-400'
-          }`}
-        >
-          {passwordStrength.length ? '✓' : '○'} At least 8 characters
-        </div>
-        <div
-          className={`flex items-center ${
-            passwordStrength.uppercase ? 'text-green-600' : 'text-gray-400'
-          }`}
-        >
-          {passwordStrength.uppercase ? '✓' : '○'} Uppercase letter
-        </div>
-        <div
-          className={`flex items-center ${
-            passwordStrength.lowercase ? 'text-green-600' : 'text-gray-400'
-          }`}
-        >
-          {passwordStrength.lowercase ? '✓' : '○'} Lowercase letter
-        </div>
-        <div
-          className={`flex items-center ${
-            passwordStrength.digit ? 'text-green-600' : 'text-gray-400'
-          }`}
-        >
-          {passwordStrength.digit ? '✓' : '○'} Number
-        </div>
-        <div
-          className={`flex items-center ${
-            passwordStrength.special ? 'text-green-600' : 'text-gray-400'
-          }`}
-        >
-          {passwordStrength.special ? '✓' : '○'} Special character
-        </div>
+      <div
+        className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-sm"
+        aria-label="Password requirements"
+      >
+        {strengthItems.map((item) => (
+          <div
+            key={item.label}
+            className={`flex items-center gap-2 transition-colors duration-200 ${
+              item.ok ? 'text-status-success' : 'text-ink-300'
+            }`}
+          >
+            <span aria-hidden="true">{item.ok ? '✓' : '○'}</span>
+            {item.label}
+          </div>
+        ))}
       </div>
 
       {/* Confirm password input */}
@@ -191,10 +188,12 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
         value={confirmPassword}
         onChange={setConfirmPassword}
         error={error ? 'Passwords do not match' : undefined}
+        className={fieldClassName}
         inputProps={{
           type: 'password',
           autoComplete: 'new-password',
           placeholder: 'Confirm password',
+          className: fieldInputClasses,
         }}
       />
 
@@ -202,7 +201,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
       <Button
         variant="primary"
         size="md"
-        className="w-full"
+        className="w-full bg-accent-600! hover:bg-accent-700! focus-visible:ring-accent-500! focus-visible:ring-offset-2! rounded-tile! py-3!"
         disabled={loading || !isPasswordStrong}
         onClick={handleSubmit}
       >
@@ -210,9 +209,9 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
       </Button>
 
       {/* Link to login */}
-      <p className="text-sm text-gray-600 text-center">
+      <p className="text-sm text-ink-500 text-center">
         Already have an account?{' '}
-        <a href="/auth/login" className="text-blue-600 hover:text-blue-700">
+        <a href="/auth/login" className="font-medium text-accent-600 hover:text-accent-700">
           Log in
         </a>
       </p>
