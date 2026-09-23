@@ -3,7 +3,6 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    INET,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -11,6 +10,7 @@ from sqlalchemy import (
     String,
     func,
 )
+from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import BaseModel
@@ -26,7 +26,7 @@ class LoginAttempt(BaseModel):
         nullable=False,
     )
     ip_address: Mapped[str] = mapped_column(
-        INET,
+        INET().with_variant(String(45), "sqlite"),
         nullable=False,
     )
     attempted_at: Mapped[datetime] = mapped_column(

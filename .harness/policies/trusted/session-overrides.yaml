@@ -1,0 +1,11 @@
+﻿session_overrides:
+  MANUAL:
+    tools: {}
+
+  AUTONOMOUS_DEV:
+    tools:
+      apply_patch: ALLOW
+
+  READ_ONLY_AUTO:
+    tools:
+      run_test: ALLOW

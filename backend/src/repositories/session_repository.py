@@ -54,8 +54,14 @@ class SessionRepository:
         Returns:
             Session | None: Session object or None if not found
         """
+        from uuid import UUID
+        try:
+            session_uuid = UUID(session_id)
+        except ValueError:
+            return None
+
         result = await self.db.execute(
-            select(Session).where(Session.id == session_id)
+            select(Session).where(Session.id == session_uuid)
         )
         return result.scalar_one_or_none()
 
@@ -68,8 +74,14 @@ class SessionRepository:
         Returns:
             bool: True if updated, False if not found
         """
+        from uuid import UUID
+        try:
+            session_uuid = UUID(session_id)
+        except ValueError:
+            return False
+
         result = await self.db.execute(
-            select(Session).where(Session.id == session_id)
+            select(Session).where(Session.id == session_uuid)
         )
         session = result.scalar_one_or_none()
 
@@ -90,8 +102,14 @@ class SessionRepository:
         Returns:
             bool: True if invalidated, False if not found
         """
+        from uuid import UUID
+        try:
+            session_uuid = UUID(session_id)
+        except ValueError:
+            return False
+
         result = await self.db.execute(
-            select(Session).where(Session.id == session_id)
+            select(Session).where(Session.id == session_uuid)
         )
         session = result.scalar_one_or_none()
 

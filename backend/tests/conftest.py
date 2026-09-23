@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 from src.models.base import Base
 from src.models.user import User
 from src.models.session import Session
+from src.models.login_attempt import LoginAttempt
 
 
 @event.listens_for(Base.metadata, "before_create")
@@ -109,7 +110,7 @@ async def test_client(test_db: AsyncSession) -> AsyncGenerator[AsyncClient, None
     app.router.lifespan_context = test_lifespan
 
     try:
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(app=app, base_url="https://test") as client:
             yield client
     finally:
         app.dependency_overrides.clear()

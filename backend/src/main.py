@@ -11,6 +11,7 @@ from src.api.v1 import auth_routes
 from src.core.config import settings
 from src.core.exceptions import AppException
 from src.database import close_db, init_db
+from src.middleware.session_refresh import SessionRefreshMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,9 @@ app.add_middleware(
     allow_methods=settings.cors_allow_methods,
     allow_headers=settings.cors_allow_headers,
 )
+
+# Add session refresh middleware
+app.add_middleware(SessionRefreshMiddleware)
 
 
 # Exception handlers

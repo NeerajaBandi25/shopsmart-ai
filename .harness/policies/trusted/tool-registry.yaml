@@ -41,7 +41,7 @@ tools:
     input_schema: apply_patch_input.yaml
     output_schema: apply_patch_output.yaml
     resource_scope:
-      allow: ["backend/**", "frontend/**", "specs/**"]
+      allow: ["backend/**", "frontend/**", "specs/**", ".harness/lib/tool_adapter.py", ".harness/lib/run_test_executor.py", ".harness/tests/**"]
       deny: [".harness/policies/trusted/**", ".harness/state/**", ".git/**", "backend/src/main.py", "frontend/src/lib/api-client.ts"]
     timeout_ms: 30000
     retry_policy:

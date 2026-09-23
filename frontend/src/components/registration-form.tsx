@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { Alert } from '@/components/ui/Alert';
 
 interface RegistrationFormProps {
   onSuccess?: () => void;
@@ -27,6 +30,13 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     digit: false,
     special: false,
   });
+  const [success, setSuccess] = useState<string | null>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+
+  // Focus the email input on mount
+  useEffect(() => {
+    emailRef.current?.focus();
+  }, []);
 
   const validatePasswordStrength = (pwd: string) => {
     setPasswordStrength({
@@ -40,15 +50,10 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
 
   const isPasswordStrong = Object.values(passwordStrength).every(v => v);
 
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const pwd = e.target.value;
-    setPassword(pwd);
-    validatePasswordStrength(pwd);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess(null);
     setLoading(true);
 
     // Client-side validation
@@ -84,7 +89,11 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
 
       if (response.ok) {
         onSuccess?.();
-        router.push('/auth/login?message=Account%20created%20successfully%20—%20please%20log%20in');
+        // Show success message for 2 seconds, then redirect to login with success message
+        setSuccess('Account created successfully. Redirecting to login...');
+        setTimeout(() => {
+          router.push('/auth/login?message=Account%20created%20successfully');
+        }, 2000);
       } else {
         const errorData = await response.json();
         setError(errorData.detail || 'Registration failed');
@@ -99,105 +108,108 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-md">
+      {/* Global messages */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
+        <Alert variant="error" message={error} />
+      )}
+      {success && (
+        <Alert variant="success" message={success} />
       )}
 
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          required
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          placeholder="you@example.com"
-        />
-      </div>
+      {/* Email input */}
+      <Input
+        label="Email"
+        value={email}
+        onChange={setEmail}
+        error={error ? 'Invalid email' : undefined}
+        inputProps={{
+          type: 'email',
+          autoComplete: 'email',
+          placeholder: 'you@example.com',
+        }}
+        inputRef={emailRef}
+      />
 
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-          Password
-        </label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={handlePasswordChange}
-          required
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Enter strong password"
-        />
-        <div className="mt-2 text-sm space-y-1">
-          <div
-            className={`flex items-center ${
-              passwordStrength.length ? 'text-green-600' : 'text-gray-400'
-            }`}
-          >
-            {passwordStrength.length ? '✓' : '○'} At least 8 characters
-          </div>
-          <div
-            className={`flex items-center ${
-              passwordStrength.uppercase ? 'text-green-600' : 'text-gray-400'
-            }`}
-          >
-            {passwordStrength.uppercase ? '✓' : '○'} Uppercase letter
-          </div>
-          <div
-            className={`flex items-center ${
-              passwordStrength.lowercase ? 'text-green-600' : 'text-gray-400'
-            }`}
-          >
-            {passwordStrength.lowercase ? '✓' : '○'} Lowercase letter
-          </div>
-          <div
-            className={`flex items-center ${
-              passwordStrength.digit ? 'text-green-600' : 'text-gray-400'
-            }`}
-          >
-            {passwordStrength.digit ? '✓' : '○'} Number
-          </div>
-          <div
-            className={`flex items-center ${
-              passwordStrength.special ? 'text-green-600' : 'text-gray-400'
-            }`}
-          >
-            {passwordStrength.special ? '✓' : '○'} Special character
-          </div>
+      {/* Password input */}
+      <Input
+        label="Password"
+        value={password}
+        onChange={(value) => {
+          setPassword(value);
+          validatePasswordStrength(value);
+        }}
+        error={error ? 'Invalid password' : undefined}
+        inputProps={{
+          type: 'password',
+          autoComplete: 'new-password',
+          placeholder: 'Enter strong password',
+        }}
+      />
+
+      {/* Password strength indicator */}
+      <div className="mt-2 text-sm space-y-1">
+        <div
+          className={`flex items-center ${
+            passwordStrength.length ? 'text-green-600' : 'text-gray-400'
+          }`}
+        >
+          {passwordStrength.length ? '✓' : '○'} At least 8 characters
+        </div>
+        <div
+          className={`flex items-center ${
+            passwordStrength.uppercase ? 'text-green-600' : 'text-gray-400'
+          }`}
+        >
+          {passwordStrength.uppercase ? '✓' : '○'} Uppercase letter
+        </div>
+        <div
+          className={`flex items-center ${
+            passwordStrength.lowercase ? 'text-green-600' : 'text-gray-400'
+          }`}
+        >
+          {passwordStrength.lowercase ? '✓' : '○'} Lowercase letter
+        </div>
+        <div
+          className={`flex items-center ${
+            passwordStrength.digit ? 'text-green-600' : 'text-gray-400'
+          }`}
+        >
+          {passwordStrength.digit ? '✓' : '○'} Number
+        </div>
+        <div
+          className={`flex items-center ${
+            passwordStrength.special ? 'text-green-600' : 'text-gray-400'
+          }`}
+        >
+          {passwordStrength.special ? '✓' : '○'} Special character
         </div>
       </div>
 
-      <div>
-        <label
-          htmlFor="confirmPassword"
-          className="block text-sm font-medium text-gray-700"
-        >
-          Confirm Password
-        </label>
-        <input
-          id="confirmPassword"
-          type="password"
-          value={confirmPassword}
-          onChange={e => setConfirmPassword(e.target.value)}
-          required
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Confirm password"
-        />
-      </div>
+      {/* Confirm password input */}
+      <Input
+        label="Confirm Password"
+        value={confirmPassword}
+        onChange={setConfirmPassword}
+        error={error ? 'Passwords do not match' : undefined}
+        inputProps={{
+          type: 'password',
+          autoComplete: 'new-password',
+          placeholder: 'Confirm password',
+        }}
+      />
 
-      <button
-        type="submit"
+      {/* Submit button */}
+      <Button
+        variant="primary"
+        size="md"
+        className="w-full"
         disabled={loading || !isPasswordStrong}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded transition"
+        onClick={handleSubmit}
       >
         {loading ? 'Creating account...' : 'Create Account'}
-      </button>
+      </Button>
 
+      {/* Link to login */}
       <p className="text-sm text-gray-600 text-center">
         Already have an account?{' '}
         <a href="/auth/login" className="text-blue-600 hover:text-blue-700">

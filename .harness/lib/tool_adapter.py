@@ -8,6 +8,7 @@ Security Invariants:
 4. No arbitrary command execution is permitted.
 """
 
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Set
 
@@ -22,6 +23,7 @@ class NormalizedInvocation:
 READ_LIKE_TOOLS: Set[str] = {"Read"}
 SEARCH_LIKE_TOOLS: Set[str] = {"Glob", "Grep"}
 WRITE_LIKE_TOOLS: Set[str] = {"Edit", "Write", "NotebookEdit"}
+TEST_LIKE_TOOLS: Set[str] = {"run_test"}
 
 
 def normalize_tool_invocation(
@@ -78,6 +80,69 @@ def normalize_tool_invocation(
         return NormalizedInvocation(
             harness_tool_name="apply_patch",
             invocation_input={"file_path": target_path.strip()},
+        )
+
+    # MCP run_test tool -> run_test
+    if clean_tool_name == "mcp__shopsmart__run_test":
+        test_target = tool_input.get("test_target")
+        if not isinstance(test_target, str) or not test_target.strip():
+            return None
+        # Validate test target - reject problematic paths
+        test_target_stripped = test_target.strip()
+        # Reject: non-string/empty targets (already checked above)
+        # Reject: absolute paths
+        if os.path.isabs(test_target_stripped):
+            return None
+        # Reject: traversal
+        if ".." in test_target_stripped or test_target_stripped.startswith("../") or "/.." in test_target_stripped:
+            return None
+        # Reject: .git
+        if ".git" in test_target_stripped.split("/") or ".git" in test_target_stripped.split("\\"):
+            return None
+        # Reject: .harness
+        if ".harness" in test_target_stripped.split("/") or ".harness" in test_target_stripped.split("\\"):
+            return None
+        # Note: The MCP tool should follow the same validation as the Claude run_test tool.
+        # We reject: backend/src/** and frontend/src/** (these are application source files, not test targets)
+        # We reject these because run_test should target test files, not source files directly
+        normalized_path = test_target_stripped.replace("\\", "/")  # Normalize for comparison
+        if normalized_path.startswith("backend/src/") or normalized_path.startswith("frontend/src/"):
+            return None
+
+        return NormalizedInvocation(
+            harness_tool_name="run_test",
+            invocation_input={"test_target": test_target_stripped},
+        )
+
+    # Claude run_test tool -> run_test
+    if clean_tool_name in TEST_LIKE_TOOLS:
+        test_target = tool_input.get("test_target") or tool_input.get("path") or tool_input.get("target")
+        if not isinstance(test_target, str) or not test_target.strip():
+            return None
+        # Validate test target - reject problematic paths
+        test_target_stripped = test_target.strip()
+        # Reject: non-string/empty targets (already checked above)
+        # Reject: absolute paths
+        if os.path.isabs(test_target_stripped):
+            return None
+        # Reject: traversal
+        if ".." in test_target_stripped or test_target_stripped.startswith("../") or "/.." in test_target_stripped:
+            return None
+        # Reject: .git
+        if ".git" in test_target_stripped.split("/") or ".git" in test_target_stripped.split("\\"):
+            return None
+        # Reject: .harness
+        if ".harness" in test_target_stripped.split("/") or ".harness" in test_target_stripped.split("\\"):
+            return None
+        # Reject: backend/src/** and frontend/src/** (these are application source files, not test targets)
+        # We reject these because run_test should target test files, not source files directly
+        normalized_path = test_target_stripped.replace("\\", "/")  # Normalize for comparison
+        if normalized_path.startswith("backend/src/") or normalized_path.startswith("frontend/src/"):
+            return None
+
+        return NormalizedInvocation(
+            harness_tool_name="run_test",
+            invocation_input={"test_target": test_target_stripped},
         )
 
     # Unsupported command execution tools (e.g. Bash), agent/workflow tools, or unknown tools -> None (DENY)

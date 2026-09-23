@@ -6,9 +6,11 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.core.config import settings
 from src.models.session import Session
+from src.models.user import User
 
 
 async def validate_session(
@@ -31,11 +33,10 @@ async def validate_session(
         dict with user_id and refresh_cookie flag if valid, None if expired/invalid
     """
     try:
-        # Fetch session from database
+        # Fetch session from database (NO FOR UPDATE for ordinary validation)
         result = await db_session.execute(
             select(Session)
             .where(Session.id == session_id)
-            .with_for_update()
         )
         session = result.scalar_one_or_none()
 
@@ -46,8 +47,11 @@ async def validate_session(
         if not session.is_active:
             return None
 
-        # Get user to verify it still exists
-        if not session.user:
+        # Verify that the user still exists by querying for the user
+        user_result = await db_session.execute(
+            select(User.id).where(User.id == session.user_id)
+        )
+        if not user_result.scalar_one_or_none():
             return None
 
         # Check inactivity timeout: NOW() - last_activity > 30 days
@@ -67,8 +71,17 @@ async def validate_session(
             "user_id": session.user_id,
             "refresh_cookie": True,  # Signal to refresh cookie in response
         }
-
+    except SQLAlchemyError:
+        # Rollback transaction on database errors to release any locks
+        await db_session.rollback()
+        # Log the error in a real application, but for now just return None
+        # to treat database errors as invalid sessions (secure fail-closed)
+        return None
     except Exception:
+        # Rollback transaction on unexpected errors to release any locks
+        await db_session.rollback()
+        # Unexpected errors - in a real app these would be logged and monitored
+        # For security, we fail closed but preserve the ability to diagnose
         return None
 
 

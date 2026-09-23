@@ -3,9 +3,11 @@
 import pytest
 from uuid import UUID
 
-from src.core.exceptions import ValidationError, ConflictError
+from src.core.exceptions import ValidationError, ConflictError, AuthenticationError, RateLimitError
 from src.services.auth_service import AuthService
 from src.repositories.user_repository import UserRepository
+from src.repositories.session_repository import SessionRepository
+from src.repositories.login_attempt_repository import LoginAttemptRepository
 
 
 @pytest.fixture
@@ -164,3 +166,344 @@ class TestPasswordHashing:
         from src.core.security import verify_password
 
         assert verify_password("WrongPassword456!", user.password_hash) is False
+
+
+# ============================================================================
+# User Story 2 Tests: Login (T042-T044)
+# ============================================================================
+
+
+class TestLoginValidation:
+    """T042: Test login validation."""
+
+    async def test_login_with_correct_credentials(
+        self, auth_service: AuthService, test_user_data_in_db: dict, test_db
+    ):
+        """Login with correct email and password should succeed."""
+        email = test_user_data_in_db["email"]
+        password = test_user_data_in_db["password"]
+
+        result = await auth_service.login_user(
+            email=email,
+            password=password,
+            ip_address="127.0.0.1",
+            user_agent="test-agent",
+        )
+
+        assert "session_id" in result
+        # Get the actual user ID from the database to compare
+        from src.repositories.user_repository import UserRepository
+        user_repo = UserRepository(db=test_db)
+        user = await user_repo.get_user_by_email(email)
+        assert result["user_id"] == str(user.id)
+        assert result["email"] == email
+
+    async def test_login_with_incorrect_password(
+        self, auth_service: AuthService, test_user_data_in_db: dict
+    ):
+        """Login with incorrect password should raise AuthenticationError (401)."""
+        email = test_user_data_in_db["email"]
+        wrong_password = "WrongPassword123!"
+
+        with pytest.raises(AuthenticationError) as exc_info:
+            await auth_service.login_user(
+                email=email,
+                password=wrong_password,
+                ip_address="127.0.0.1",
+                user_agent="test-agent",
+            )
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.error_code == "invalid_credentials"
+        # Should be generic message, not revealing whether email exists
+        assert exc_info.value.message == "Invalid email or password"
+
+    async def test_login_with_nonexistent_email(
+        self, auth_service: AuthService
+    ):
+        """Login with non-existent email should raise AuthenticationError (401)."""
+        email = "nonexistent@example.com"
+        password = "anyPassword123!"
+
+        with pytest.raises(AuthenticationError) as exc_info:
+            await auth_service.login_user(
+                email=email,
+                password=password,
+                ip_address="127.0.0.1",
+                user_agent="test-agent",
+            )
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.error_code == "invalid_credentials"
+        # Should be generic message, not revealing whether email exists
+        assert exc_info.value.message == "Invalid email or password"
+
+
+class TestSingleSessionEnforcement:
+    """T043: Test single-session enforcement."""
+
+    async def test_second_login_invalidates_previous_session(
+        self, auth_service: AuthService, test_user_data_in_db: dict, test_db
+    ):
+        """Second login from different device should invalidate previous session."""
+        from src.repositories.session_repository import SessionRepository
+
+        email = test_user_data_in_db["email"]
+        password = test_user_data_in_db["password"]
+
+        # First login
+        result1 = await auth_service.login_user(
+            email=email,
+            password=password,
+            ip_address="127.0.0.1",
+            user_agent="test-agent-1",
+        )
+        session1_id = result1["session_id"]
+
+        # Verify first session exists and is active
+        session_repo = SessionRepository(db=test_db)
+        session1 = await session_repo.get_session(session1_id)
+        assert session1 is not None
+        assert session1.is_active is True
+
+        # Second login (different device)
+        result2 = await auth_service.login_user(
+            email=email,
+            password=password,
+            ip_address="127.0.0.2",  # Different IP
+            user_agent="test-agent-2",
+        )
+        session2_id = result2["session_id"]
+
+        # Verify second session exists and is active
+        session2 = await session_repo.get_session(session2_id)
+        assert session2 is not None
+        assert session2.is_active is True
+        assert session2_id != session1_id
+
+        # Verify first session is now invalidated
+        session1_after = await session_repo.get_session(session1_id)
+        assert session1_after is not None
+        assert session1_after.is_active is False  # Should be invalidated
+
+    async def test_only_one_active_session_per_user(
+        self, auth_service: AuthService, test_user_data_in_db: dict, test_db
+    ):
+        """After multiple logins, only one active session should exist per user."""
+        from src.repositories.session_repository import SessionRepository
+
+        email = test_user_data_in_db["email"]
+        password = test_user_data_in_db["password"]
+
+        # Perform three logins
+        result1 = await auth_service.login_user(
+            email=email,
+            password=password,
+            ip_address="127.0.0.1",
+            user_agent="test-agent-1",
+        )
+        result2 = await auth_service.login_user(
+            email=email,
+            password=password,
+            ip_address="127.0.0.2",
+            user_agent="test-agent-2",
+        )
+        result3 = await auth_service.login_user(
+            email=email,
+            password=password,
+            ip_address="127.0.0.3",
+            user_agent="test-agent-3",
+        )
+
+        # Check all sessions exist
+        session_repo = SessionRepository(db=test_db)
+        session1 = await session_repo.get_session(result1["session_id"])
+        session2 = await session_repo.get_session(result2["session_id"])
+        session3 = await session_repo.get_session(result3["session_id"])
+
+        assert session1 is not None
+        assert session2 is not None
+        assert session3 is not None
+
+        # Only the most recent session should be active
+        assert session1.is_active is False
+        assert session2.is_active is False
+        assert session3.is_active is True
+
+
+class TestRateLimitingLogic:
+    """T044: Test rate limiting logic."""
+
+    async def test_five_failed_attempts_allowed(
+        self, auth_service: AuthService
+    ):
+        """Up to 5 failed login attempts from same IP should be allowed."""
+        email = "nonexistent@example.com"  # Use non-existent email to guarantee failure
+        password = "wrong123!"
+        ip_address = "192.168.1.100"
+
+        # Try 5 failed attempts - all should fail with AuthenticationError, not RateLimitError
+        for i in range(5):
+            with pytest.raises(AuthenticationError) as exc_info:
+                await auth_service.login_user(
+                    email=email,
+                    password=password,
+                    ip_address=ip_address,
+                    user_agent="test-agent",
+                )
+            assert exc_info.value.status_code == 401
+            assert exc_info.value.error_code == "invalid_credentials"
+
+    async def test_sixth_failed_attempt_rate_limited(
+        self, auth_service: AuthService
+    ):
+        """6th failed login attempt from same IP should raise RateLimitError (429)."""
+        email = "nonexistent@example.com"  # Use non-existent email to guarantee failure
+        password = "wrong123!"
+        ip_address = "192.168.1.100"
+
+        # Try 5 failed attempts first
+        for i in range(5):
+            with pytest.raises(AuthenticationError):
+                await auth_service.login_user(
+                    email=email,
+                    password=password,
+                    ip_address=ip_address,
+                    user_agent="test-agent",
+                )
+
+        # 6th attempt should be rate limited
+        with pytest.raises(RateLimitError) as exc_info:
+            await auth_service.login_user(
+                email=email,
+                password=password,
+                ip_address=ip_address,
+                user_agent="test-agent",
+            )
+        assert exc_info.value.status_code == 429
+        assert exc_info.value.error_code == "rate_limited"
+
+    async def test_rate_limit_resets_after_time_window(
+        self, test_db, monkeypatch
+    ):
+        """Test that rate limit resets after 15-minute window - patched both model and repo."""
+        # Import datetime for time manipulation
+        from unittest.mock import MagicMock
+        import datetime
+
+        # Test user credentials
+        email = "rate_limit_reset@example.com"
+        password = "wrong123!"
+        ip_address = "192.168.1.100"
+
+        # Fixed time for testing - set to a time in the past relative to real time
+        fixed_time = datetime.datetime(2020, 1, 1, 12, 0, 0)
+
+        # Create a mock datetime class with a utcnow method that returns our fixed time
+        class MockDatetimeClass:
+            @staticmethod
+            def utcnow():
+                return fixed_time
+
+            # Support for timedelta (needed by repository)
+            timedelta = datetime.timedelta
+
+        # Monkey patch BEFORE importing/creating anything that uses LoginAttempt
+        # Replace the imported datetime class in both modules
+        monkeypatch.setattr('src.models.login_attempt.datetime', MockDatetimeClass)
+        monkeypatch.setattr('src.repositories.login_attempt_repository.datetime', MockDatetimeClass)
+
+        # NOW create the auth service after patching
+        from src.services.auth_service import AuthService
+        auth_service = AuthService(db=test_db)
+
+        # Make 5 failed attempts - all should be allowed (AuthenticationError, not RateLimitError)
+        for i in range(5):
+            with pytest.raises(Exception) as exc_info:
+                await auth_service.login_user(
+                    email=email,
+                    password=password,
+                    ip_address=ip_address,
+                    user_agent="test-agent",
+                )
+            # First 5 should be AuthenticationError (invalid credentials), not RateLimitError
+            assert exc_info.type.__name__ == "AuthenticationError"
+
+        # 6th attempt should be rate limited
+        with pytest.raises(Exception) as exc_info:
+            await auth_service.login_user(
+                email=email,
+                password=password,
+                ip_address=ip_address,
+                user_agent="test-agent",
+            )
+        assert exc_info.type.__name__ == "RateLimitError"
+
+        # Now advance time by enough years to surpass real time (so real timestamps are "old")
+        future_time = datetime.datetime(2027, 1, 1, 12, 0, 0)
+        # Update the mock to return the future time
+        class MockDatetimeClassFuture:
+            @staticmethod
+            def utcnow():
+                return future_time
+
+            # Support for timedelta (needed by repository)
+            timedelta = datetime.timedelta
+
+        # Update the patches to use the future time mock
+        monkeypatch.setattr('src.models.login_attempt.datetime', MockDatetimeClassFuture)
+        monkeypatch.setattr('src.repositories.login_attempt_repository.datetime', MockDatetimeClassFuture)
+
+        # After waiting sufficient time, the rate limit should reset
+        # Next attempt should be allowed (AuthenticationError for invalid credentials, not RateLimitError)
+        with pytest.raises(Exception) as exc_info:
+            await auth_service.login_user(
+                email=email,
+                password=password,
+                ip_address=ip_address,
+                user_agent="test-agent",
+            )
+        # Should be AuthenticationError (invalid credentials) since rate limit reset
+        assert exc_info.type.__name__ == "AuthenticationError"
+
+
+# ============================================================================
+# User Story 3 Tests: Logout (T059-T062)
+# ============================================================================
+
+class TestLogout:
+    """T059: Test logout invalidation."""
+
+    async def test_logout_invalidation(self, auth_service: AuthService, user_repo: UserRepository, test_db):
+        """Test logout invalidation: session is_active set to FALSE; subsequent session lookup fails"""
+        # Create a user
+        password = "Secure123!"
+        user_result = await auth_service.register_user(
+            email="logout_test@example.com", password=password
+        )
+
+        # Login to create a session
+        login_result = await auth_service.login_user(
+            email="logout_test@example.com",
+            password=password,
+            ip_address="127.0.0.1",
+            user_agent="test-agent",
+        )
+        session_id = login_result["session_id"]
+
+        # Verify session exists and is active
+        session_repo = SessionRepository(db=test_db)
+        session = await session_repo.get_session(session_id)
+        assert session is not None
+        assert session.is_active is True
+
+        # Logout the user
+        await auth_service.logout_user(session_id)
+
+        # Verify session is now invalidated
+        session_after = await session_repo.get_session(session_id)
+        assert session_after is not None
+        assert session_after.is_active is False
+
+
+# ============================================================================
+# User Story 4 Tests: Authenticated User Identity & Authorization Boundaries (T069-T075)
+# ============================================================================

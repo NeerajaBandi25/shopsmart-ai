@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects import postgresql
 
 from src.models.login_attempt import LoginAttempt
 
@@ -59,10 +60,19 @@ class LoginAttemptRepository:
         """
         cutoff_time = datetime.utcnow() - timedelta(minutes=minutes)
 
+        # Handle IP address comparison for different database dialects
+        # PostgreSQL uses INET type, SQLite uses String variant
+        if self.db.bind.dialect.name == "postgresql":
+            from sqlalchemy import cast
+            from sqlalchemy.dialects.postgresql import INET
+            ip_condition = LoginAttempt.ip_address == cast(ip_address, INET)
+        else:
+            ip_condition = LoginAttempt.ip_address == ip_address
+
         result = await self.db.execute(
             select(LoginAttempt).where(
                 and_(
-                    LoginAttempt.ip_address == ip_address,
+                    ip_condition,
                     LoginAttempt.attempted_at >= cutoff_time,
                     LoginAttempt.success == False,
                 )

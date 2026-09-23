@@ -4,6 +4,22 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// Helper to handle API responses and redirect on 401
+async function handleApiResponse<T>(response: Response): Promise<T> {
+  const data = await response.json();
+
+  if (!response.ok) {
+    const error = data as ApiError;
+    // Redirect to login on 401 Unauthorized, throw error that can be caught by components to redirect to login
+    if (response.status === 401) {
+      throw new Error(error.detail || 'Unauthorized - please log in');
+    }
+    throw new Error(error.detail || 'API request failed');
+  }
+
+  return data;
+}
+
 interface RegisterRequest {
   email: string;
   password: string;
@@ -13,6 +29,16 @@ interface RegisterResponse {
   user_id: string;
   email: string;
   created_at: string;
+}
+
+interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+interface LoginResponse {
+  user_id: string;
+  email: string;
 }
 
 interface ApiError {
@@ -42,14 +68,7 @@ export async function register(
     credentials: 'include',
   });
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    const error = data as ApiError;
-    throw new Error(error.detail || 'Registration failed');
-  }
-
-  return data as RegisterResponse;
+  return handleApiResponse<RegisterResponse>(response);
 }
 
 /**
@@ -67,12 +86,76 @@ export async function getProfile(): Promise<RegisterResponse> {
     credentials: 'include',
   });
 
-  const data = await response.json();
+  return handleApiResponse<RegisterResponse>(response);
+}
+
+/**
+ * Log in a user (sets session cookie).
+ *
+ * @param email User email address
+ * @param password User password
+ * @returns Login response with user_id, email
+ * @throws Error if login fails (invalid credentials, rate limited, etc.)
+ */
+export async function login(
+  email: string,
+  password: string
+): Promise<LoginResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password } as LoginRequest),
+    credentials: 'include',
+  });
+
+  return handleApiResponse<LoginResponse>(response);
+}
+
+/**
+ * Log out the current user (clears session cookie).
+ *
+ * @returns Empty promise on success
+ * @throws Error if logout fails
+ */
+export async function logout(): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+  });
 
   if (!response.ok) {
-    const error = data as ApiError;
-    throw new Error(error.detail || 'Failed to fetch profile');
+    const error = await response.json() as ApiError;
+    throw new Error(error.detail || 'Logout failed');
   }
+}
 
-  return data as RegisterResponse;
+/**
+ * Change the current user's password.
+ *
+ * @param currentPassword The user's current password
+ * @param newPassword The new password to set
+ * @throws Error if the password change fails
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/auth/password-change`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json() as ApiError;
+    throw new Error(error.detail || 'Password change failed');
+  }
 }

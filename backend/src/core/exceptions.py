@@ -43,7 +43,7 @@ class ValidationError(AppException):
 class AuthenticationError(AppException):
     """Authentication error (401)."""
 
-    def __init__(self, message: str = "Invalid credentials", error_code: str = "AUTHENTICATION_ERROR"):
+    def __init__(self, message: str = "Invalid email or password", error_code: str = "invalid_credentials"):
         super().__init__(
             message=message,
             status_code=401,
@@ -65,7 +65,7 @@ class AuthorizationError(AppException):
 class RateLimitError(AppException):
     """Rate limit exceeded (429)."""
 
-    def __init__(self, message: str = "Too many requests", error_code: str = "RATE_LIMIT_EXCEEDED"):
+    def __init__(self, message: str = "Too many login attempts. Please try again in 15 minutes.", error_code: str = "rate_limited"):
         super().__init__(
             message=message,
             status_code=429,

@@ -5,21 +5,21 @@ permission_matrix:
     WRITE: DENY
     DELETE: DENY
     EXECUTE: DENY
-  
+
   DRAFT:
     READ: ALLOW
     DRAFT: ALLOW
     WRITE: DENY
     DELETE: DENY
     EXECUTE: DENY  # For run_test verification
-  
+
   WRITE:
     READ: ALLOW
     DRAFT: ALLOW
     WRITE: REQUIRES_HUMAN_APPROVAL
     DELETE: DENY
     EXECUTE: REQUIRES_HUMAN_APPROVAL
-  
+
   DESTRUCTIVE:
     READ: ALLOW
     DRAFT: ALLOW

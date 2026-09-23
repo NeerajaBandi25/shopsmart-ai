@@ -13,6 +13,20 @@ class RiskClass(str, Enum):
     DESTRUCTIVE = "DESTRUCTIVE"
 
 
+class SessionMode(str, Enum):
+    MANUAL = "MANUAL"
+    AUTONOMOUS_DEV = "AUTONOMOUS_DEV"
+    READ_ONLY_AUTO = "READ_ONLY_AUTO"
+
+    @classmethod
+    def from_environment(cls) -> "SessionMode":
+        raw = os.getenv("SHOPSMART_SESSION_MODE", "READ_ONLY_AUTO").strip().upper()
+        try:
+            return cls(raw)
+        except ValueError:
+            return cls.READ_ONLY_AUTO
+
+
 class OperationType(str, Enum):
     READ = "READ"
     DRAFT = "DRAFT"
@@ -93,11 +107,15 @@ class AuthorizationEngine:
         permission_matrix: Dict[str, Dict[str, str]],
         tools: Dict[str, ToolDefinition],
         protected_files: Optional[List[str]] = None,
+        session_overrides: Optional[Dict[str, Any]] = None,
+        persisted_mode: Optional[str] = None,
     ):
         self.risk_classes = risk_classes
         self.permission_matrix = permission_matrix
         self.tools = tools
         self.protected_files = protected_files or []
+        self.session_overrides = session_overrides or {}
+        self.persisted_mode = persisted_mode
 
     @classmethod
     def from_directory(cls, policy_dir: Union[str, Path]) -> "AuthorizationEngine":
@@ -109,6 +127,7 @@ class AuthorizationEngine:
         matrix_file = policy_path / "permission-matrix.yaml"
         registry_file = policy_path / "tool-registry.yaml"
         protected_files_file = policy_path / "protected-files.txt"
+        session_overrides_file = policy_path / "session-overrides.yaml"
 
         for required_file in (risk_classes_file, matrix_file, registry_file):
             if not required_file.is_file():
@@ -124,6 +143,16 @@ class AuthorizationEngine:
         except Exception as e:
             raise ConfigurationError(f"Failed to parse policy YAML: {e}") from e
 
+        session_overrides = {}
+        if session_overrides_file.is_file():
+            try:
+                with open(session_overrides_file, "r", encoding="utf-8") as f:
+                    session_overrides = yaml.safe_load(f) or {}
+            except Exception as e:
+                raise ConfigurationError(
+                    f"Failed to parse session overrides: {e}"
+                ) from e
+
         protected_files = []
         if protected_files_file.is_file():
             try:
@@ -135,11 +164,32 @@ class AuthorizationEngine:
             except Exception as e:
                 raise ConfigurationError(f"Failed to read protected files: {e}") from e
 
+        # Load persisted session mode from state directory
+        persisted_mode = None
+        state_dir = policy_path.parent / "state"
+        mode_file = state_dir / "session_mode.json"
+        if mode_file.is_file():
+            try:
+                with open(mode_file, "r", encoding="utf-8") as f:
+                    mode_data = yaml.safe_load(f) or {}
+                    persisted_mode = mode_data.get("mode")
+                    # Validate the persisted mode
+                    if persisted_mode:
+                        persisted_mode = persisted_mode.strip().upper()
+                        valid_modes = {mode.value for mode in SessionMode}
+                        if persisted_mode not in valid_modes:
+                            persisted_mode = None  # Invalid mode, will fall back to default
+            except Exception:
+                # If we can't read the persisted mode, continue without it
+                persisted_mode = None
+
         return cls.from_dict(
             risk_classes_data=risk_data,
             permission_matrix_data=matrix_data,
             tool_registry_data=registry_data,
             protected_files=protected_files,
+            session_overrides=session_overrides,
+            persisted_mode=persisted_mode,
         )
 
     @classmethod
@@ -149,6 +199,8 @@ class AuthorizationEngine:
         permission_matrix_data: Dict[str, Any],
         tool_registry_data: Dict[str, Any],
         protected_files: Optional[List[str]] = None,
+        session_overrides: Optional[Dict[str, Any]] = None,
+        persisted_mode: Optional[str] = None,
     ) -> "AuthorizationEngine":
         # 1. Validate risk classes
         raw_risk_classes = risk_classes_data.get("risk_classes")
@@ -300,11 +352,57 @@ class AuthorizationEngine:
                 audit_policy=audit_policy,
             )
 
+        normalized_overrides = (
+            session_overrides if isinstance(session_overrides, dict) else {}
+        )
+
+        raw_session_overrides = normalized_overrides.get(
+            "session_overrides", {}
+        )
+
+        if not isinstance(raw_session_overrides, dict):
+            raise ConfigurationError(
+                "session_overrides must be a dictionary"
+            )
+
+        valid_modes = {mode.value for mode in SessionMode}
+
+        for mode_name, mode_cfg in raw_session_overrides.items():
+            if mode_name not in valid_modes:
+                raise ConfigurationError(
+                    f"Unknown session mode: '{mode_name}'"
+                )
+
+            if not isinstance(mode_cfg, dict):
+                raise ConfigurationError(
+                    f"Session mode '{mode_name}' must be a dictionary"
+                )
+
+            tools_cfg = mode_cfg.get("tools", {})
+
+            if not isinstance(tools_cfg, dict):
+                raise ConfigurationError(
+                    f"Session mode '{mode_name}.tools' must be a dictionary"
+                )
+
+            for tool_name, decision in tools_cfg.items():
+                if tool_name not in tools:
+                    raise ConfigurationError(
+                        f"Session override references unknown tool: '{tool_name}'"
+                    )
+
+                if decision not in VALID_DECISIONS:
+                    raise ConfigurationError(
+                        f"Invalid session decision '{decision}'"
+                    )
+
         return cls(
             risk_classes=raw_risk_classes,
             permission_matrix=matrix,
             tools=tools,
             protected_files=protected_files,
+            session_overrides=normalized_overrides,
+            persisted_mode=persisted_mode,
         )
 
     def resolve_permission(
@@ -328,13 +426,64 @@ class AuthorizationEngine:
         except ValueError:
             return Decision.DENY
 
+    def _resolve_session_override(
+        self,
+        tool_name: str,
+        session_mode: SessionMode,
+    ) -> Optional[Decision]:
+        raw = self.session_overrides.get("session_overrides", {})
+
+        if not isinstance(raw, dict):
+            return None
+
+        mode_cfg = raw.get(session_mode.value, {})
+
+        if not isinstance(mode_cfg, dict):
+            return None
+
+        tools_cfg = mode_cfg.get("tools", {})
+
+        if not isinstance(tools_cfg, dict):
+            return None
+
+        value = tools_cfg.get(tool_name)
+
+        if value is None:
+            return None
+
+        try:
+            return Decision(value)
+        except ValueError:
+            return Decision.DENY
+
     def authorize(
         self,
         tool_name: str,
         invocation_input: Dict[str, Any],
         repo_root: Union[str, Path],
+        session_mode: Optional[Union[SessionMode, str]] = None,
     ) -> Decision:
-        # 1. Look up tool in registry
+        # Resolve explicit session mode or environment mode or persisted mode.
+        if session_mode is None:
+            # Check for persisted mode first
+            if self.persisted_mode:
+                try:
+                    active_mode = SessionMode(self.persisted_mode)
+                except ValueError:
+                    # If persisted mode is invalid, fall back to environment
+                    active_mode = SessionMode.from_environment()
+            else:
+                # No persisted mode, use environment variable
+                active_mode = SessionMode.from_environment()
+        elif isinstance(session_mode, SessionMode):
+            active_mode = session_mode
+        else:
+            try:
+                active_mode = SessionMode(str(session_mode).upper())
+            except ValueError:
+                return Decision.DENY
+
+        # 1. Look up tool in registry.
         tool = self.tools.get(tool_name)
         if not tool:
             return Decision.DENY
@@ -344,7 +493,7 @@ class AuthorizationEngine:
         if base_decision == Decision.DENY:
             return Decision.DENY
 
-        # 3. Resolve repo root
+        # 3. Check protected files for non-read operations
         root_path = Path(repo_root).resolve()
 
         # 4. Extract path targets from invocation input
@@ -374,6 +523,14 @@ class AuthorizationEngine:
             if tool.allow_patterns:
                 if not any(_match_glob(canonical_rel_path, pattern) for pattern in tool.allow_patterns):
                     return Decision.DENY
+
+        session_decision = self._resolve_session_override(
+            tool_name,
+            active_mode,
+        )
+
+        if session_decision is not None:
+            return session_decision
 
         return base_decision
 
