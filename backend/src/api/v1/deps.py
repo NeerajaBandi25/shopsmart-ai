@@ -14,11 +14,19 @@ from src.database import AsyncSessionLocal
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Provide database session to endpoints.
 
+    Services own transaction boundaries (commit); this dependency never
+    auto-commits. It only rolls back on exception so failed requests do
+    not leave a dirty transaction open.
+
     Yields:
         AsyncSession: Database session
     """
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
 
 
 async def get_current_user(

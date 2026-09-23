@@ -135,22 +135,53 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * Change the current user's password.
+ * Get the CSRF token bound to the current session.
+ *
+ * Calls the authenticated GET /auth/csrf endpoint (session cookie
+ * identifies the exact session row); the token is then sent as
+ * X-CSRF-Token on state-changing requests such as password change.
+ */
+export async function getCsrfToken(): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/auth/csrf`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+  });
+
+  const data = await handleApiResponse<{ csrf_token: string }>(response);
+  return data.csrf_token;
+}
+
+/**
+ * Change the current user's password (canonical contract).
+ *
+ * PUT /api/v1/users/password with {current_password, new_password} and
+ * X-CSRF-Token header. Missing/invalid CSRF yields 403; missing/invalid
+ * session yields 401.
  *
  * @param currentPassword The user's current password
  * @param newPassword The new password to set
+ * @param csrfToken Optional CSRF token; fetched via GET /auth/csrf if omitted
  * @throws Error if the password change fails
  */
 export async function changePassword(
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
+  csrfToken?: string
 ): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/auth/password-change`, {
-    method: 'POST',
+  const token = csrfToken ?? (await getCsrfToken());
+  const response = await fetch(`${API_BASE_URL}/users/password`, {
+    method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
+      'X-CSRF-Token': token,
     },
-    body: JSON.stringify({ currentPassword, newPassword }),
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
     credentials: 'include',
   });
 

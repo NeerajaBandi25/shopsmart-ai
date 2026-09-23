@@ -46,6 +46,10 @@ class Session(BaseModel):
         default=True,
         server_default="true",
     )
+    csrf_token: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
 
     # Relationships
     user: Mapped["User"] = relationship(

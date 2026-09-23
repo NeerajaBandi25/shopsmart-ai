@@ -257,7 +257,10 @@ class TestSingleSessionConcurrency:
         # Save original lifespan context
         original_lifespan_context = app.router.lifespan_context
 
-        # Set test override that creates a fresh session for each request
+        # Override get_db with a fresh, independent session per request:
+        # each request gets a NEW AsyncSession from the session factory
+        # (never the shared setup session), so only committed data is visible
+        # across requests — this is what proves the D1/D2/D5 commit fixes.
         async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
             async with async_session_maker() as session:
                 yield session
@@ -295,8 +298,9 @@ class TestSingleSessionConcurrency:
             for i, response in enumerate(responses):
                 assert response["status_code"] == 200, f"Login attempt {i} failed: {response}"
 
-            # Verify database state: exactly one active session should exist
-            # Create a new validation session to check the final state
+            # Verify database state: exactly one active session should exist.
+            # Use a fresh, independent validation session (not any request
+            # session) so the check proves committed, cross-session state.
             validation_session = async_session_maker()
             try:
                 # Get the user ID

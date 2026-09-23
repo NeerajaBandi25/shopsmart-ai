@@ -1,18 +1,15 @@
 """Authentication API routes."""
 
-from datetime import datetime
-from pydantic import BaseModel, Field
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Cookie, Depends, Request, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.v1.deps import get_db, get_current_user
+from src.api.v1.deps import get_current_user, get_db
+from src.core.exceptions import AuthenticationError
 from src.services.auth_service import AuthService
-from src.core.exceptions import AuthenticationError, RateLimitError
-from src.models.user import User
-
 
 # ============================================================================
 # Request/Response Models
@@ -54,6 +51,12 @@ class MeResponse(BaseModel):
     user_id: str = Field(..., description="User ID")
     email: str = Field(..., description="User email")
     created_at: str = Field(..., description="Account creation timestamp")
+
+
+class CsrfResponse(BaseModel):
+    """CSRF token response model."""
+
+    csrf_token: str = Field(..., description="CSRF token for state-changing requests")
 
 
 # ============================================================================
@@ -192,6 +195,46 @@ async def logout(
 
     # Return 204 No Content (no response body)
     return None
+
+
+@router.get(
+    "/csrf",
+    response_model=CsrfResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get CSRF token for current session",
+)
+async def get_csrf_token(
+    session_id: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db),
+) -> CsrfResponse:
+    """Return the csrf_token belonging to the exact session_id cookie.
+
+    Resolves the current session row by session ID (never by user_id alone),
+    verifies it is active/unexpired, and returns its stored token.
+    Session failures remain 401.
+    """
+    if not session_id:
+        raise AuthenticationError("Session required")
+    from src.repositories.session_repository import SessionRepository
+
+    session_repo = SessionRepository(db=db)
+    session = await session_repo.get_session(session_id)
+    if not session or not session.is_active:
+        raise AuthenticationError("Session invalid or expired")
+    # Enforce rolling inactivity window (same 30-day rule as validation).
+    from datetime import datetime
+
+    from src.core.config import settings
+
+    now = datetime.utcnow()
+    if (
+        not session.last_activity
+        or (now.timestamp() - session.last_activity.timestamp()) > settings.session_timeout_seconds
+    ):
+        raise AuthenticationError("Session invalid or expired")
+    if not session.csrf_token:
+        raise AuthenticationError("Session invalid or expired")
+    return CsrfResponse(csrf_token=session.csrf_token)
 
 
 @router.get(

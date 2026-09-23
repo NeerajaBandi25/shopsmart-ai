@@ -4,15 +4,13 @@ import logging
 import re
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import and_, select
 
-from src.core.exceptions import ValidationError, ConflictError, AuthenticationError, RateLimitError
-from src.core.security import hash_password, verify_password, generate_session_id
+from src.core.exceptions import AuthenticationError, ConflictError, RateLimitError, ValidationError
+from src.core.security import generate_csrf_token, hash_password, verify_password
 from src.models.user import User
 from src.repositories.user_repository import UserRepository
-from src.repositories.session_repository import SessionRepository
-from src.repositories.login_attempt_repository import LoginAttemptRepository
 
 logger = logging.getLogger(__name__)
 
@@ -106,9 +104,9 @@ class AuthService:
             RateLimitError (429): Rate limit exceeded
         """
         # Import repositories inside method to avoid circular imports
-        from src.repositories.user_repository import UserRepository
-        from src.repositories.session_repository import SessionRepository
         from src.repositories.login_attempt_repository import LoginAttemptRepository
+        from src.repositories.session_repository import SessionRepository
+        from src.repositories.user_repository import UserRepository
 
         # Initialize repositories
         user_repo = UserRepository(db=self.db)
@@ -116,12 +114,15 @@ class AuthService:
         login_attempt_repo = LoginAttemptRepository(db=self.db)
 
         # Transaction (READ COMMITTED isolation per data-model.md):
+        # D1: failed-login LoginAttempt rows must be committed before raising,
+        # or the audit/rate-limit write is rolled back with the request session.
         # 1. Check rate limit first
         failed_attempts = await login_attempt_repo.count_failed_attempts(ip_address, minutes=15)
         if failed_attempts >= 5:
             await login_attempt_repo.log_attempt(
                 email=email, ip_address=ip_address, success=False, failure_reason="rate_limit"
             )
+            await self.db.commit()
             logger.warning(f"Rate limit exceeded for IP: {ip_address}")
             raise RateLimitError()
 
@@ -131,6 +132,7 @@ class AuthService:
             await login_attempt_repo.log_attempt(
                 email=email, ip_address=ip_address, success=False, failure_reason="invalid_credentials"
             )
+            await self.db.commit()
             logger.warning(f"Failed login attempt for email: {email} from IP: {ip_address}")
             raise AuthenticationError()
 
@@ -147,26 +149,32 @@ class AuthService:
             await login_attempt_repo.log_attempt(
                 email=email, ip_address=ip_address, success=False, failure_reason="user_not_found"
             )
+            await self.db.commit()
             logger.warning(f"User not found during lock for email: {email} from IP: {ip_address}")
             raise AuthenticationError("Invalid credentials")
 
         # 4. Invalidate existing active session if present: UPDATE sessions SET is_active=FALSE WHERE user_id=? AND is_active=TRUE
         await session_repo.invalidate_user_sessions(user.id)
 
-        # 5. INSERT new Session with is_active=TRUE, last_activity=now, ip_address, user_agent
+        # 5. INSERT new Session with is_active=TRUE, last_activity=now, ip_address, user_agent,
+        # DB-backed csrf_token bound to this exact session row.
         session = await session_repo.create_session(
             user_id=user.id,
             ip_address=ip_address,
             user_agent=user_agent,
+            csrf_token=generate_csrf_token(),
         )
 
         # 6. COMMIT transaction (lock released)
         await self.db.commit()
 
+        # D2: successful LoginAttempt must also be committed; the commit above
+        # only persists the session/invalidation, so commit the audit row separately.
         # 7. Log LoginAttempt(success=TRUE)
         await login_attempt_repo.log_attempt(
             email=email, ip_address=ip_address, success=True, failure_reason=None
         )
+        await self.db.commit()
 
         logger.info(f"User logged in successfully: {email} (ID: {user.id}) from IP: {ip_address}")
 
@@ -192,15 +200,53 @@ class AuthService:
         # Initialize repository
         session_repo = SessionRepository(db=self.db)
 
+        # D5: session invalidation is flush-only in the repository, so the
+        # service must commit; otherwise logout is lost on session close.
         # Invalidate the session
         result = await session_repo.invalidate_session(session_id)
 
         if result:
+            await self.db.commit()
             logger.info(f"User logged out successfully: session {session_id} invalidated")
         else:
             logger.warning(f"Logout attempt for non-existent session: {session_id}")
 
         return result
+
+    async def change_password(
+        self, user_id: UUID, current_password: str, new_password: str
+    ) -> None:
+        """Change user password and invalidate all sessions (rotate CSRF).
+
+        Args:
+            user_id: Authenticated user ID (from validated session)
+            current_password: Current password (plaintext, verified)
+            new_password: New password (strength-validated)
+
+        Raises:
+            ValidationError (400): incorrect current password or weak new password
+        """
+        from src.repositories.session_repository import SessionRepository
+
+        user = await self.user_repo.get_user_by_id(user_id)
+        if not user or not verify_password(current_password, user.password_hash):
+            raise ValidationError(
+                message="Current password is incorrect",
+                error_code="invalid_current_password",
+            )
+        if not self._is_strong_password(new_password):
+            raise ValidationError(
+                message=(
+                    "New password must be at least 8 characters with uppercase, "
+                    "lowercase, digit, and special character"
+                ),
+                error_code="weak_password",
+            )
+        user.password_hash = hash_password(new_password)
+        session_repo = SessionRepository(db=self.db)
+        await session_repo.invalidate_user_sessions(user.id)
+        await self.db.commit()
+        logger.info(f"Password changed for user ID: {user.id}")
 
     @staticmethod
     def _is_valid_email(email: str) -> bool:
