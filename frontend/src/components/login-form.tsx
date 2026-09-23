@@ -45,7 +45,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     }
 
     try {
-      const response = await login(email, password);
+      await login(email, password);
       onSuccess?.();
 
       // Show success message for 2 seconds, then redirect
@@ -56,17 +56,26 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         const redirectTo = urlParams.get('redirectTo') || '/dashboard';
         router.push(redirectTo);
       }, 2000);
-    } catch (err: any) {
+    } catch (err) {
       // Show generic error message (no email enumeration)
-      setError(err.message || 'Invalid email or password');
+      setError(
+        err instanceof Error ? err.message : 'Invalid email or password'
+      );
       console.error('Login error:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  // Premium field styling applied through the existing Input component's
+  // extension points (className wrapper + inputProps classes). ui/Input.tsx
+  // itself remains frozen.
+  const fieldClassName = 'premium-field';
+  const fieldInputClasses =
+    'border-ink-100! bg-white! rounded-tile! shadow-tile! focus:ring-accent-500! focus-visible:ring-accent-500! transition-shadow!';
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-md">
+    <form onSubmit={handleSubmit} className="space-y-5 w-full max-w-md">
       {/* Global messages */}
       {error && (
         <Alert variant="error" message={error} />
@@ -75,16 +84,18 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <Alert variant="success" message={success} />
       )}
 
-      {/* Email input */}
+      {/* Email input — real errors are shown in the Alert above; do not
+          stamp misleading per-field messages for server-side errors. */}
       <Input
         label="Email"
         value={email}
         onChange={setEmail}
-        error={error ? 'Invalid email' : undefined}
+        className={fieldClassName}
         inputProps={{
           type: 'email',
           autoComplete: 'email',
           placeholder: 'you@example.com',
+          className: fieldInputClasses,
         }}
         inputRef={emailRef}
       />
@@ -94,11 +105,12 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         label="Password"
         value={password}
         onChange={setPassword}
-        error={error ? 'Invalid password' : undefined}
+        className={fieldClassName}
         inputProps={{
           type: 'password',
           autoComplete: 'current-password',
           placeholder: 'Enter your password',
+          className: fieldInputClasses,
         }}
       />
 
@@ -106,7 +118,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       <Button
         variant="primary"
         size="md"
-        className="w-full"
+        className="w-full bg-accent-600! hover:bg-accent-700! focus-visible:ring-accent-500! focus-visible:ring-offset-2! rounded-tile! py-3!"
         disabled={loading}
         onClick={handleSubmit}
       >
@@ -114,9 +126,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       </Button>
 
       {/* Link to register */}
-      <p className="text-sm text-gray-600 text-center">
-        Don't have an account?{' '}
-        <a href="/auth/register" className="text-blue-600 hover:text-blue-700">
+      <p className="text-sm text-ink-500 text-center">
+        Don&apos;t have an account?{' '}
+        <a href="/auth/register" className="font-medium text-accent-600 hover:text-accent-700">
           Sign up
         </a>
       </p>
