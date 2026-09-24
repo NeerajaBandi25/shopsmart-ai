@@ -16,13 +16,13 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Add backend/src to path for imports
+# Add the backend root so migrations use the same package imports as the app.
 import sys
-backend_path = Path(__file__).parent.parent.parent / "src"
-sys.path.insert(0, str(backend_path))
+backend_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(backend_root))
 
-from core.config import settings  # noqa: E402
-from models.base import Base  # noqa: E402
+from src.core.config import settings  # noqa: E402
+from src.models.base import Base  # noqa: E402
 
 # Set target_metadata for autogenerate support
 target_metadata = Base.metadata

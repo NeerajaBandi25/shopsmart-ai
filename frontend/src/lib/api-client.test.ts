@@ -1,7 +1,15 @@
 import { logout } from './api-client';
 
 // Mock fetch
-global.fetch = jest.fn();
+const mockedFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
+global.fetch = mockedFetch;
+
+const jsonResponse = (body: unknown, status: number): Response =>
+  ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  }) as Response;
 
 describe('api-client.logout()', () => {
   beforeEach(() => {
@@ -9,20 +17,31 @@ describe('api-client.logout()', () => {
   });
 
   it('throws on 401 response', async () => {
-    fetch.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({ detail: 'Unauthorized' }) });
+    mockedFetch
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }, 200))
+      .mockResolvedValueOnce(jsonResponse({ detail: 'Unauthorized' }, 401));
     await expect(logout()).rejects.toThrow('Unauthorized');
   });
 
   it('resolves on 204 response', async () => {
-    fetch.mockResolvedValueOnce({ ok: true, status: 204 });
+    mockedFetch
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }, 200))
+      .mockResolvedValueOnce(jsonResponse(undefined, 204));
     await expect(logout()).resolves.toBeUndefined();
   });
 
   it('includes credentials: include', async () => {
-    await logout().catch(() => {}); // Ignore result, just check call
-    expect(fetch).toHaveBeenCalledWith(
+    mockedFetch
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }, 200))
+      .mockResolvedValueOnce(jsonResponse(undefined, 204));
+    await logout();
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      2,
       expect.stringContaining('/auth/logout'),
-      expect.objectContaining({ credentials: 'include' })
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' }),
+      })
     );
   });
 });
