@@ -3,6 +3,7 @@
 import os
 from typing import Optional
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -14,9 +15,10 @@ class Settings(BaseSettings):
         "DATABASE_URL", "postgresql+asyncpg://user:password@localhost/shopsmart_ai"
     )
     database_echo: bool = os.getenv("DATABASE_ECHO", "False").lower() == "true"
+    auto_create_tables: bool = os.getenv("AUTO_CREATE_TABLES", "True").lower() == "true"
 
     # Security
-    secret_key: str = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+    secret_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
@@ -39,13 +41,25 @@ class Settings(BaseSettings):
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
     # CORS
-    cors_origins: list[str] = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-    ]
+    cors_origins: list[str] = []
     cors_allow_credentials: bool = True
     cors_allow_methods: list[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     cors_allow_headers: list[str] = ["*"]
+
+    @field_validator("secret_key")
+    @classmethod
+    def reject_empty_secret_key(cls, secret_key: str) -> str:
+        if not secret_key.strip():
+            raise ValueError("SECRET_KEY must not be empty")
+        return secret_key
+
+    @field_validator("cors_origins")
+    @classmethod
+    def reject_wildcard_cors_origins(cls, origins: list[str]) -> list[str]:
+        """Credentialed CORS requires an explicit allowlist."""
+        if "*" in origins:
+            raise ValueError("CORS_ORIGINS must not contain '*' when credentials are enabled")
+        return origins
 
     class Config:
         """Pydantic config."""

@@ -44,7 +44,7 @@ class TestLoginEndpointContract:
         cookie_header = response.headers["set-cookie"]
         assert "HttpOnly" in cookie_header
         assert "Secure" in cookie_header
-        assert "SameSite=Strict" in cookie_header
+        assert "samesite=strict" in cookie_header.lower()
         assert "Max-Age=2592000" in cookie_header  # 30 days
 
     async def test_login_invalid_credentials_error_response(

@@ -389,55 +389,435 @@ class TestSessionPersistence:
 class TestRateLimitingIntegration:
     """T050: Test rate limiting integration."""
 
+    async def test_login_uses_configured_rate_limiter(self, test_client, monkeypatch):
+        from src.services import auth_service
+
+        checked_ips = []
+        monkeypatch.setattr(
+            auth_service,
+            "check_login_rate_limit",
+            lambda ip_address: checked_ips.append(ip_address) or True,
+        )
+
+        response = await test_client.post(
+            "/api/v1/auth/login",
+            json={"email": "blocked@example.com", "password": "Wrong123!"},
+        )
+
+        assert response.status_code == 429
+        assert checked_ips == ["127.0.0.1"]
+
+    async def test_successful_login_resets_failed_attempt_window(
+        self, test_client: AsyncClient, test_user_data_in_db: dict
+    ):
+        for _ in range(4):
+            failed = await test_client.post(
+                "/api/v1/auth/login",
+                json={"email": test_user_data_in_db["email"], "password": "Wrong123!"},
+            )
+            assert failed.status_code == 401
+
+        successful = await test_client.post(
+            "/api/v1/auth/login", json=test_user_data_in_db
+        )
+        assert successful.status_code == 200
+
+        for _ in range(5):
+            failed = await test_client.post(
+                "/api/v1/auth/login",
+                json={"email": test_user_data_in_db["email"], "password": "Wrong123!"},
+            )
+            assert failed.status_code == 401
+
+        limited = await test_client.post(
+            "/api/v1/auth/login",
+            json={"email": test_user_data_in_db["email"], "password": "Wrong123!"},
+        )
+        assert limited.status_code == 429
+
     async def test_six_failed_attempts_trigger_429(
         self, test_client: AsyncClient
     ):
         """6 failed login attempts from same IP should trigger 429 response."""
+        from datetime import datetime, timedelta, timezone
+        from math import ceil
+
+        from freezegun import freeze_time
+
         email = "rate_limit_test@example.com"
         password = "wrong123!"
+        fixed_time = datetime(2025, 1, 1, 12, 0, 0)
 
-        # Make 5 failed attempts - should all return 401
-        for i in range(5):
+        with freeze_time(fixed_time) as clock:
+            for i in range(5):
+                response = await test_client.post(
+                    "/api/v1/auth/login",
+                    json={"email": email, "password": password},
+                )
+                assert response.status_code == 401, f"Attempt {i+1} failed unexpectedly"
+
             response = await test_client.post(
                 "/api/v1/auth/login",
                 json={"email": email, "password": password},
             )
-            assert response.status_code == 401, f"Attempt {i+1} failed unexpectedly"
+            assert response.status_code == 429
 
-        # 6th attempt should return 429
-        response = await test_client.post(
-            "/api/v1/auth/login",
-            json={"email": email, "password": password},
-        )
-        assert response.status_code == 429
+            data = response.json()
+            assert "detail" in data
+            assert "error_code" in data
+            assert data["detail"] == "Too many login attempts. Please try again in 15 minutes."
+            assert data["error_code"] == "rate_limited"
+            assert response.headers["X-RateLimit-Limit"] == "5"
+            assert response.headers["X-RateLimit-Remaining"] == "0"
 
-        # Response should be rate limit error
-        data = response.json()
-        assert "detail" in data
-        assert "error_code" in data
-        assert data["detail"] == "Too many login attempts. Please try again in 15 minutes."
-        assert data["error_code"] == "rate_limited"
+            expected_reset = ceil(
+                (
+                    fixed_time.replace(tzinfo=timezone.utc)
+                    + timedelta(minutes=15, microseconds=1)
+                ).timestamp()
+            )
+            assert int(response.headers["X-RateLimit-Reset"]) == expected_reset
+            assert expected_reset > int(fixed_time.replace(tzinfo=timezone.utc).timestamp())
 
     async def test_rate_limit_resets_after_window(
-        self, test_client: AsyncClient
+        self, test_client: AsyncClient, test_db
     ):
-        """Rate limit should reset after 15-minute window."""
-        # This test would require mocking time - we'll skip for now
-        # but note that the implementation should support time-based reset
-        pass
+        """A new active window after expiry reports its own reset timestamp."""
+        from datetime import datetime, timedelta, timezone
+        from math import ceil
+
+        from freezegun import freeze_time
+
+        email = "rate_limit_window_reset@example.com"
+        payload = {"email": email, "password": "wrong123!"}
+        fixed_time = datetime(2025, 1, 1, 12, 0, 0)
+
+        with freeze_time(fixed_time) as clock:
+            for _ in range(5):
+                response = await test_client.post("/api/v1/auth/login", json=payload)
+                assert response.status_code == 401
+
+            limited = await test_client.post("/api/v1/auth/login", json=payload)
+            assert limited.status_code == 429
+            first_reset = int(limited.headers["X-RateLimit-Reset"])
+
+            new_window = datetime.fromtimestamp(first_reset, tz=timezone.utc)
+            clock.move_to(new_window)
+
+            for _ in range(5):
+                response = await test_client.post("/api/v1/auth/login", json=payload)
+                assert response.status_code == 401
+
+            from src.repositories.login_attempt_repository import LoginAttemptRepository
+
+            active_attempts = await LoginAttemptRepository(test_db).get_failed_attempt_timestamps(
+                "127.0.0.1", minutes=15
+            )
+            assert len(active_attempts) == 5
+            limited_again = await test_client.post("/api/v1/auth/login", json=payload)
+
+        assert limited_again.status_code == 429
+        expected_reset = ceil(
+            (
+                new_window
+                + timedelta(minutes=15, microseconds=1)
+            ).timestamp()
+        )
+        assert int(limited_again.headers["X-RateLimit-Limit"]) == 5
+        assert int(limited_again.headers["X-RateLimit-Remaining"]) == 0
+        assert int(limited_again.headers["X-RateLimit-Reset"]) == expected_reset
+        assert expected_reset > first_reset
+
+    async def test_normal_auth_responses_have_no_rate_limit_headers(
+        self, test_client: AsyncClient, test_user_data_in_db: dict
+    ):
+        """401 and successful login responses remain free of 429 metadata."""
+        rate_limit_headers = (
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Reset",
+        )
+
+        invalid = await test_client.post(
+            "/api/v1/auth/login",
+            json={"email": test_user_data_in_db["email"], "password": "wrong123!"},
+        )
+        assert invalid.status_code == 401
+        assert not any(header in invalid.headers for header in rate_limit_headers)
+
+        successful = await test_client.post(
+            "/api/v1/auth/login",
+            json=test_user_data_in_db,
+        )
+        assert successful.status_code == 200
+        assert not any(header in successful.headers for header in rate_limit_headers)
+
+
+@pytest.fixture
+def middleware_db_factory(test_engine, monkeypatch):
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import sessionmaker
+
+    from src.middleware import session_refresh
+
+    session_factory = sessionmaker(
+        test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    monkeypatch.setattr(session_refresh, "AsyncSessionLocal", session_factory)
+    return session_factory
 
 
 class TestCookieRefreshOnAuthenticatedRequest:
     """T050A: Test cookie refresh on authenticated request."""
 
     async def test_authenticated_request_refreshes_session_cookie(
-        self, test_client: AsyncClient, test_user_data_in_db: dict, test_db
+        self, test_client: AsyncClient, test_user_data_in_db: dict, middleware_db_factory
     ):
-        """Authenticated request should refresh session cookie Max-Age."""
+        """An authenticated request refreshes a secure, HttpOnly session cookie."""
+        login_response = await test_client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": test_user_data_in_db["email"],
+                "password": test_user_data_in_db["password"],
+            },
+        )
+        session_id = login_response.cookies.get("session_id")
+        assert session_id
+
+        response = await test_client.get(
+            "/api/v1/auth/me",
+            cookies={"session_id": session_id},
+        )
+
+        assert response.status_code == 200, response.text
+        assert "session_id" not in response.json()
+        cookie_header = response.headers["set-cookie"]
+        assert cookie_header.startswith(f"session_id={session_id};")
+        assert "HttpOnly" in cookie_header
+        assert "Secure" in cookie_header
+        assert "samesite=strict" in cookie_header.lower()
+        assert "Path=/" in cookie_header
+        assert "Max-Age=2592000" in cookie_header
+        assert "Domain=" not in cookie_header
+
+    async def test_public_request_does_not_refresh_session_cookie(
+        self, test_client: AsyncClient, test_user_data_in_db: dict, middleware_db_factory
+    ):
+        """A valid cookie alone must not refresh it on an unauthenticated endpoint."""
+        login_response = await test_client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": test_user_data_in_db["email"],
+                "password": test_user_data_in_db["password"],
+            },
+        )
+
+        response = await test_client.post(
+            "/api/v1/auth/register",
+            json={"email": "cookie_refresh_public@example.com", "password": "Secure123!"},
+            cookies=login_response.cookies,
+        )
+
+        assert response.status_code == 201
+        assert "set-cookie" not in response.headers
+
+    async def test_expired_session_is_not_refreshed(
+        self, test_client: AsyncClient, test_user_data_in_db: dict, test_db, middleware_db_factory
+    ):
+        """An inactivity-expired session cannot receive a refreshed cookie."""
         from datetime import datetime, timedelta
-        # This test would require mocking time - we'll implement a simplified version
-        # that checks the middleware is called
-        pass  # Will implement once we have the middleware
+
+        from src.core.config import settings
+        from src.repositories.session_repository import SessionRepository
+
+        login_response = await test_client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": test_user_data_in_db["email"],
+                "password": test_user_data_in_db["password"],
+            },
+        )
+        session_id = login_response.cookies.get("session_id")
+        session = await SessionRepository(test_db).get_session(session_id)
+        session.last_activity = datetime.utcnow() - timedelta(
+            seconds=settings.session_timeout_seconds + 1
+        )
+        await test_db.commit()
+
+        response = await test_client.get(
+            "/api/v1/auth/me",
+            cookies={"session_id": session_id},
+        )
+
+        assert response.status_code == 401
+        assert "set-cookie" not in response.headers
+
+
+class TestRollingSessionTimeout:
+    """T097-T099: verify the rolling inactivity timeout over HTTP."""
+
+    async def _login(self, test_client: AsyncClient, test_user_data_in_db: dict) -> str:
+        response = await test_client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": test_user_data_in_db["email"],
+                "password": test_user_data_in_db["password"],
+            },
+        )
+        assert response.status_code == 200
+        session_id = response.cookies.get("session_id")
+        assert session_id
+        return session_id
+
+    @staticmethod
+    def _assert_refreshed_cookie(response, session_id: str) -> None:
+        cookie_header = response.headers["set-cookie"]
+        assert cookie_header.startswith(f"session_id={session_id};")
+        assert "Max-Age=2592000" in cookie_header
+        assert "HttpOnly" in cookie_header
+        assert "Secure" in cookie_header
+        assert "samesite=strict" in cookie_header.lower()
+
+    async def test_t097_session_expires_only_after_inactivity_boundary(
+        self,
+        test_client: AsyncClient,
+        test_user_data_in_db: dict,
+        test_db,
+        middleware_db_factory,
+    ):
+        """A session works just before and at the limit, then expires after it."""
+        from datetime import datetime, timedelta
+
+        from freezegun import freeze_time
+
+        from src.core.config import settings
+        from src.repositories.session_repository import SessionRepository
+
+        with freeze_time("2025-01-01 12:00:00") as clock:
+            session_id = await self._login(test_client, test_user_data_in_db)
+            repository = SessionRepository(test_db)
+            session = await repository.get_session(session_id)
+            original_activity = session.last_activity
+            timeout = settings.session_timeout_seconds
+
+            clock.move_to(original_activity + timedelta(seconds=timeout - 1))
+            before_boundary = await test_client.get(
+                "/api/v1/auth/me", cookies={"session_id": session_id}
+            )
+            assert before_boundary.status_code == 200
+            self._assert_refreshed_cookie(before_boundary, session_id)
+
+            session.last_activity = original_activity
+            await test_db.commit()
+            clock.move_to(original_activity + timedelta(seconds=timeout))
+            at_boundary = await test_client.get(
+                "/api/v1/auth/me", cookies={"session_id": session_id}
+            )
+            assert at_boundary.status_code == 200
+            self._assert_refreshed_cookie(at_boundary, session_id)
+
+            session.last_activity = original_activity
+            await test_db.commit()
+            clock.move_to(original_activity + timedelta(seconds=timeout + 1))
+            after_boundary = await test_client.get(
+                "/api/v1/auth/me", cookies={"session_id": session_id}
+            )
+
+            assert after_boundary.status_code == 401
+            assert "set-cookie" not in after_boundary.headers
+
+    async def test_t098_authenticated_activity_resets_inactivity_window(
+        self,
+        test_client: AsyncClient,
+        test_user_data_in_db: dict,
+        test_db,
+        middleware_db_factory,
+    ):
+        """Activity near expiry starts a fresh inactivity period from that request."""
+        from datetime import timedelta
+
+        from freezegun import freeze_time
+
+        from src.core.config import settings
+        from src.repositories.session_repository import SessionRepository
+
+        with freeze_time("2025-01-01 12:00:00") as clock:
+            session_id = await self._login(test_client, test_user_data_in_db)
+            repository = SessionRepository(test_db)
+            session = await repository.get_session(session_id)
+            login_activity = session.last_activity
+            timeout = settings.session_timeout_seconds
+
+            clock.move_to(login_activity + timedelta(seconds=timeout - 1))
+            activity = await test_client.get(
+                "/api/v1/auth/me", cookies={"session_id": session_id}
+            )
+            assert activity.status_code == 200
+            self._assert_refreshed_cookie(activity, session_id)
+            assert session.last_activity == clock()
+            latest_activity = session.last_activity
+
+            # More than 30 days after login, but only 29 days after activity.
+            clock.move_to(login_activity + timedelta(seconds=timeout * 2 - 2))
+            still_active = await test_client.get(
+                "/api/v1/auth/me", cookies={"session_id": session_id}
+            )
+
+            assert still_active.status_code == 200
+            self._assert_refreshed_cookie(still_active, session_id)
+            assert session.last_activity == clock()
+            assert session.last_activity > latest_activity
+
+    async def test_t099_continuous_activity_has_no_absolute_expiration_cap(
+        self,
+        test_client: AsyncClient,
+        test_user_data_in_db: dict,
+        test_db,
+        middleware_db_factory,
+    ):
+        """Repeated activity keeps a session alive beyond 30 days since login."""
+        from datetime import timedelta
+
+        from freezegun import freeze_time
+
+        from src.core.config import settings
+        from src.repositories.session_repository import SessionRepository
+
+        with freeze_time("2025-01-01 12:00:00") as clock:
+            session_id = await self._login(test_client, test_user_data_in_db)
+            repository = SessionRepository(test_db)
+            session = await repository.get_session(session_id)
+            login_activity = session.last_activity
+            timeout = settings.session_timeout_seconds
+
+            for day in (29, 58, 87, 116):
+                clock.move_to(login_activity + timedelta(days=day))
+                response = await test_client.get(
+                    "/api/v1/auth/me", cookies={"session_id": session_id}
+                )
+
+                assert response.status_code == 200
+                self._assert_refreshed_cookie(response, session_id)
+                assert session.last_activity == clock()
+
+            # At the exact inactivity boundary the session is still valid;
+            # only exceeding the boundary expires it.
+            clock.move_to(session.last_activity + timedelta(seconds=timeout))
+            at_boundary = await test_client.get(
+                "/api/v1/auth/me", cookies={"session_id": session_id}
+            )
+            assert at_boundary.status_code == 200
+            self._assert_refreshed_cookie(at_boundary, session_id)
+
+            clock.move_to(session.last_activity + timedelta(seconds=timeout + 1))
+            expired = await test_client.get(
+                "/api/v1/auth/me", cookies={"session_id": session_id}
+            )
+
+            assert expired.status_code == 401
+            assert "set-cookie" not in expired.headers
 
 
 # ============================================================================
@@ -465,11 +845,14 @@ class TestLogoutEndpoint:
         # Extract session cookie from login response
         login_cookies = login_response.cookies
         assert len(login_cookies) > 0
+        csrf_response = await test_client.get("/api/v1/auth/csrf", cookies=login_cookies)
+        assert csrf_response.status_code == 200
 
         # Now call logout endpoint
         response = await test_client.post(
             "/api/v1/auth/logout",
             cookies=login_cookies,
+            headers={"X-CSRF-Token": csrf_response.json()["csrf_token"]},
         )
 
         # Verify response
@@ -516,11 +899,14 @@ class TestLogoutEndpoint:
 
         # Extract cookies
         login_cookies = login_response.cookies
+        csrf_response = await test_client.get("/api/v1/auth/csrf", cookies=login_cookies)
+        assert csrf_response.status_code == 200
 
         # Logout
         logout_response = await test_client.post(
             "/api/v1/auth/logout",
             cookies=login_cookies,
+            headers={"X-CSRF-Token": csrf_response.json()["csrf_token"]},
         )
         assert logout_response.status_code == 204
 
@@ -530,10 +916,177 @@ class TestLogoutEndpoint:
             cookies=login_cookies,  # Still sending old cookies
         )
         assert me_response.status_code == 401
+        assert "set-cookie" not in me_response.headers
 
         # Try to access a protected route (like /orders) - should redirect to login
         # Note: We don't have /orders endpoint yet, but we can test that auth endpoints require auth
         # For now, we'll verify that /auth/me returns 401 which indicates proper session invalidation
+
+
+class TestCsrfProtection:
+    """CSRF validation for state-changing authenticated requests."""
+
+    async def _login_and_get_csrf(self, test_client, test_user_data_in_db):
+        login_response = await test_client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": test_user_data_in_db["email"],
+                "password": test_user_data_in_db["password"],
+            },
+        )
+        assert login_response.status_code == 200
+        cookies = login_response.cookies
+        token_response = await test_client.get("/api/v1/auth/csrf", cookies=cookies)
+        assert token_response.status_code == 200
+        return cookies, token_response.json()["csrf_token"]
+
+    async def test_valid_token_allows_password_change(
+        self, test_client: AsyncClient, test_user_data_in_db: dict
+    ):
+        cookies, csrf_token = await self._login_and_get_csrf(
+            test_client, test_user_data_in_db
+        )
+        response = await test_client.put(
+            "/api/v1/users/password",
+            cookies=cookies,
+            headers={"X-CSRF-Token": csrf_token},
+            json={
+                "current_password": test_user_data_in_db["password"],
+                "new_password": "ChangedPassword123!",
+            },
+        )
+        assert response.status_code == 204
+
+    async def test_missing_and_invalid_tokens_are_rejected(
+        self, test_client: AsyncClient, test_user_data_in_db: dict
+    ):
+        cookies, _csrf_token = await self._login_and_get_csrf(
+            test_client, test_user_data_in_db
+        )
+        payload = {
+            "current_password": test_user_data_in_db["password"],
+            "new_password": "ChangedPassword123!",
+        }
+        missing = await test_client.put(
+            "/api/v1/users/password", cookies=cookies, json=payload
+        )
+        invalid = await test_client.put(
+            "/api/v1/users/password",
+            cookies=cookies,
+            headers={"X-CSRF-Token": "invalid-token"},
+            json=payload,
+        )
+        assert missing.status_code == 403
+        assert missing.json()["error_code"] == "csrf_invalid"
+        assert invalid.status_code == 403
+        assert invalid.json()["error_code"] == "csrf_invalid"
+        assert "invalid-token" not in invalid.text
+
+    async def test_token_from_another_session_is_rejected(
+        self, test_client: AsyncClient, test_user_data_in_db: dict, test_db
+    ):
+        from src.core.security import generate_csrf_token
+        from src.repositories.session_repository import SessionRepository
+        from src.repositories.user_repository import UserRepository
+
+        _cookies, first_token = await self._login_and_get_csrf(
+            test_client, test_user_data_in_db
+        )
+        user = await UserRepository(test_db).get_user_by_email(test_user_data_in_db["email"])
+        session_repo = SessionRepository(test_db)
+        second = await session_repo.create_session(
+            user_id=user.id,
+            ip_address="127.0.0.1",
+            user_agent="csrf-test",
+            csrf_token=generate_csrf_token(),
+        )
+        await test_db.commit()
+        response = await test_client.put(
+            "/api/v1/users/password",
+            cookies={"session_id": str(second.id)},
+            headers={"X-CSRF-Token": first_token},
+            json={
+                "current_password": test_user_data_in_db["password"],
+                "new_password": "ChangedPassword123!",
+            },
+        )
+        assert response.status_code == 403
+        assert response.json()["error_code"] == "csrf_invalid"
+
+    async def test_revoked_session_cannot_pass_csrf_validation(
+        self, test_client: AsyncClient, test_user_data_in_db: dict, test_db
+    ):
+        from src.repositories.session_repository import SessionRepository
+
+        cookies, csrf_token = await self._login_and_get_csrf(
+            test_client, test_user_data_in_db
+        )
+        await SessionRepository(test_db).invalidate_session(cookies.get("session_id"))
+        await test_db.commit()
+        response = await test_client.put(
+            "/api/v1/users/password",
+            cookies=cookies,
+            headers={"X-CSRF-Token": csrf_token},
+            json={
+                "current_password": test_user_data_in_db["password"],
+                "new_password": "ChangedPassword123!",
+            },
+        )
+        assert response.status_code == 401
+        assert csrf_token not in response.text
+
+    async def test_expired_session_cannot_pass_csrf_validation(
+        self, test_client: AsyncClient, test_user_data_in_db: dict, test_db
+    ):
+        from datetime import datetime, timedelta
+
+        from src.core.config import settings
+        from src.repositories.session_repository import SessionRepository
+
+        cookies, csrf_token = await self._login_and_get_csrf(
+            test_client, test_user_data_in_db
+        )
+        session = await SessionRepository(test_db).get_session(cookies.get("session_id"))
+        session.last_activity = datetime.utcnow() - timedelta(
+            seconds=settings.session_timeout_seconds + 1
+        )
+        await test_db.commit()
+
+        response = await test_client.put(
+            "/api/v1/users/password",
+            cookies=cookies,
+            headers={"X-CSRF-Token": csrf_token},
+            json={
+                "current_password": test_user_data_in_db["password"],
+                "new_password": "ChangedPassword123!",
+            },
+        )
+
+        assert response.status_code == 401
+        assert csrf_token not in response.text
+
+    async def test_safe_get_does_not_require_csrf_token(
+        self, test_client: AsyncClient, test_user_data_in_db: dict
+    ):
+        cookies, _csrf_token = await self._login_and_get_csrf(
+            test_client, test_user_data_in_db
+        )
+        response = await test_client.get("/api/v1/auth/me", cookies=cookies)
+        assert response.status_code == 200
+
+    async def test_logout_rejects_invalid_csrf_token(
+        self, test_client: AsyncClient, test_user_data_in_db: dict
+    ):
+        cookies, _csrf_token = await self._login_and_get_csrf(
+            test_client, test_user_data_in_db
+        )
+        response = await test_client.post(
+            "/api/v1/auth/logout",
+            cookies=cookies,
+            headers={"X-CSRF-Token": "invalid-token"},
+        )
+        assert response.status_code == 403
+        assert response.json()["error_code"] == "csrf_invalid"
 
 
 # ============================================================================

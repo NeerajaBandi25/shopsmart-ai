@@ -19,6 +19,15 @@ from src.models.session import Session
 from src.models.login_attempt import LoginAttempt
 
 
+@pytest.fixture(autouse=True)
+def isolate_process_rate_limiter(monkeypatch):
+    """Keep process-local rate-limit state from leaking between tests."""
+    from src.core import rate_limiter as rate_limiter_module
+
+    monkeypatch.setattr(rate_limiter_module.settings, "redis_url", None)
+    monkeypatch.setattr(rate_limiter_module, "rate_limiter", rate_limiter_module.RateLimiter())
+
+
 @event.listens_for(Base.metadata, "before_create")
 def filter_sqlite_constraints(target, connection, **kw):
     """Filter out PostgreSQL-specific constraints (e.g. regex operators) when running in-memory SQLite tests."""

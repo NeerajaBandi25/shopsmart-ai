@@ -65,7 +65,19 @@ class AuthorizationError(AppException):
 class RateLimitError(AppException):
     """Rate limit exceeded (429)."""
 
-    def __init__(self, message: str = "Too many login attempts. Please try again in 15 minutes.", error_code: str = "rate_limited"):
+    def __init__(
+        self,
+        limit: int,
+        remaining: int,
+        reset_at: int,
+        message: str = "Too many login attempts. Please try again in 15 minutes.",
+        error_code: str = "rate_limited",
+    ):
+        self.rate_limit_headers = {
+            "X-RateLimit-Limit": str(limit),
+            "X-RateLimit-Remaining": str(max(0, remaining)),
+            "X-RateLimit-Reset": str(reset_at),
+        }
         super().__init__(
             message=message,
             status_code=429,

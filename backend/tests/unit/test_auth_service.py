@@ -381,88 +381,49 @@ class TestRateLimitingLogic:
         assert exc_info.value.status_code == 429
         assert exc_info.value.error_code == "rate_limited"
 
-    async def test_rate_limit_resets_after_time_window(
-        self, test_db, monkeypatch
-    ):
-        """Test that rate limit resets after 15-minute window - patched both model and repo."""
-        # Import datetime for time manipulation
-        from unittest.mock import MagicMock
-        import datetime
+    async def test_rate_limit_resets_after_time_window(self, test_db):
+        """The limiter allows attempts again after its shared window expires."""
+        from datetime import timedelta
+
+        from freezegun import freeze_time
+
+        from src.core import rate_limiter as rate_limiter_module
+        from src.services.auth_service import AuthService
 
         # Test user credentials
         email = "rate_limit_reset@example.com"
         password = "wrong123!"
         ip_address = "192.168.1.100"
 
-        # Fixed time for testing - set to a time in the past relative to real time
-        fixed_time = datetime.datetime(2020, 1, 1, 12, 0, 0)
-
-        # Create a mock datetime class with a utcnow method that returns our fixed time
-        class MockDatetimeClass:
-            @staticmethod
-            def utcnow():
-                return fixed_time
-
-            # Support for timedelta (needed by repository)
-            timedelta = datetime.timedelta
-
-        # Monkey patch BEFORE importing/creating anything that uses LoginAttempt
-        # Replace the imported datetime class in both modules
-        monkeypatch.setattr('src.models.login_attempt.datetime', MockDatetimeClass)
-        monkeypatch.setattr('src.repositories.login_attempt_repository.datetime', MockDatetimeClass)
-
-        # NOW create the auth service after patching
-        from src.services.auth_service import AuthService
         auth_service = AuthService(db=test_db)
 
-        # Make 5 failed attempts - all should be allowed (AuthenticationError, not RateLimitError)
-        for i in range(5):
-            with pytest.raises(Exception) as exc_info:
+        with freeze_time("2025-01-01 12:00:00") as clock:
+            rate_limiter_module.rate_limiter._clock = lambda: clock().timestamp()
+            for _ in range(5):
+                with pytest.raises(AuthenticationError):
+                    await auth_service.login_user(
+                        email=email,
+                        password=password,
+                        ip_address=ip_address,
+                        user_agent="test-agent",
+                    )
+
+            with pytest.raises(RateLimitError):
                 await auth_service.login_user(
                     email=email,
                     password=password,
                     ip_address=ip_address,
                     user_agent="test-agent",
                 )
-            # First 5 should be AuthenticationError (invalid credentials), not RateLimitError
-            assert exc_info.type.__name__ == "AuthenticationError"
 
-        # 6th attempt should be rate limited
-        with pytest.raises(Exception) as exc_info:
-            await auth_service.login_user(
-                email=email,
-                password=password,
-                ip_address=ip_address,
-                user_agent="test-agent",
-            )
-        assert exc_info.type.__name__ == "RateLimitError"
-
-        # Now advance time by enough years to surpass real time (so real timestamps are "old")
-        future_time = datetime.datetime(2027, 1, 1, 12, 0, 0)
-        # Update the mock to return the future time
-        class MockDatetimeClassFuture:
-            @staticmethod
-            def utcnow():
-                return future_time
-
-            # Support for timedelta (needed by repository)
-            timedelta = datetime.timedelta
-
-        # Update the patches to use the future time mock
-        monkeypatch.setattr('src.models.login_attempt.datetime', MockDatetimeClassFuture)
-        monkeypatch.setattr('src.repositories.login_attempt_repository.datetime', MockDatetimeClassFuture)
-
-        # After waiting sufficient time, the rate limit should reset
-        # Next attempt should be allowed (AuthenticationError for invalid credentials, not RateLimitError)
-        with pytest.raises(Exception) as exc_info:
-            await auth_service.login_user(
-                email=email,
-                password=password,
-                ip_address=ip_address,
-                user_agent="test-agent",
-            )
-        # Should be AuthenticationError (invalid credentials) since rate limit reset
-        assert exc_info.type.__name__ == "AuthenticationError"
+            clock.tick(delta=timedelta(minutes=15, seconds=1))
+            with pytest.raises(AuthenticationError):
+                await auth_service.login_user(
+                    email=email,
+                    password=password,
+                    ip_address=ip_address,
+                    user_agent="test-agent",
+                )
 
 
 # ============================================================================

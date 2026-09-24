@@ -120,10 +120,12 @@ export async function login(
  * @throws Error if logout fails
  */
 export async function logout(): Promise<void> {
+  const csrfToken = await getCsrfToken();
   const response = await fetch(`${API_BASE_URL}/auth/logout`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
     },
     credentials: 'include',
   });

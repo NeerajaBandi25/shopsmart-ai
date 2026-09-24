@@ -45,8 +45,9 @@ export async function middleware(request: NextRequest) {
 
   // For protected paths, check session validity
   try {
+    const apiBaseUrl = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL;
     const sessionResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/auth/me`,
+      `${apiBaseUrl}/auth/me`,
       {
         method: 'GET',
         headers: {

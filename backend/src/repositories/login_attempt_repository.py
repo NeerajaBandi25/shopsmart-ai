@@ -41,6 +41,7 @@ class LoginAttemptRepository:
         attempt = LoginAttempt(
             email=email,
             ip_address=ip_address,
+            attempted_at=datetime.utcnow(),
             success=success,
             failure_reason=failure_reason,
         )
@@ -58,6 +59,12 @@ class LoginAttemptRepository:
         Returns:
             int: Number of failed attempts
         """
+        return len(await self.get_failed_attempt_timestamps(ip_address, minutes))
+
+    async def get_failed_attempt_timestamps(
+        self, ip_address: str, minutes: int = 15
+    ) -> list[datetime]:
+        """Return timestamps for failed attempts within the active window."""
         cutoff_time = datetime.utcnow() - timedelta(minutes=minutes)
 
         # Handle IP address comparison for different database dialects
@@ -70,7 +77,7 @@ class LoginAttemptRepository:
             ip_condition = LoginAttempt.ip_address == ip_address
 
         result = await self.db.execute(
-            select(LoginAttempt).where(
+            select(LoginAttempt.attempted_at).where(
                 and_(
                     ip_condition,
                     LoginAttempt.attempted_at >= cutoff_time,
@@ -78,4 +85,4 @@ class LoginAttemptRepository:
                 )
             )
         )
-        return len(result.scalars().all())
+        return list(result.scalars().all())

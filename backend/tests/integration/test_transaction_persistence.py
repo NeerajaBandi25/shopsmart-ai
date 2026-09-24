@@ -165,10 +165,16 @@ class TestTransactionPersistence:
         cookies = login.cookies
         session_id = cookies.get("session_id")
         assert session_id
+        request_cookies = {"session_id": session_id}
+        csrf_response = await pg_client.get(
+            "/api/v1/auth/csrf", cookies=request_cookies
+        )
+        assert csrf_response.status_code == 200
 
         logout = await pg_client.post(
             "/api/v1/auth/logout",
-            cookies={"session_id": session_id},
+            cookies=request_cookies,
+            headers={"X-CSRF-Token": csrf_response.json()["csrf_token"]},
         )
         assert logout.status_code == 204
 

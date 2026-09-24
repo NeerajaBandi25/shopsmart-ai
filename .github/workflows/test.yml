@@ -1,0 +1,199 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same branch/PR
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend tests (pytest, PostgreSQL)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: agentsuresh
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: shopsmart_ai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Matches the local backend/.env convention. The companion
+      # shopsmart_ai_test database (used by PG-backed integration tests) is
+      # created in the first step because tests derive their own "<db>_test" URL.
+      DATABASE_URL: postgresql+asyncpg://agentsuresh@localhost:5432/shopsmart_ai
+      SECRET_KEY: ci-only-not-a-production-secret
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Create test database
+        run: |
+          psql "postgresql://agentsuresh@localhost:5432/postgres" \
+            --set ON_ERROR_STOP=1 \
+            -c "CREATE DATABASE shopsmart_ai_test OWNER agentsuresh;"
+
+      - name: Sync dependencies (uv, lock-pinned)
+        run: uv sync --frozen --extra test --no-install-project
+
+      - name: Apply Alembic migrations
+        run: uv run --no-sync alembic upgrade head
+
+      # python -m (not the console script) so the backend root lands on
+      # sys.path and `import src` resolves the same way as local runs.
+      - name: Run backend and authentication security tests
+        run: uv run --no-sync python -m pytest
+
+      - name: Upload coverage HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-html
+          path: backend/htmlcov/
+          retention-days: 7
+
+  backend-security-gates:
+    name: Backend security gates (Ruff, pip-audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Check authentication/security code (Ruff)
+        run: >-
+          uvx --from ruff==0.1.8 ruff check
+          src/core/security.py
+          src/core/rate_limiter.py
+          src/services/auth_service.py
+          src/api/v1/auth_routes.py
+
+      - name: Check authentication/security rules (Ruff S)
+        run: >-
+          uvx --from ruff==0.1.8 ruff check --select S
+          src/core/security.py
+          src/core/rate_limiter.py
+          src/services/auth_service.py
+          src/api/v1/auth_routes.py
+
+      - name: Audit backend dependencies (pip-audit)
+        run: uvx --from pip-audit==2.10.1 pip-audit .
+
+  frontend-tests:
+    name: Frontend tests (jest, lint, prettier)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Run tests (jest)
+        run: npm test -- --ci
+
+      - name: Lint (eslint via next lint)
+        run: npm run lint
+
+      # Includes Next.js/TypeScript compilation checks per CLAUDE.md section 16.
+      - name: Build (next build)
+        run: npm run build
+
+      - name: Check formatting (prettier)
+        run: npm run format:check
+
+  docker-compose-smoke:
+    name: Docker Compose smoke test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: shopsmart
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: shopsmart_ai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://shopsmart@host.docker.internal:5432/shopsmart_ai
+      SECRET_KEY: ci-only-not-a-production-secret
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: '["http://localhost:3000"]'
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start services and wait for container health checks
+        run: docker compose up --build --detach --wait --wait-timeout 240
+
+      - name: Apply migrations and verify database readiness
+        run: |
+          docker compose exec -T backend alembic upgrade head
+          curl --fail --retry 10 --retry-connrefused --retry-delay 2 --retry-max-time 30 \
+            http://localhost:8000/readiness
+
+      - name: Verify frontend health
+        run: curl --fail http://localhost:3000/
+
+      - name: Stop Compose services
+        if: always()
+        run: docker compose down --volumes --remove-orphans

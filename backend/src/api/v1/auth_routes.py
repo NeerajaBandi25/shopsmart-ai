@@ -7,8 +7,10 @@ from fastapi import APIRouter, Cookie, Depends, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.v1.deps import get_current_user, get_db
+from src.api.v1.deps import get_current_user, get_db, require_csrf_token
+from src.core.config import settings
 from src.core.exceptions import AuthenticationError
+from src.core.observability import security_audit_event
 from src.services.auth_service import AuthService
 
 # ============================================================================
@@ -139,9 +141,15 @@ async def login(
         user_agent=user_agent,
     )
 
-    # Set session cookie with security flags: httpOnly, Secure, SameSite=Strict, Max-Age=2592000
-    cookie_value = f"session_id={result['session_id']}; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000; Path=/"
-    response.headers.setdefault("Set-Cookie", cookie_value)
+    response.set_cookie(
+        key="session_id",
+        value=result["session_id"],
+        max_age=settings.session_timeout_seconds,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="strict",
+    )
 
     # Return user info (session_id is in cookie only)
     return LoginResponse(
@@ -156,9 +164,12 @@ async def login(
     summary="Logout user and invalidate session",
 )
 async def logout(
+    http_request: Request,
     session_id: str = Cookie(None),
     response: Response = None,
     db: AsyncSession = Depends(get_db),
+    current_user_uuid: UUID = Depends(get_current_user),
+    _csrf_validated: None = Depends(require_csrf_token),
 ):
     """Logout user by invalidating their session and clearing the session cookie.
 
@@ -183,14 +194,22 @@ async def logout(
     if not logged_out:
         raise AuthenticationError("Invalid session")
 
-    response.headers["Set-Cookie"] = (
-        "session_id=; "
-        "HttpOnly; "
-        "Secure; "
-        "SameSite=Strict; "
-        "Path=/; "
-        "Max-Age=0; "
-        "expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    security_audit_event(
+        "logout_success",
+        success=True,
+        user_id=str(current_user_uuid),
+        client_ip=http_request.client.host if http_request.client else None,
+    )
+
+    response.set_cookie(
+        key="session_id",
+        value="",
+        max_age=0,
+        expires="Thu, 01 Jan 1970 00:00:00 GMT",
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="strict",
     )
 
     # Return 204 No Content (no response body)
@@ -204,6 +223,7 @@ async def logout(
     summary="Get CSRF token for current session",
 )
 async def get_csrf_token(
+    current_user_uuid: UUID = Depends(get_current_user),
     session_id: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db),
 ) -> CsrfResponse:
@@ -213,24 +233,13 @@ async def get_csrf_token(
     verifies it is active/unexpired, and returns its stored token.
     Session failures remain 401.
     """
-    if not session_id:
-        raise AuthenticationError("Session required")
     from src.repositories.session_repository import SessionRepository
 
+    if not session_id:
+        raise AuthenticationError("Session required")
     session_repo = SessionRepository(db=db)
     session = await session_repo.get_session(session_id)
-    if not session or not session.is_active:
-        raise AuthenticationError("Session invalid or expired")
-    # Enforce rolling inactivity window (same 30-day rule as validation).
-    from datetime import datetime
-
-    from src.core.config import settings
-
-    now = datetime.utcnow()
-    if (
-        not session.last_activity
-        or (now.timestamp() - session.last_activity.timestamp()) > settings.session_timeout_seconds
-    ):
+    if not session or not session.is_active or session.user_id != current_user_uuid:
         raise AuthenticationError("Session invalid or expired")
     if not session.csrf_token:
         raise AuthenticationError("Session invalid or expired")
