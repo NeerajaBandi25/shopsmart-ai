@@ -1,0 +1,101 @@
+name: Engineering task
+description: Define one bounded ShopSmart engineering task for human review and agent execution.
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Create one issue per independently reviewable task. Human approval is required before implementation.
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What outcome should this task achieve, and why?
+      placeholder: Describe the observable result.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List verifiable outcomes. Avoid implementation-only criteria.
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Specify included behavior and allowed paths or modules.
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: Identify adjacent work that must not be included.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and interfaces
+      description: List prerequisite issues, stable contracts, shared files, and sequencing constraints.
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk classification
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+  - type: textarea
+    id: security_impact
+    attributes:
+      label: Security impact
+      description: Describe auth, authorization, data, secrets, threat-model, or security-check impact. Use "None identified" only after review.
+    validations:
+      required: true
+  - type: textarea
+    id: migration_impact
+    attributes:
+      label: Migration and data impact
+      description: Describe schema/data migration impact, or state "None identified".
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests and validation
+      description: Name expected tests, exact commands where known, and required CI checks.
+    validations:
+      required: true
+  - type: textarea
+    id: risks_rollback
+    attributes:
+      label: Risks and rollback
+      description: Describe failure modes, monitoring needs, and how to safely revert or mitigate.
+    validations:
+      required: true
+  - type: input
+    id: baseline_sha
+    attributes:
+      label: Approved baseline commit SHA
+      description: Human-maintained. Leave blank until a baseline is selected.
+      placeholder: Full commit SHA
+  - type: textarea
+    id: publication_authorization
+    attributes:
+      label: Commit, push, and PR authorization
+      description: Human-maintained. State explicitly whether commits, pushes, and PR creation are authorized, and name the permitted branch. Blank means not authorized.
+      placeholder: Not authorized / Authorized for task ... on branch ...; PR creation ...
+  - type: textarea
+    id: build_fix_authorization
+    attributes:
+      label: CI Build-Fix authorization
+      description: Human-maintained. Default is no autonomous repair. If authorized, scope eligible failure classes/paths and set the attempt budget. Sensitive or ambiguous failures always escalate.
+      placeholder: Not authorized / Authorized for ... paths and ... attempt(s); same branch only

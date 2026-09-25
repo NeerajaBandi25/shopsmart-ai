@@ -107,6 +107,6 @@ Do NOT:
 - add Agent SDK
 - add generic shell executor
 - add workspace hashing yet
-- add multi-agent architecture
+- add multi-agent architecture unless explicitly authorized by the project owner; the approved initial exception is limited to the Planner, Engineer, and CI / Build-Fix Copilot workflow definitions, shared instructions, Issue/PR templates, and workflow documentation. It does not authorize application changes, edits to `.claude/` or `.harness/`, GitHub settings changes, or agent merge/deployment authority.
 - change OmniRoute/FCC provider routing unless specifically required
 - modify unrelated application files during harness maintenance
