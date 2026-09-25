@@ -125,8 +125,8 @@ export function CategorySection() {
         </div>
 
         <p className="mx-auto mt-8 max-w-xl text-center text-sm text-ink-500">
-          Visual categories for browsing inspiration. Shopping functionality is not yet implemented
-          — this section showcases our design vision.
+          Visual categories for browsing inspiration. Current products and stock availability are
+          shown in the catalog above.
         </p>
       </div>
     </section>

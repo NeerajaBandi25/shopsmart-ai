@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,3 +73,21 @@ async def test_get_products_orders_newest_first_and_applies_pagination(
 
     assert [product.sku for product in all_products] == ["NEWEST", "MIDDLE", "OLDEST"]
     assert [product.sku for product in page] == ["MIDDLE"]
+
+
+async def test_get_products_breaks_created_at_ties_by_id_descending(
+    test_db: AsyncSession,
+):
+    created_at = datetime(2025, 1, 1)
+    lower_id = UUID("00000000-0000-0000-0000-000000000001")
+    higher_id = UUID("00000000-0000-0000-0000-000000000002")
+    lower_id_product = _product("TIE-LOW", created_at)
+    lower_id_product.id = lower_id
+    higher_id_product = _product("TIE-HIGH", created_at)
+    higher_id_product.id = higher_id
+    test_db.add_all([lower_id_product, higher_id_product])
+    await test_db.flush()
+
+    products = await ProductRepository(test_db).get_products(active_only=False)
+
+    assert [product.sku for product in products] == ["TIE-HIGH", "TIE-LOW"]

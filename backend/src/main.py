@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.api.v1 import auth_routes, user_routes
+from src.api.v1 import auth_routes, product_routes, user_routes
 from src.core.config import settings
 from src.core.exceptions import (
     AppException,
@@ -152,6 +152,7 @@ async def readiness_check():
 
 # Include API routes
 app.include_router(auth_routes.router, prefix="/api/v1")
+app.include_router(product_routes.router, prefix="/api/v1")
 app.include_router(user_routes.router, prefix="/api/v1")
 
 

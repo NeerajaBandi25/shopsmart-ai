@@ -17,6 +17,7 @@ from src.models.base import Base
 from src.models.user import User
 from src.models.session import Session
 from src.models.login_attempt import LoginAttempt
+from src.models.product import Product  # noqa: F401
 
 
 @pytest.fixture(autouse=True)

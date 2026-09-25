@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Nav from '@/components/nav';
 import { cookies } from 'next/headers';
 import { HeroCampaign } from '@/components/HeroCampaign';
+import { ProductCatalog } from '@/components/ProductCatalog';
 import { CategorySection } from '@/components/CategorySection';
 import { DiscoverySection } from '@/components/DiscoverySection';
 import { PromoBanner } from '@/components/PromoBanner';
@@ -9,11 +10,11 @@ import { PromoBanner } from '@/components/PromoBanner';
 /**
  * ShopSmart AI homepage — Phase 3 visual redesign.
  * Composes the existing merchandising components in the approved order:
- * Nav → Hero → Offer band → Categories → Discovery → Promo. Visual redesign
- * only: existing routes/CTAs, no commerce behavior, no search, no product
- * data. The offer band states only perks that are true today (secure account,
- * planned AI features framed as early access, free registration) — no
- * fabricated discounts or inventory.
+ * Nav → Hero → Offer band → live catalog → Categories → Discovery → Promo.
+ * The catalog is the first persisted commerce behavior; other visual sections
+ * remain inspiration-only. The offer band states only perks that are true
+ * today (secure account, planned AI features framed as early access, free
+ * registration) — no fabricated discounts or inventory.
  *
  * Section rhythm: sections own their vertical padding (py-12/py-16 range) so
  * bands sit flush and the page reads as one editorial composition.
@@ -82,6 +83,7 @@ export default async function HomePage() {
           </div>
         </section>
 
+        <ProductCatalog />
         <CategorySection />
         <DiscoverySection />
         <PromoBanner />
