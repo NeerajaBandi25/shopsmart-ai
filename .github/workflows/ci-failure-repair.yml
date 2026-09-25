@@ -1,0 +1,194 @@
+name: CI Failure Repair
+run-name: CI Failure Repair PR #${{ github.event.issue.number }} authorization-comment=${{ github.event.comment.id }}
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: read
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: ci-failure-repair-${{ github.event.issue.number }}-${{ github.event.comment.id }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Validate authorization and consume one-shot attempt
+    if: github.event.issue.pull_request != null && github.ref == 'refs/heads/main' && startsWith(github.event.comment.body, 'PHASE6B REPAIR AUTHORIZATION')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      eligible: ${{ steps.validate.outputs.eligible }}
+      pr_number: ${{ steps.validate.outputs.pr_number }}
+      head_sha: ${{ steps.validate.outputs.head_sha }}
+      head_ref: ${{ steps.validate.outputs.head_ref }}
+      authorization_comment_id: ${{ steps.validate.outputs.authorization_comment_id }}
+      workflow_id: ${{ steps.validate.outputs.workflow_id }}
+      source_run_id: ${{ steps.validate.outputs.source_run_id }}
+    steps:
+      - name: Check out trusted default-branch repair code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Verify helper self-tests
+        run: python3 .github/scripts/ci_failure_repair.py --self-test
+
+      - name: Validate failure and explicit authorization
+        id: validate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: python3 .github/scripts/ci_failure_repair.py preflight
+
+  format:
+    name: Format isolated allowlisted file (no write token)
+    needs: preflight
+    if: needs.preflight.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Check out the validated PR head without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ needs.preflight.outputs.head_sha }}
+          path: source
+          persist-credentials: false
+
+      - name: Check out trusted formatter configuration and repair code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: repair-tools
+          persist-credentials: false
+
+      - name: Set up Node without reading repository configuration
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      - name: Install only the pinned formatter without lifecycle scripts
+        run: npm install --ignore-scripts --no-save --prefix "$RUNNER_TEMP/prettier" prettier@3.9.8
+
+      - name: Revalidate source authorization immediately before formatting
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.preflight.outputs.pr_number }}
+          EXPECTED_SHA: ${{ needs.preflight.outputs.head_sha }}
+          EXPECTED_HEAD_REF: ${{ needs.preflight.outputs.head_ref }}
+          SOURCE_RUN_ID: ${{ needs.preflight.outputs.source_run_id }}
+          AUTHORIZATION_COMMENT_ID: ${{ needs.preflight.outputs.authorization_comment_id }}
+        run: python3 repair-tools/.github/scripts/ci_failure_repair.py verify-source
+
+      - name: Format only the allowlisted file without credentials
+        env:
+          FORMATTER: ${{ runner.temp }}/prettier/node_modules/prettier/bin/prettier.cjs
+          TRUSTED_CONFIG: repair-tools/frontend/.prettierrc
+          TARGET_FILE: source/frontend/src/app/page.tsx
+        run: python3 repair-tools/.github/scripts/ci_failure_repair.py format-file
+
+      - name: Enforce formatting-only change to exactly the allowlisted path
+        env:
+          REPO_DIR: source
+        run: python3 repair-tools/.github/scripts/ci_failure_repair.py verify-working-tree
+
+      - name: Upload validated one-file patch
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: authorized-prettier-repair
+          path: source/frontend/src/app/page.tsx
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Revalidate and publish exact-path repair
+    needs: [preflight, format]
+    if: needs.preflight.outputs.eligible == 'true' && needs.format.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+      issues: read
+      pull-requests: read
+    outputs:
+      repair_sha: ${{ steps.publish.outputs.repair_sha }}
+    steps:
+      - name: Check out trusted default-branch publisher code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Set up Node for trusted formatter verification
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      - name: Download patch data outside the repository
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: authorized-prettier-repair
+          path: ${{ runner.temp }}/repair-artifact
+
+      - name: Install pinned formatter without lifecycle scripts
+        run: npm install --ignore-scripts --no-save --prefix "$RUNNER_TEMP/prettier" prettier@3.9.8
+
+      - name: Verify artifact with trusted formatter and no credentials
+        id: verify
+        env:
+          FORMATTER: ${{ runner.temp }}/prettier/node_modules/prettier/bin/prettier.cjs
+          TRUSTED_CONFIG: frontend/.prettierrc
+          ARTIFACT_FILE: ${{ runner.temp }}/repair-artifact/page.tsx
+        run: python3 .github/scripts/ci_failure_repair.py verify-artifact
+
+      - name: Revalidate authorization and publish one file to the existing branch
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.preflight.outputs.pr_number }}
+          EXPECTED_SHA: ${{ needs.preflight.outputs.head_sha }}
+          EXPECTED_HEAD_REF: ${{ needs.preflight.outputs.head_ref }}
+          SOURCE_RUN_ID: ${{ needs.preflight.outputs.source_run_id }}
+          AUTHORIZATION_COMMENT_ID: ${{ needs.preflight.outputs.authorization_comment_id }}
+          ARTIFACT_FILE: ${{ runner.temp }}/repair-artifact/page.tsx
+          ARTIFACT_SHA256: ${{ steps.verify.outputs.artifact_sha256 }}
+        run: python3 .github/scripts/ci_failure_repair.py publish
+
+  dispatch-fresh-ci:
+    name: Dispatch and verify fresh CI on repaired SHA
+    needs: [preflight, publish]
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Dispatch existing CI on the repair commit SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.preflight.outputs.pr_number }}
+          EXPECTED_REPAIR_SHA: ${{ needs.publish.outputs.repair_sha }}
+          CI_WORKFLOW_ID: ${{ needs.preflight.outputs.workflow_id }}
+        run: python3 .github/scripts/ci_failure_repair.py dispatch-ci
