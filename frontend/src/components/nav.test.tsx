@@ -28,6 +28,8 @@ describe('Nav', () => {
     render(<Nav />);
     await screen.findByRole('button', { name: /log out/i });
     expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cart' })).toHaveAttribute('href', '/cart');
+    expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute('href', '/orders');
   });
 
   it('hides logout button when not authenticated', async () => {

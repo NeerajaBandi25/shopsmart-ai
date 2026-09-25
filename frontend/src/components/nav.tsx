@@ -144,6 +144,12 @@ export default function Nav({ probeAuth = true }: NavProps) {
               <Link href="/dashboard" className={navLinkClasses}>
                 Dashboard
               </Link>
+              <Link href="/cart" className={navLinkClasses}>
+                Cart
+              </Link>
+              <Link href="/orders" className={navLinkClasses}>
+                Orders
+              </Link>
               <Link href="/account" className={navLinkClasses}>
                 Account
               </Link>

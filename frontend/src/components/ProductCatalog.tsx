@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { getProducts, type Product, type ProductPage } from '@/lib/api-client';
+import { AddToCartButton } from '@/components/AddToCartButton';
 
 const PAGE_SIZE = 24;
 const priceFormatter = new Intl.NumberFormat('en-US', {
@@ -60,6 +62,12 @@ export function ProductCatalog() {
           <p className="max-w-xl text-sm text-ink-500">
             Current products, with live pricing and stock availability.
           </p>
+          <Link
+            href="/cart"
+            className="mt-2 w-fit text-sm font-semibold text-accent-700 underline underline-offset-4"
+          >
+            View cart
+          </Link>
         </div>
 
         {status === 'loading' && (
@@ -121,6 +129,13 @@ export function ProductCatalog() {
                       ? `${product.stock_quantity} in stock`
                       : 'Out of stock'}
                   </p>
+                </div>
+                <div className="mt-4">
+                  <AddToCartButton
+                    productId={product.id}
+                    stockQuantity={product.stock_quantity}
+                    maxPurchaseQuantity={product.max_purchase_quantity}
+                  />
                 </div>
               </article>
             ))}

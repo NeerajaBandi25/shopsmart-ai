@@ -10,7 +10,7 @@ export interface CheckoutLine extends CheckoutItem {
 
 interface CheckoutFormProps {
   items: CheckoutLine[];
-  onSuccess?: (order: Order) => void;
+  onSuccess?: (order: Order) => void | Promise<boolean | void>;
 }
 
 function createIdempotencyKey(): string {
@@ -26,6 +26,7 @@ export function CheckoutForm({ items, onSuccess }: CheckoutFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
+  const [cartCleanupWarning, setCartCleanupWarning] = useState(false);
   const idempotencyKey = useRef<string | null>(null);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -40,7 +41,7 @@ export function CheckoutForm({ items, onSuccess }: CheckoutFormProps) {
         idempotencyKey.current
       );
       setPlacedOrder(order);
-      onSuccess?.(order);
+      setCartCleanupWarning((await onSuccess?.(order)) === true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Checkout could not be completed.');
     } finally {
@@ -55,6 +56,11 @@ export function CheckoutForm({ items, onSuccess }: CheckoutFormProps) {
           Order placed successfully.
         </p>
         <p className="text-sm text-ink-500">Order #{placedOrder.id}</p>
+        {cartCleanupWarning && (
+          <p role="alert" className="text-sm text-status-error">
+            Your order was placed, but the cart could not be fully cleared. Review your cart.
+          </p>
+        )}
         <Link href="/orders" className="font-medium text-accent-700 underline underline-offset-4">
           View order history
         </Link>

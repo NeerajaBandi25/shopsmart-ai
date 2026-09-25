@@ -5,6 +5,7 @@ import { ProductCatalog } from '@/components/ProductCatalog';
 jest.mock('@/lib/api-client', () => ({
   getProducts: jest.fn(),
 }));
+jest.mock('@/lib/cart-api', () => ({ addCartItem: jest.fn() }));
 
 const mockedGetProducts = jest.mocked(getProducts);
 
@@ -56,9 +57,11 @@ describe('ProductCatalog', () => {
     expect(await screen.findByRole('heading', { name: 'Canvas Weekender' })).toBeInTheDocument();
     expect(screen.getByText('$12.99')).toBeInTheDocument();
     expect(screen.getByText('8 in stock')).toBeInTheDocument();
-    expect(screen.getByText('Out of stock')).toBeInTheDocument();
+    expect(screen.getByText('Out of stock', { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByText('A durable carryall for short trips.')).toBeInTheDocument();
     expect(mockedGetProducts).toHaveBeenCalledWith(0, 24);
+    expect(screen.getByRole('button', { name: 'Add to cart' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View cart' })).toHaveAttribute('href', '/cart');
   });
 
   it('shows an empty state when the API returns no products', async () => {

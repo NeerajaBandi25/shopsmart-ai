@@ -23,6 +23,8 @@ sys.path.insert(0, str(backend_root))
 
 from src.core.config import settings  # noqa: E402
 from src.models.base import Base  # noqa: E402
+from src.models.cart import Cart, CartItem  # noqa: E402, F401
+from src.models.order import Order, OrderItem  # noqa: E402, F401
 from src.models.product import Product  # noqa: E402, F401
 
 # Set target_metadata for autogenerate support

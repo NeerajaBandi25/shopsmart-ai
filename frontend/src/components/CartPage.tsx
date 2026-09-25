@@ -190,6 +190,14 @@ export function CartPage() {
               {priceFormatter.format(cart.subtotal / 100)}
             </p>
           </div>
+          <div className="flex flex-wrap justify-end gap-4 border-t border-ink-100 pt-5">
+            <Link
+              href="/checkout"
+              className="rounded-sm bg-accent-700 px-5 py-3 text-sm font-semibold text-white hover:bg-accent-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
+            >
+              Continue to checkout
+            </Link>
+          </div>
         </>
       )}
     </section>

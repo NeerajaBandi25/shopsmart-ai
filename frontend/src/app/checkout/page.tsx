@@ -1,27 +1,7 @@
 import AuthenticatedLayout from '@/app/authenticated-layout';
-import { CheckoutForm, type CheckoutLine } from '@/components/CheckoutForm';
+import { CheckoutFlow } from '@/components/CheckoutFlow';
 
-type SearchValue = string | string[] | undefined;
-
-function asList(value: SearchValue): string[] {
-  if (Array.isArray(value)) return value;
-  return value ? [value] : [];
-}
-
-export default function CheckoutPage({
-  searchParams,
-}: {
-  searchParams: { product_id?: SearchValue; quantity?: SearchValue };
-}) {
-  const productIds = asList(searchParams.product_id);
-  const quantities = asList(searchParams.quantity);
-  const items: CheckoutLine[] = productIds.flatMap((product_id, index) => {
-    const quantity = Number(quantities[index]);
-    return product_id && Number.isSafeInteger(quantity) && quantity > 0
-      ? [{ product_id, quantity }]
-      : [];
-  });
-
+export default function CheckoutPage() {
   return (
     <AuthenticatedLayout>
       <div className="mx-auto max-w-3xl space-y-8">
@@ -32,9 +12,7 @@ export default function CheckoutPage({
             Final prices and availability are confirmed when you place the order.
           </p>
         </header>
-        <section className="rounded-tile border border-ink-100 bg-white p-5 shadow-tile sm:p-7">
-          <CheckoutForm items={items} />
-        </section>
+        <CheckoutFlow />
       </div>
     </AuthenticatedLayout>
   );
