@@ -56,8 +56,6 @@ class Product(BaseModel):
         CheckConstraint("price >= 0", name="ck_products_price_non_negative"),
         CheckConstraint("stock_quantity >= 0", name="ck_products_stock_non_negative"),
         CheckConstraint("max_purchase_quantity >= 1", name="ck_products_max_purchase_positive"),
-        Index("ix_products_name", "name"),
-        Index("ix_products_sku", "sku"),
         Index("ix_products_is_active", "is_active"),
     )
 
