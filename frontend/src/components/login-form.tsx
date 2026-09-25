@@ -58,9 +58,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       }, 2000);
     } catch (err) {
       // Show generic error message (no email enumeration)
-      setError(
-        err instanceof Error ? err.message : 'Invalid email or password'
-      );
+      setError(err instanceof Error ? err.message : 'Invalid email or password');
       console.error('Login error:', err);
     } finally {
       setLoading(false);
@@ -77,12 +75,8 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5 w-full max-w-md">
       {/* Global messages */}
-      {error && (
-        <Alert variant="error" message={error} />
-      )}
-      {success && (
-        <Alert variant="success" message={success} />
-      )}
+      {error && <Alert variant="error" message={error} />}
+      {success && <Alert variant="success" message={success} />}
 
       {/* Email input — real errors are shown in the Alert above; do not
           stamp misleading per-field messages for server-side errors. */}

@@ -1,18 +1,27 @@
 """Authentication service for user registration, login, logout."""
 
-import logging
+import asyncio
+import math
 import re
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import AuthenticationError, ConflictError, RateLimitError, ValidationError
+from src.core.observability import security_audit_event
+from src.core.rate_limiter import (
+    check_login_rate_limit,
+    record_failed_attempt,
+    record_successful_login,
+)
 from src.core.security import generate_csrf_token, hash_password, verify_password
 from src.models.user import User
 from src.repositories.user_repository import UserRepository
 
-logger = logging.getLogger(__name__)
+LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5
+LOGIN_RATE_LIMIT_WINDOW_MINUTES = 15
 
 
 class AuthService:
@@ -43,7 +52,7 @@ class AuthService:
         """
         # Validate email format (RFC 5322 simplified)
         if not self._is_valid_email(email):
-            logger.warning(f"Registration attempt with invalid email: {email}")
+            security_audit_event("registration_failure", success=False, reason="invalid_email")
             raise ValidationError(
                 message="Invalid email format",
                 error_code="invalid_email",
@@ -51,7 +60,7 @@ class AuthService:
 
         # Validate password strength
         if not self._is_strong_password(password):
-            logger.warning(f"Registration attempt with weak password for email: {email}")
+            security_audit_event("registration_failure", success=False, reason="weak_password")
             raise ValidationError(
                 message="Password must be at least 8 characters and contain uppercase, lowercase, digit, and special character",
                 error_code="weak_password",
@@ -60,7 +69,7 @@ class AuthService:
         # Check for duplicate email
         existing_user = await self.user_repo.get_user_by_email(email)
         if existing_user:
-            logger.warning(f"Registration attempt with duplicate email: {email}")
+            security_audit_event("registration_failure", success=False, reason="email_exists")
             raise ConflictError(
                 message="Email already in use",
                 error_code="email_already_exists",
@@ -77,7 +86,9 @@ class AuthService:
 
         await self.db.commit()
 
-        logger.info(f"User registered successfully: {email} (ID: {user.id})")
+        security_audit_event(
+            "registration_success", success=True, user_id=str(user.id)
+        )
 
         return {
             "user_id": str(user.id),
@@ -113,18 +124,44 @@ class AuthService:
         session_repo = SessionRepository(db=self.db)
         login_attempt_repo = LoginAttemptRepository(db=self.db)
 
-        # Transaction (READ COMMITTED isolation per data-model.md):
-        # D1: failed-login LoginAttempt rows must be committed before raising,
-        # or the audit/rate-limit write is rolled back with the request session.
-        # 1. Check rate limit first
-        failed_attempts = await login_attempt_repo.count_failed_attempts(ip_address, minutes=15)
-        if failed_attempts >= 5:
+        # LoginAttempt rows remain the durable audit trail; the limiter provides
+        # shared Redis state when available and process-local fallback otherwise.
+        # The Redis client is synchronous, so run its calls outside the event loop.
+        is_rate_limited = await asyncio.to_thread(check_login_rate_limit, ip_address)
+        if is_rate_limited:
             await login_attempt_repo.log_attempt(
                 email=email, ip_address=ip_address, success=False, failure_reason="rate_limit"
             )
             await self.db.commit()
-            logger.warning(f"Rate limit exceeded for IP: {ip_address}")
-            raise RateLimitError()
+            failed_attempt_timestamps = await login_attempt_repo.get_failed_attempt_timestamps(
+                ip_address, minutes=LOGIN_RATE_LIMIT_WINDOW_MINUTES
+            )
+            if failed_attempt_timestamps:
+                attempts_to_expire = max(
+                    1,
+                    len(failed_attempt_timestamps) - LOGIN_RATE_LIMIT_MAX_ATTEMPTS + 1,
+                )
+                reset_at = failed_attempt_timestamps[attempts_to_expire - 1] + timedelta(
+                    minutes=LOGIN_RATE_LIMIT_WINDOW_MINUTES, microseconds=1
+                )
+                if reset_at.tzinfo is None:
+                    reset_at = reset_at.replace(tzinfo=timezone.utc)
+            else:
+                reset_at = datetime.now(timezone.utc) + timedelta(
+                    minutes=LOGIN_RATE_LIMIT_WINDOW_MINUTES
+                )
+            security_audit_event(
+                "login_rate_limited",
+                success=False,
+                client_ip=ip_address,
+                user_agent=user_agent,
+                reason="attempt_limit_exceeded",
+            )
+            raise RateLimitError(
+                limit=LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+                remaining=0,
+                reset_at=math.ceil(reset_at.timestamp()),
+            )
 
         # 2. SELECT user BY email; if not found or password wrong → log LoginAttempt(success=FALSE, reason) → raise AuthenticationError (401)
         user = await user_repo.get_user_by_email(email)
@@ -133,7 +170,14 @@ class AuthService:
                 email=email, ip_address=ip_address, success=False, failure_reason="invalid_credentials"
             )
             await self.db.commit()
-            logger.warning(f"Failed login attempt for email: {email} from IP: {ip_address}")
+            await asyncio.to_thread(record_failed_attempt, ip_address)
+            security_audit_event(
+                "login_failure",
+                success=False,
+                client_ip=ip_address,
+                user_agent=user_agent,
+                reason="invalid_credentials",
+            )
             raise AuthenticationError()
 
         # 3. SELECT user FOR UPDATE (row-level lock on user row, prevents concurrent session race)
@@ -150,7 +194,14 @@ class AuthService:
                 email=email, ip_address=ip_address, success=False, failure_reason="user_not_found"
             )
             await self.db.commit()
-            logger.warning(f"User not found during lock for email: {email} from IP: {ip_address}")
+            await asyncio.to_thread(record_failed_attempt, ip_address)
+            security_audit_event(
+                "login_failure",
+                success=False,
+                client_ip=ip_address,
+                user_agent=user_agent,
+                reason="user_unavailable",
+            )
             raise AuthenticationError("Invalid credentials")
 
         # 4. Invalidate existing active session if present: UPDATE sessions SET is_active=FALSE WHERE user_id=? AND is_active=TRUE
@@ -175,8 +226,15 @@ class AuthService:
             email=email, ip_address=ip_address, success=True, failure_reason=None
         )
         await self.db.commit()
+        await asyncio.to_thread(record_successful_login, ip_address)
 
-        logger.info(f"User logged in successfully: {email} (ID: {user.id}) from IP: {ip_address}")
+        security_audit_event(
+            "login_success",
+            success=True,
+            user_id=str(user.id),
+            client_ip=ip_address,
+            user_agent=user_agent,
+        )
 
         # Returns session_id, user_id, email (session_id in cookie only, never in response body)
         return {
@@ -207,9 +265,6 @@ class AuthService:
 
         if result:
             await self.db.commit()
-            logger.info(f"User logged out successfully: session {session_id} invalidated")
-        else:
-            logger.warning(f"Logout attempt for non-existent session: {session_id}")
 
         return result
 
@@ -230,11 +285,23 @@ class AuthService:
 
         user = await self.user_repo.get_user_by_id(user_id)
         if not user or not verify_password(current_password, user.password_hash):
+            security_audit_event(
+                "password_change_failure",
+                success=False,
+                user_id=str(user_id),
+                reason="current_password_invalid",
+            )
             raise ValidationError(
                 message="Current password is incorrect",
                 error_code="invalid_current_password",
             )
         if not self._is_strong_password(new_password):
+            security_audit_event(
+                "password_change_failure",
+                success=False,
+                user_id=str(user_id),
+                reason="new_password_weak",
+            )
             raise ValidationError(
                 message=(
                     "New password must be at least 8 characters with uppercase, "
@@ -246,7 +313,9 @@ class AuthService:
         session_repo = SessionRepository(db=self.db)
         await session_repo.invalidate_user_sessions(user.id)
         await self.db.commit()
-        logger.info(f"Password changed for user ID: {user.id}")
+        security_audit_event(
+            "password_change_success", success=True, user_id=str(user.id)
+        )
 
     @staticmethod
     def _is_valid_email(email: str) -> bool:

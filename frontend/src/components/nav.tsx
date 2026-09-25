@@ -62,7 +62,10 @@ export default function Nav({ probeAuth = true }: NavProps) {
       <span className="font-display text-xl font-bold tracking-display text-ink-900">
         ShopSmart AI
       </span>
-      <span aria-hidden="true" className="hidden h-1 w-1 rounded-full bg-accent-500 sm:inline-block" />
+      <span
+        aria-hidden="true"
+        className="hidden h-1 w-1 rounded-full bg-accent-500 sm:inline-block"
+      />
       <span className="hidden text-[11px] font-semibold uppercase tracking-caps text-ink-500 sm:inline">
         The Premium Edit
       </span>
@@ -74,9 +77,13 @@ export default function Nav({ probeAuth = true }: NavProps) {
     <div className="bg-accent-800 text-white">
       <p className="mx-auto max-w-7xl px-4 py-1.5 text-center text-[10px] font-semibold uppercase tracking-caps sm:text-[11px]">
         New Season
-        <span aria-hidden="true" className="mx-2 text-white/50">·</span>
+        <span aria-hidden="true" className="mx-2 text-white/50">
+          ·
+        </span>
         The AI Edit
-        <span aria-hidden="true" className="mx-2 text-white/50">·</span>
+        <span aria-hidden="true" className="mx-2 text-white/50">
+          ·
+        </span>
         Members First
       </p>
     </div>

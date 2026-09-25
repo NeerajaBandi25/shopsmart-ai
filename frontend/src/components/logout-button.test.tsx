@@ -1,11 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { LogoutButton } from './logout-button';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-  }),
+  useRouter: jest.fn(() => ({ push: jest.fn() })),
 }));
 
 // Mock the logout function
@@ -39,17 +38,19 @@ describe('LogoutButton', () => {
     (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
 
     render(<LogoutButton onSuccess={onSuccess} />);
-    await screen.findByRole('button', { name: /log out/i }).click();
-    expect(logout).toHaveBeenCalledTimes(1);
-    expect(onSuccess).toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith('/auth/login');
+    fireEvent.click(screen.getByRole('button', { name: /log out/i }));
+    await waitFor(() => {
+      expect(logout).toHaveBeenCalledTimes(1);
+      expect(onSuccess).toHaveBeenCalled();
+      expect(mockPush).toHaveBeenCalledWith('/auth/login');
+    });
   });
 
   it('handles logout error', async () => {
     (logout as jest.Mock).mockRejectedValue(new Error('Failed to logout'));
     render(<LogoutButton />);
-    await screen.findByRole('button', { name: /log out/i }).click();
+    fireEvent.click(screen.getByRole('button', { name: /log out/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/logout failed/i);
     expect(logout).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/logout failed/i)).toBeInTheDocument();
   });
 });

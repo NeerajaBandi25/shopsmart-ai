@@ -33,9 +33,7 @@ export default function DashboardPage() {
         setError(null);
       } catch (err) {
         // Redirect to login if not authenticated
-        setError(
-          err instanceof Error ? err.message : 'Failed to load profile'
-        );
+        setError(err instanceof Error ? err.message : 'Failed to load profile');
         router.push('/auth/login');
       } finally {
         setLoading(false);
@@ -85,10 +83,11 @@ export default function DashboardPage() {
   }
 
   const memberName = profile.email.split('@')[0];
-  const memberSince = new Date(profile.created_at).toLocaleDateString(
-    undefined,
-    { year: 'numeric', month: 'long', day: 'numeric' }
-  );
+  const memberSince = new Date(profile.created_at).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 
   return (
     <AuthenticatedLayout>
@@ -99,8 +98,7 @@ export default function DashboardPage() {
             Member Studio
           </p>
           <h1 className="font-display text-display-md sm:text-display-lg font-bold tracking-display text-ink-900 text-balance">
-            Welcome back,{' '}
-            <span className="text-accent-600">{memberName}</span>
+            Welcome back, <span className="text-accent-600">{memberName}</span>
           </h1>
           <p className="text-sm sm:text-base text-ink-500">
             Your account, at a glance — secured and always yours.
@@ -122,17 +120,13 @@ export default function DashboardPage() {
               <p className="text-[11px] font-semibold uppercase tracking-caps text-ink-500">
                 Member since
               </p>
-              <p className="text-sm sm:text-base font-medium text-ink-900">
-                {memberSince}
-              </p>
+              <p className="text-sm sm:text-base font-medium text-ink-900">{memberSince}</p>
             </div>
             <div className="space-y-1.5">
               <p className="text-[11px] font-semibold uppercase tracking-caps text-ink-500">
                 Member ID
               </p>
-              <p className="text-xs font-mono text-ink-500 break-all pt-0.5">
-                {profile.user_id}
-              </p>
+              <p className="text-xs font-mono text-ink-500 break-all pt-0.5">{profile.user_id}</p>
             </div>
           </div>
         </div>
@@ -166,9 +160,7 @@ export default function DashboardPage() {
               className="group rounded-tile border border-ink-100 bg-white p-6 text-left shadow-tile transition-all duration-300 ease-luxe hover:shadow-tile-hover hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 disabled:opacity-50 disabled:pointer-events-none"
             >
               <p className="font-semibold text-ink-900">Sign Out</p>
-              <p className="mt-1 text-sm text-ink-500">
-                End your session on this device.
-              </p>
+              <p className="mt-1 text-sm text-ink-500">End your session on this device.</p>
               <span
                 aria-hidden="true"
                 className="mt-4 inline-block text-sm font-medium text-ink-500"

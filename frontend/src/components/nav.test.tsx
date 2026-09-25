@@ -1,5 +1,10 @@
 import { render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import Nav from './nav';
+
+jest.mock('next/navigation', () => ({
+  useRouter: jest.fn(() => ({ push: jest.fn() })),
+}));
 
 // Mock getProfile
 jest.mock('@/lib/api-client', () => ({
@@ -32,8 +37,8 @@ describe('Nav', () => {
   });
 
   it('shows loading state while checking auth', async () => {
-    (getProfile as jest.Mock).mockImplementation(() =>
-      new Promise(resolve => setTimeout(() => resolve({}), 100))
+    (getProfile as jest.Mock).mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({}), 100))
     );
     render(<Nav />);
     // During loading, nav should still render but we can check for the loading indicator in the nav

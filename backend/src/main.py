@@ -6,14 +6,27 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.v1 import auth_routes, user_routes
 from src.core.config import settings
-from src.core.exceptions import AppException
-from src.database import close_db, init_db
+from src.core.exceptions import (
+    AppException,
+    AuthenticationError,
+    AuthorizationError,
+    RateLimitError,
+)
+from src.core.observability import (
+    RequestObservabilityMiddleware,
+    configure_structured_logging,
+    security_audit_event,
+)
+from src.database import close_db, engine, init_db
 from src.middleware.session_refresh import SessionRefreshMiddleware
 
 logger = logging.getLogger(__name__)
+configure_structured_logging(settings.log_level)
 
 
 # Lifespan events
@@ -22,7 +35,8 @@ async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
     # Startup
     logger.info("Starting up application...")
-    await init_db()
+    if settings.auto_create_tables:
+        await init_db()
     yield
     # Shutdown
     logger.info("Shutting down application...")
@@ -48,14 +62,40 @@ app.add_middleware(
 
 # Add session refresh middleware
 app.add_middleware(SessionRefreshMiddleware)
+app.add_middleware(RequestObservabilityMiddleware)
 
 
 # Exception handlers
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException):
     """Handle application exceptions."""
+    if isinstance(exc, AuthenticationError) and request.url.path != "/api/v1/auth/login":
+        security_audit_event(
+            "authentication_failure",
+            success=False,
+            user_id=getattr(request.state, "user_id", None),
+            client_ip=request.client.host if request.client else None,
+            reason=exc.error_code,
+        )
+    elif isinstance(exc, AuthorizationError):
+        security_audit_event(
+            "authorization_denied",
+            success=False,
+            user_id=getattr(request.state, "user_id", None),
+            client_ip=request.client.host if request.client else None,
+            reason=exc.error_code,
+        )
+
+    response_headers = {}
+    if isinstance(exc, RateLimitError):
+        response_headers.update(exc.rate_limit_headers)
+    request_id = getattr(request.state, "request_id", None)
+    if request_id:
+        response_headers["X-Request-ID"] = request_id
+
     return JSONResponse(
         status_code=exc.status_code,
+        headers=response_headers,
         content={
             "detail": exc.message,
             "status_code": exc.status_code,
@@ -67,9 +107,17 @@ async def app_exception_handler(request: Request, exc: AppException):
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """Handle general exceptions (never expose stack traces)."""
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    logger.error(
+        "unhandled_exception",
+        extra={"event": "unhandled_exception", "exception_type": type(exc).__name__},
+    )
+    response_headers = {}
+    request_id = getattr(request.state, "request_id", None)
+    if request_id:
+        response_headers["X-Request-ID"] = request_id
     return JSONResponse(
         status_code=500,
+        headers=response_headers,
         content={
             "detail": "Internal server error",
             "status_code": 500,
@@ -87,7 +135,18 @@ async def health_check():
 @app.get("/readiness", tags=["Health"])
 async def readiness_check():
     """Readiness check endpoint."""
-    # TODO: Check database connectivity
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Service unavailable",
+                "status_code": 503,
+                "error_code": "DATABASE_UNAVAILABLE",
+            },
+        )
     return {"status": "ready"}
 
 

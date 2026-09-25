@@ -55,10 +55,7 @@ interface ApiError {
  * @returns Registration response with user_id, email, created_at
  * @throws Error if registration fails
  */
-export async function register(
-  email: string,
-  password: string
-): Promise<RegisterResponse> {
+export async function register(email: string, password: string): Promise<RegisterResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
     method: 'POST',
     headers: {
@@ -97,10 +94,7 @@ export async function getProfile(): Promise<RegisterResponse> {
  * @returns Login response with user_id, email
  * @throws Error if login fails (invalid credentials, rate limited, etc.)
  */
-export async function login(
-  email: string,
-  password: string
-): Promise<LoginResponse> {
+export async function login(email: string, password: string): Promise<LoginResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: {
@@ -120,16 +114,18 @@ export async function login(
  * @throws Error if logout fails
  */
 export async function logout(): Promise<void> {
+  const csrfToken = await getCsrfToken();
   const response = await fetch(`${API_BASE_URL}/auth/logout`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
     },
     credentials: 'include',
   });
 
   if (!response.ok) {
-    const error = await response.json() as ApiError;
+    const error = (await response.json()) as ApiError;
     throw new Error(error.detail || 'Logout failed');
   }
 }
@@ -186,7 +182,7 @@ export async function changePassword(
   });
 
   if (!response.ok) {
-    const error = await response.json() as ApiError;
+    const error = (await response.json()) as ApiError;
     throw new Error(error.detail || 'Password change failed');
   }
 }

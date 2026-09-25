@@ -167,8 +167,13 @@ export function HeroCampaign() {
         <g className="ai-reveal" style={{ animationDelay: '650ms' }}>
           <g className="hero-orbit-a">
             <ellipse
-              cx="640" cy="400" rx="330" ry="200"
-              stroke={ACCENT_200} strokeOpacity="0.35" strokeWidth="1"
+              cx="640"
+              cy="400"
+              rx="330"
+              ry="200"
+              stroke={ACCENT_200}
+              strokeOpacity="0.35"
+              strokeWidth="1"
               strokeDasharray="2 10"
               transform="rotate(-14 640 400)"
             />
@@ -177,8 +182,13 @@ export function HeroCampaign() {
         <g className="ai-reveal" style={{ animationDelay: '850ms' }}>
           <g className="hero-orbit-b">
             <ellipse
-              cx="640" cy="400" rx="255" ry="308"
-              stroke={CHAMPAGNE} strokeOpacity="0.28" strokeWidth="1"
+              cx="640"
+              cy="400"
+              rx="255"
+              ry="308"
+              stroke={CHAMPAGNE}
+              strokeOpacity="0.28"
+              strokeWidth="1"
               strokeDasharray="1 12"
               transform="rotate(12 640 400)"
             />
@@ -187,12 +197,7 @@ export function HeroCampaign() {
 
         {/* Detection frame — corner brackets around the mirror zone */}
         <g className="ai-reveal" style={{ animationDelay: '750ms' }}>
-          <g
-            className="ai-detect"
-            stroke={CHAMPAGNE}
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          >
+          <g className="ai-detect" stroke={CHAMPAGNE} strokeWidth="1.5" strokeLinecap="round">
             <path d="M436 176 v-26 h26" />
             <path d="M844 150 h26 v26" />
             <path d="M870 624 v26 h-26" />
@@ -226,7 +231,9 @@ export function HeroCampaign() {
             <circle
               key={i}
               className={`ai-particle ${i === 2 || i === 6 ? 'ai-particle-sync' : ''}`}
-              cx={x} cy={y} r={r}
+              cx={x}
+              cy={y}
+              r={r}
               fill={i % 3 === 0 ? CHAMPAGNE : ACCENT_200}
               style={{ '--pd': `${dur}s`, '--pd-delay': `${delay}s` } as React.CSSProperties}
             />
@@ -261,7 +268,9 @@ export function HeroCampaign() {
             <circle
               key={i}
               className={`ai-particle ${i === 1 || i === 4 ? 'ai-particle-sync' : ''}`}
-              cx={x} cy={y} r={r}
+              cx={x}
+              cy={y}
+              r={r}
               fill={i % 3 === 0 ? CHAMPAGNE : ACCENT_200}
               style={{ '--pd': `${dur}s`, '--pd-delay': `${delay}s` } as React.CSSProperties}
             />
@@ -316,8 +325,8 @@ export function HeroCampaign() {
             className="hero-rise mx-auto mt-6 max-w-xl text-base leading-relaxed text-ink-100/85 sm:text-lg lg:mx-0"
             style={{ animationDelay: '500ms' }}
           >
-            A premium shopping experience with a secure, AI-assisted account
-            foundation — built for confidence from sign-up to sign-in.
+            A premium shopping experience with a secure, AI-assisted account foundation — built for
+            confidence from sign-up to sign-in.
           </p>
 
           <div
@@ -355,14 +364,16 @@ export function HeroCampaign() {
             className="hero-rise mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-ink-100/70 lg:justify-start"
             style={{ animationDelay: '800ms' }}
           >
-            {['Encrypted credentials', 'HttpOnly sessions', 'Single-device sign-in'].map((marker) => (
-              <li key={marker} className="inline-flex items-center gap-1.5">
-                <svg aria-hidden="true" viewBox="0 0 12 11" className="h-3 w-3" fill={CHAMPAGNE}>
-                  <path d="M2 10 C 2 4, 6 1, 11 0 C 11 6, 8 10, 2 10 Z" />
-                </svg>
-                {marker}
-              </li>
-            ))}
+            {['Encrypted credentials', 'HttpOnly sessions', 'Single-device sign-in'].map(
+              (marker) => (
+                <li key={marker} className="inline-flex items-center gap-1.5">
+                  <svg aria-hidden="true" viewBox="0 0 12 11" className="h-3 w-3" fill={CHAMPAGNE}>
+                    <path d="M2 10 C 2 4, 6 1, 11 0 C 11 6, 8 10, 2 10 Z" />
+                  </svg>
+                  {marker}
+                </li>
+              )
+            )}
           </ul>
         </div>
 

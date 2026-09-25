@@ -22,13 +22,19 @@ function CapabilityGlyph({ icon }: { icon: CapabilityIcon }) {
     >
       {icon === 'shield' && (
         <g stroke="var(--color-accent-200)">
-          <path d="M20 5 L 32 10 V 20 C 32 28, 27 33, 20 36 C 13 33, 8 28, 8 20 V 10 Z" fill="rgba(199,126,158,0.18)" />
+          <path
+            d="M20 5 L 32 10 V 20 C 32 28, 27 33, 20 36 C 13 33, 8 28, 8 20 V 10 Z"
+            fill="rgba(199,126,158,0.18)"
+          />
           <path d="M14 20 L 18.5 24.5 L 27 15" stroke="var(--color-accent-300)" />
         </g>
       )}
       {icon === 'spark' && (
         <g stroke="var(--color-white)">
-          <path d="M20 6 C 21.5 13, 24 16.5, 31 18 C 24 19.5, 21.5 23, 20 30 C 18.5 23, 16 19.5, 9 18 C 16 16.5, 18.5 13, 20 6 Z" fill="rgba(255,255,255,0.10)" />
+          <path
+            d="M20 6 C 21.5 13, 24 16.5, 31 18 C 24 19.5, 21.5 23, 20 30 C 18.5 23, 16 19.5, 9 18 C 16 16.5, 18.5 13, 20 6 Z"
+            fill="rgba(255,255,255,0.10)"
+          />
           <circle cx="31" cy="29" r="2" fill="var(--color-accent-400)" stroke="none" />
           <circle cx="10" cy="30" r="1.5" fill="var(--color-accent-400)" stroke="none" />
         </g>
@@ -37,7 +43,11 @@ function CapabilityGlyph({ icon }: { icon: CapabilityIcon }) {
         <g stroke="var(--color-white)">
           <circle cx="18" cy="18" r="10" />
           <path d="M25.5 25.5 L 33 33" />
-          <path d="M13 18 C 15 14, 18 13.5, 20 15.5 C 22 17.5, 24 17, 23 20" stroke="var(--color-accent-300)" strokeWidth="1.8" />
+          <path
+            d="M13 18 C 15 14, 18 13.5, 20 15.5 C 22 17.5, 24 17, 23 20"
+            stroke="var(--color-accent-300)"
+            strokeWidth="1.8"
+          />
         </g>
       )}
       {icon === 'trend' && (
@@ -109,8 +119,8 @@ export function DiscoverySection() {
             Powered by Intelligent Retail
           </h2>
           <p className="max-w-2xl mx-auto text-base text-ink-300">
-            ShopSmart AI pairs a premium storefront vision with an already-shipped
-            security foundation.
+            ShopSmart AI pairs a premium storefront vision with an already-shipped security
+            foundation.
           </p>
         </div>
 
@@ -145,7 +155,10 @@ export function DiscoverySection() {
                 </p>
               ) : (
                 <p className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3.5 py-1 text-[10px] font-medium uppercase tracking-caps text-ink-300">
-                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full border border-ink-300" />
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 rounded-full border border-ink-300"
+                  />
                   Planned
                 </p>
               )}
@@ -154,10 +167,9 @@ export function DiscoverySection() {
         </div>
 
         <p className="mt-9 text-center text-sm text-ink-300 max-w-2xl mx-auto">
-          Smart Recommendations, Visual Search, and Trend Analysis are conceptual
-          features planned for future implementation and are not currently
-          available. Secure Foundation is available today and supports the
-          registered-account experience.
+          Smart Recommendations, Visual Search, and Trend Analysis are conceptual features planned
+          for future implementation and are not currently available. Secure Foundation is available
+          today and supports the registered-account experience.
         </p>
       </div>
     </section>

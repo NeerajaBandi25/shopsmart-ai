@@ -103,9 +103,7 @@ export function CategorySection() {
     <section className="border-b border-ink-100 bg-white">
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
         <div className="text-center space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-caps text-accent-600">
-            Discover
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-caps text-accent-600">Discover</p>
           <h2 className="font-display text-display-md sm:text-display-lg font-bold tracking-display text-ink-900">
             Explore by Category
           </h2>
@@ -116,15 +114,19 @@ export function CategorySection() {
 
         <div className="mt-8 grid grid-cols-2 gap-x-3 gap-y-5 sm:gap-x-5 sm:gap-y-8 lg:grid-cols-3 lg:gap-x-6 lg:gap-y-12">
           {categories.map((category, i) => (
-            <div key={category.numeral} className="cat-reveal" style={{ animationDelay: `${i * 70}ms` }}>
+            <div
+              key={category.numeral}
+              className="cat-reveal"
+              style={{ animationDelay: `${i * 70}ms` }}
+            >
               <CategoryCard {...category} />
             </div>
           ))}
         </div>
 
         <p className="mx-auto mt-8 max-w-xl text-center text-sm text-ink-500">
-          Visual categories for browsing inspiration. Shopping functionality is
-          not yet implemented — this section showcases our design vision.
+          Visual categories for browsing inspiration. Shopping functionality is not yet implemented
+          — this section showcases our design vision.
         </p>
       </div>
     </section>

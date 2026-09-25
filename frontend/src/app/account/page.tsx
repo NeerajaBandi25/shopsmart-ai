@@ -44,9 +44,7 @@ export default function AccountPage() {
   }, [router]);
 
   // Handle password change
-  const handlePasswordChange = async (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
+  const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
@@ -55,11 +53,9 @@ export default function AccountPage() {
     const formData = new FormData(e.currentTarget);
     // Controlled state is the source of truth (inputs also carry `name`
     // attributes so FormData works); fall back to FormData if needed.
-    const currentPasswordValue =
-      currentPassword || (formData.get('currentPassword') as string);
+    const currentPasswordValue = currentPassword || (formData.get('currentPassword') as string);
     const newPasswordValue = newPassword || (formData.get('newPassword') as string);
-    const confirmPasswordValue =
-      confirmPassword || (formData.get('confirmPassword') as string);
+    const confirmPasswordValue = confirmPassword || (formData.get('confirmPassword') as string);
     const currentPasswordLocal = currentPasswordValue;
     const newPasswordLocal = newPasswordValue;
     const confirmPasswordLocal = confirmPasswordValue;
@@ -107,11 +103,7 @@ export default function AccountPage() {
         router.push('/auth/login');
       }, 2000);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'An error occurred. Please try again.'
-      );
+      setError(err instanceof Error ? err.message : 'An error occurred. Please try again.');
     } finally {
       setPasswordChangeLoading(false);
     }
@@ -156,9 +148,7 @@ export default function AccountPage() {
             </div>
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-500">Email</p>
-              <p className="text-xl font-mono break-all text-gray-900">
-                {profile.email}
-              </p>
+              <p className="text-xl font-mono break-all text-gray-900">{profile.email}</p>
             </div>
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-500">Member since</p>
@@ -218,11 +208,7 @@ export default function AccountPage() {
               label="Confirm New Password"
               value={confirmPassword}
               onChange={setConfirmPassword}
-              error={
-                error && error.includes('Passwords do not match')
-                  ? error
-                  : undefined
-              }
+              error={error && error.includes('Passwords do not match') ? error : undefined}
               inputProps={{
                 type: 'password',
                 id: 'confirmPassword',
@@ -233,14 +219,10 @@ export default function AccountPage() {
             />
 
             {/* Error Message */}
-            {error && (
-              <Alert variant="error" message={error} className="mt-4" />
-            )}
+            {error && <Alert variant="error" message={error} className="mt-4" />}
 
             {/* Success Message */}
-            {success && (
-              <Alert variant="success" message={success} className="mt-4" />
-            )}
+            {success && <Alert variant="success" message={success} className="mt-4" />}
 
             <Button
               type="submit"

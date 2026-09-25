@@ -34,9 +34,13 @@ async def validate_session(
     """
     try:
         # Fetch session from database (NO FOR UPDATE for ordinary validation)
+        try:
+            session_uuid = UUID(session_id)
+        except ValueError:
+            return None
+
         result = await db_session.execute(
-            select(Session)
-            .where(Session.id == session_id)
+            select(Session).where(Session.id == session_uuid)
         )
         session = result.scalar_one_or_none()
 

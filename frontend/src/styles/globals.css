@@ -1,8 +1,11 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   /* Font families */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    'Segoe UI Symbol', 'Noto Color Emoji';
 
   /* Font sizes */
   --text-base: 1rem;
@@ -21,21 +24,21 @@
   --font-weight-extrabold: 800;
 
   /* Colors - Primary */
-  --color-primary-500: #3B82F6;
-  --color-primary-600: #2563EB;
-  --color-primary-700: #1D4ED8;
-  --color-primary-800: #1E40AF;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
 
   /* Colors - Secondary */
-  --color-secondary-50: #F9FAFB;
-  --color-secondary-200: #E5E7EB;
-  --color-secondary-600: #4B5563;
+  --color-secondary-50: #f9fafb;
+  --color-secondary-200: #e5e7eb;
+  --color-secondary-600: #4b5563;
   --color-secondary-900: #111827;
 
   /* Colors - Status */
-  --color-status-success: #10B981;
-  --color-status-error: #EF4444;
-  --color-status-warning: #F59E0B;
+  --color-status-success: #10b981;
+  --color-status-error: #ef4444;
+  --color-status-warning: #f59e0b;
 
   /* Border radius */
   --radius-sm: 0.25rem;
@@ -55,7 +58,9 @@
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Typography — editorial display scale (Phase 3) */
-  --font-display: "Playfair Display", "Didot", "Bodoni MT", "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-display:
+    'Playfair Display', 'Didot', 'Bodoni MT', 'Cormorant Garamond', Georgia, 'Times New Roman',
+    serif;
   --tracking-display: -0.02em;
   --tracking-caps: 0.2em;
   --text-display-md: 2.25rem;
@@ -66,37 +71,37 @@
   --text-display-xl--line-height: 1.04;
 
   /* Colors — editorial accent (ShopSmart berry; brand-own palette, no third-party assets) */
-  --color-accent-50: #FBF6F8;
-  --color-accent-100: #F6E9EF;
-  --color-accent-200: #EDD3DF;
-  --color-accent-300: #DCAFC4;
-  --color-accent-400: #C37E9E;
-  --color-accent-500: #A8547D;
-  --color-accent-600: #8A3A62;
-  --color-accent-700: #6D1F42;
+  --color-accent-50: #fbf6f8;
+  --color-accent-100: #f6e9ef;
+  --color-accent-200: #edd3df;
+  --color-accent-300: #dcafc4;
+  --color-accent-400: #c37e9e;
+  --color-accent-500: #a8547d;
+  --color-accent-600: #8a3a62;
+  --color-accent-700: #6d1f42;
   --color-accent-800: #571836;
-  --color-accent-900: #40122A;
+  --color-accent-900: #40122a;
 
   /* Colors — warm editorial neutrals */
-  --color-ink-100: #EFEAEC;
-  --color-ink-300: #B8AEB3;
-  --color-ink-500: #6E6268;
-  --color-ink-700: #3D3238;
+  --color-ink-100: #efeaec;
+  --color-ink-300: #b8aeb3;
+  --color-ink-500: #6e6268;
+  --color-ink-700: #3d3238;
   --color-ink-900: #191114;
-  --color-blush-50: #FAF7F5;
-  --color-sand-100: #F1EAE4;
-  --color-sand-200: #E5DBD2;
+  --color-blush-50: #faf7f5;
+  --color-sand-100: #f1eae4;
+  --color-sand-200: #e5dbd2;
 
   /* Colors — warm campaign tints (ShopSmart-own, harmonized with the berry
      accent; champagne/clay echo the boutique photography's warm highlights.
      Supporting roles only: berry remains the primary accent.) */
-  --color-leaf-500: #3E6B4F;
-  --color-leaf-600: #2E5740;
-  --color-leaf-700: #1F4232;
-  --color-leaf-800: #16301F;
-  --color-clay-200: #F6D9C2;
-  --color-clay-300: #EFBF9C;
-  --color-clay-400: #E5A273;
+  --color-leaf-500: #3e6b4f;
+  --color-leaf-600: #2e5740;
+  --color-leaf-700: #1f4232;
+  --color-leaf-800: #16301f;
+  --color-clay-200: #f6d9c2;
+  --color-clay-300: #efbf9c;
+  --color-clay-400: #e5a273;
 
   /* Radii, shadows, motion — merchandising surfaces */
   --radius-tile: 1.125rem;
@@ -111,19 +116,30 @@
 /* Keyframes — decorative campaign motion (all collapsed by the global
    prefers-reduced-motion rule below). */
 @keyframes ticker {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @keyframes drift {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-8px) rotate(1.5deg); }
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1.5deg);
+  }
 }
 
 /* Slow orbital rotation for the hero's thin AI arcs (dash pattern makes the
    rotation visible without moving any geometry). */
 @keyframes hero-orbit-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Base layer */
@@ -157,7 +173,7 @@
 @layer components {
   /* Editorial sheen sweep — hover polish for merchandising tiles */
   .sheen::after {
-    content: "";
+    content: '';
     position: absolute;
     inset: 0;
     background: linear-gradient(
@@ -192,8 +208,12 @@
     background-image:
       radial-gradient(rgba(25, 17, 20, 0.14) 0.5px, transparent 0.5px),
       radial-gradient(rgba(25, 17, 20, 0.09) 0.5px, transparent 0.5px);
-    background-size: 3px 3px, 5px 5px;
-    background-position: 0 0, 1.5px 2.5px;
+    background-size:
+      3px 3px,
+      5px 5px;
+    background-position:
+      0 0,
+      1.5px 2.5px;
   }
 
   /* ── Hero cinematic motion system ────────────────────────────────
@@ -204,64 +224,131 @@
      static. */
 
   @keyframes hero-rise {
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   @keyframes hero-mask-rise {
-    from { transform: translateY(110%); }
-    to { transform: translateY(0); }
+    from {
+      transform: translateY(110%);
+    }
+    to {
+      transform: translateY(0);
+    }
   }
 
   /* Scrim/unifier reveal: the photo is visible from t=0; the brand tint and
      legibility gradients fade in over it (opacity only). */
   @keyframes hero-scrim-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   /* AI overlay elements fade into the scene during 600–1000ms. */
   @keyframes ai-reveal {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   /* Floating editorial chips: near-subconscious drift (≈7px over 9s) with
      tiny opacity variation. Per-chip rhythm via --chip-drift-delay. */
   @keyframes hero-chip-drift {
-    0%, 100% { transform: translate3d(0, 0, 0); opacity: 1; }
-    50% { transform: translate3d(0, -7px, 0); opacity: 0.93; }
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+      opacity: 1;
+    }
+    50% {
+      transform: translate3d(0, -7px, 0);
+      opacity: 0.93;
+    }
   }
 
   /* Focal AI motion: one dominant periodic scan (10s cycle — ≈8s idle,
      ≈2s sweep) with the supporting geometry responding to the same beat. */
   @keyframes ai-scan {
-    0%, 78% { transform: translateX(-130%); opacity: 0; }
-    83% { opacity: 0.85; }
-    90% { opacity: 0.85; }
-    95%, 100% { transform: translateX(560%); opacity: 0; }
+    0%,
+    78% {
+      transform: translateX(-130%);
+      opacity: 0;
+    }
+    83% {
+      opacity: 0.85;
+    }
+    90% {
+      opacity: 0.85;
+    }
+    95%,
+    100% {
+      transform: translateX(560%);
+      opacity: 0;
+    }
   }
 
   /* Detection frame + synced accents brighten while the scan passes. */
   @keyframes ai-pulse {
-    0%, 76% { opacity: 0.5; }
-    82%, 92% { opacity: 1; }
-    98%, 100% { opacity: 0.5; }
+    0%,
+    76% {
+      opacity: 0.5;
+    }
+    82%,
+    92% {
+      opacity: 1;
+    }
+    98%,
+    100% {
+      opacity: 0.5;
+    }
   }
 
   /* Connection line: quiet until the scan, then a quick dash-draw pulse. */
   @keyframes ai-line-draw {
-    0%, 76% { stroke-dashoffset: 1; opacity: 0.35; }
-    82% { stroke-dashoffset: 0; opacity: 0.9; }
-    90% { stroke-dashoffset: 0; opacity: 0.9; }
-    98%, 100% { stroke-dashoffset: 1; opacity: 0.35; }
+    0%,
+    76% {
+      stroke-dashoffset: 1;
+      opacity: 0.35;
+    }
+    82% {
+      stroke-dashoffset: 0;
+      opacity: 0.9;
+    }
+    90% {
+      stroke-dashoffset: 0;
+      opacity: 0.9;
+    }
+    98%,
+    100% {
+      stroke-dashoffset: 1;
+      opacity: 0.35;
+    }
   }
 
   /* Particle ambient life: tiny drift + twinkle, staggered per particle via
      --pd (duration) / --pd-delay (delay). */
   @keyframes ai-particle-drift {
-    0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.25; }
-    50% { transform: translate3d(2px, -5px, 0); opacity: 0.75; }
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+      opacity: 0.25;
+    }
+    50% {
+      transform: translate3d(2px, -5px, 0);
+      opacity: 0.75;
+    }
   }
 
   .hero-rise {
@@ -280,8 +367,12 @@
   /* Typographic swash: self-drawing underline beneath the accent word
      (pathLength=1 normalization; draws once after the headline lands). */
   @keyframes hero-draw {
-    from { stroke-dashoffset: 1; }
-    to { stroke-dashoffset: 0; }
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
   }
 
   .hero-draw {
@@ -308,8 +399,12 @@
     transform-origin: 50% 50%;
     will-change: transform;
   }
-  .hero-orbit-a { animation: hero-orbit-spin 80s linear infinite; }
-  .hero-orbit-b { animation: hero-orbit-spin 110s linear infinite reverse; }
+  .hero-orbit-a {
+    animation: hero-orbit-spin 80s linear infinite;
+  }
+  .hero-orbit-b {
+    animation: hero-orbit-spin 110s linear infinite reverse;
+  }
 
   /* Detection frame: rests at half strength, brightens on the scan beat. */
   .ai-detect {
@@ -348,7 +443,7 @@
       100deg,
       transparent 0%,
       rgba(246, 217, 194, 0.06) 30%,
-      rgba(246, 217, 194, 0.30) 50%,
+      rgba(246, 217, 194, 0.3) 50%,
       rgba(246, 217, 194, 0.06) 70%,
       transparent 100%
     );
@@ -382,8 +477,13 @@
   }
 
   @keyframes shimmer-sweep {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
   }
 
   /* ── Pointer parallax (desktop, fine pointer, motion allowed) ────
@@ -413,11 +513,19 @@
      translateY only; delay is set per card from the section). Cards are
      below the hero — pure enhancement, never a gate for content. */
   @keyframes cat-reveal {
-    from { opacity: 0; transform: translateY(18px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
-  .cat-reveal { animation: cat-reveal 0.8s var(--ease-luxe) both; }
+  .cat-reveal {
+    animation: cat-reveal 0.8s var(--ease-luxe) both;
+  }
 }
 
 /* Utilities layer */

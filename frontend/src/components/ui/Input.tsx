@@ -25,7 +25,10 @@ export function Input({
 }: InputProps) {
   return (
     <div className={className}>
-      <label htmlFor={label.toLowerCase().replace(/\s+/g, '-')} className="mb-2 block text-sm font-medium text-gray-700">
+      <label
+        htmlFor={label.toLowerCase().replace(/\s+/g, '-')}
+        className="mb-2 block text-sm font-medium text-gray-700"
+      >
         {label}
       </label>
       <input
