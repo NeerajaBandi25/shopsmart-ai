@@ -62,7 +62,9 @@ class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
 def parse_authorization(comment: dict[str, Any]) -> dict[str, str] | None:
     if comment.get("author_association") not in TRUSTED_ASSOCIATIONS:
         return None
-    match = AUTHORIZATION_PATTERN.fullmatch(comment.get("body", ""))
+    body = comment.get("body", "")
+    normalized_body = body.replace("\r\n", "\n").replace("\r", "\n")
+    match = AUTHORIZATION_PATTERN.fullmatch(normalized_body)
     if match is None:
         return None
     return {
@@ -841,7 +843,28 @@ def self_test() -> None:
             f"PATH: {ALLOWLISTED_PATH}\nATTEMPTS: 1"
         ),
     }
+    parsed_lf = parse_authorization(valid_comment)
+    assert parsed_lf is not None
+    assert parse_authorization(
+        {**valid_comment, "body": valid_comment["body"].replace("\n", "\r\n")}
+    ) == parsed_lf
+    assert parse_authorization(
+        {**valid_comment, "body": valid_comment["body"].replace("\n", "\r")}
+    ) == parsed_lf
+    assert parse_authorization({**valid_comment, "author_association": "CONTRIBUTOR"}) is None
+
+    invalid_authorization_bodies = [
+        valid_comment["body"].replace("PHASE6B REPAIR AUTHORIZATION", "PHASE6B REPAIR"),
+        valid_comment["body"].replace(f"HEAD_SHA: {sha}", f"HEAD_SHA: {sha[:7]}"),
+        valid_comment["body"].replace(FAILURE_CLASS, "Frontend Prettier formatting-only failure"),
+        valid_comment["body"].replace(ALLOWLISTED_PATH, "frontend/src/app/other.tsx"),
+        valid_comment["body"].replace("ATTEMPTS: 1", "ATTEMPTS: 2"),
+        valid_comment["body"] + "\nextra",
+    ]
+    for invalid_body in invalid_authorization_bodies:
+        assert parse_authorization({**valid_comment, "body": invalid_body}) is None
     assert validate_authorization([valid_comment], pr_number=7, head_sha=sha, source_run_id=123)
+    assert validate_authorization([valid_comment], pr_number=8, head_sha=sha, source_run_id=123) is None
     assert validate_authorization(
         [valid_comment], pr_number=7, head_sha=sha, source_run_id=123, required_comment_id="99"
     )
