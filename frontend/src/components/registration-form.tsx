@@ -48,7 +48,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     });
   };
 
-  const isPasswordStrong = Object.values(passwordStrength).every(v => v);
+  const isPasswordStrong = Object.values(passwordStrength).every((v) => v);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,15 +77,13 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
 
     try {
       // Same-origin call — proxied to the backend by next.config.mjs.
-      const response = await fetch('/api/v1/auth/register',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ email, password }),
-        }
-      );
+      const response = await fetch('/api/v1/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
       if (response.ok) {
         onSuccess?.();
@@ -124,12 +122,8 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5 w-full max-w-md">
       {/* Global messages */}
-      {error && (
-        <Alert variant="error" message={error} />
-      )}
-      {success && (
-        <Alert variant="success" message={success} />
-      )}
+      {error && <Alert variant="error" message={error} />}
+      {success && <Alert variant="success" message={success} />}
 
       {/* Email input — real errors are shown in the Alert above; do not
           stamp misleading per-field messages for server-side errors. */}

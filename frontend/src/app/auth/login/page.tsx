@@ -50,9 +50,7 @@ export default function LoginPage() {
           <h1 className="font-display text-3xl font-bold tracking-display text-ink-900 sm:text-4xl">
             Sign in to your account
           </h1>
-          <p className="text-sm text-ink-500">
-            Access your secure, AI-assisted account.
-          </p>
+          <p className="text-sm text-ink-500">Access your secure, AI-assisted account.</p>
         </div>
 
         {/* Form card */}

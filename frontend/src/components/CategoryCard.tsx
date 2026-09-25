@@ -91,7 +91,15 @@ export function CategoryCard({
         aria-hidden="true"
         className="absolute bottom-3 right-3 flex h-7 w-7 translate-x-[-6px] items-center justify-center rounded-full border border-clay-200/50 bg-ink-900/30 text-clay-200 opacity-0 backdrop-blur-[2px] transition-all duration-500 ease-luxe group-hover:translate-x-0 group-hover:opacity-100 sm:bottom-4 sm:right-4"
       >
-        <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          viewBox="0 0 12 12"
+          className="h-3 w-3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M2.5 6 H 9.5 M6.5 3 L 9.5 6 L 6.5 9" />
         </svg>
       </span>

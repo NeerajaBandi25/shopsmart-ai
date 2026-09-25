@@ -18,15 +18,27 @@ export function PromoBanner() {
       {/* ── Closing CTA band ─────────────────────────────────────────── */}
       <div className="relative overflow-hidden border-t border-white/10 bg-gradient-to-br from-accent-700 via-accent-600 to-accent-800">
         {/* Decorative depth: glows + botanical silhouette (brand-own SVG) */}
-        <div aria-hidden="true" className="absolute -top-20 -left-16 h-64 w-64 rounded-full bg-accent-400/25 blur-3xl" />
-        <div aria-hidden="true" className="absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-accent-900/45 blur-3xl" />
+        <div
+          aria-hidden="true"
+          className="absolute -top-20 -left-16 h-64 w-64 rounded-full bg-accent-400/25 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-accent-900/45 blur-3xl"
+        />
         <svg
           aria-hidden="true"
           viewBox="0 0 120 160"
           className="absolute -bottom-4 left-[6%] hidden h-40 w-auto opacity-25 lg:block"
         >
           <g fill="var(--color-accent-300)">
-            <path d="M60 158 C 56 118, 58 76, 66 34" stroke="var(--color-accent-300)" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+            <path
+              d="M60 158 C 56 118, 58 76, 66 34"
+              stroke="var(--color-accent-300)"
+              strokeWidth="2.5"
+              fill="none"
+              strokeLinecap="round"
+            />
             <path d="M64 46 C 52 44, 42 34, 40 18 C 56 20, 64 30, 64 46 Z" />
             <path d="M63 66 C 74 62, 82 52, 83 36 C 68 40, 62 50, 63 66 Z" />
             <path d="M61 88 C 49 86, 40 76, 38 60 C 54 62, 61 72, 61 88 Z" />
@@ -43,15 +55,18 @@ export function PromoBanner() {
           </h2>
 
           {/* Ornamental divider: quiet editorial punctuation */}
-          <div aria-hidden="true" className="mx-auto mt-6 flex w-24 items-center justify-center gap-2">
+          <div
+            aria-hidden="true"
+            className="mx-auto mt-6 flex w-24 items-center justify-center gap-2"
+          >
             <span className="h-px flex-1 bg-accent-300/60" />
             <span className="h-1 w-1 rounded-full bg-accent-300" />
             <span className="h-px flex-1 bg-accent-300/60" />
           </div>
 
           <p className="mt-5 max-w-xl mx-auto text-base text-accent-100">
-            Create your account to experience secure, AI-assisted membership from
-            your very first sign-in.
+            Create your account to experience secure, AI-assisted membership from your very first
+            sign-in.
           </p>
 
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -93,9 +108,8 @@ export function PromoBanner() {
                 ShopSmart <span className="text-accent-400">AI</span>
               </p>
               <p className="mt-3 max-w-sm text-sm leading-relaxed">
-                A premium shopping destination with a secure, AI-assisted
-                account foundation. Commerce features are planned — the design
-                vision ships today.
+                A premium shopping destination with a secure, AI-assisted account foundation.
+                Commerce features are planned — the design vision ships today.
               </p>
               <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/15 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-caps text-ink-300">
                 <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-leaf-500" />
@@ -109,9 +123,21 @@ export function PromoBanner() {
                 Explore
               </p>
               <ul className="mt-4 space-y-2.5 text-sm">
-                <li><Link href="/" className="transition-colors hover:text-white">Home</Link></li>
-                <li><Link href="/auth/login" className="transition-colors hover:text-white">Sign in</Link></li>
-                <li><Link href="/auth/register" className="transition-colors hover:text-white">Create account</Link></li>
+                <li>
+                  <Link href="/" className="transition-colors hover:text-white">
+                    Home
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/auth/login" className="transition-colors hover:text-white">
+                    Sign in
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/auth/register" className="transition-colors hover:text-white">
+                    Create account
+                  </Link>
+                </li>
               </ul>
             </nav>
 
@@ -121,12 +147,18 @@ export function PromoBanner() {
                 The AI Edit
               </p>
               <ul className="mt-4 space-y-2.5 text-sm">
-                <li>Secure account foundation — <span className="text-white font-medium">Available</span></li>
-                <li>Recommendations, visual search, trends — <span className="text-ink-300">Planned</span></li>
+                <li>
+                  Secure account foundation —{' '}
+                  <span className="text-white font-medium">Available</span>
+                </li>
+                <li>
+                  Recommendations, visual search, trends —{' '}
+                  <span className="text-ink-300">Planned</span>
+                </li>
               </ul>
               <p className="mt-5 text-xs leading-relaxed text-ink-300/80">
-                Planned capabilities are under future consideration and are not
-                part of the current product.
+                Planned capabilities are under future consideration and are not part of the current
+                product.
               </p>
             </div>
           </div>

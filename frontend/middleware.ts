@@ -24,18 +24,14 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Check if path is public
-  const isPublicPath = publicPaths.some(path =>
-    pathname.startsWith(path)
-  );
+  const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
 
   if (isPublicPath) {
     return NextResponse.next();
   }
 
   // Check if path is protected
-  const isProtectedPath = protectedPaths.some(path =>
-    pathname.startsWith(path)
-  );
+  const isProtectedPath = protectedPaths.some((path) => pathname.startsWith(path));
 
   if (!isProtectedPath) {
     // For paths not explicitly protected or public, we'll still check auth
@@ -46,16 +42,13 @@ export async function middleware(request: NextRequest) {
   // For protected paths, check session validity
   try {
     const apiBaseUrl = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL;
-    const sessionResponse = await fetch(
-      `${apiBaseUrl}/auth/me`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      }
-    );
+    const sessionResponse = await fetch(`${apiBaseUrl}/auth/me`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
 
     if (sessionResponse.ok) {
       // Session is valid, continue to requested page
