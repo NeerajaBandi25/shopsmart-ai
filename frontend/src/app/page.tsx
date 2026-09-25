@@ -27,7 +27,7 @@ import { PromoBanner } from '@/components/PromoBanner';
  * in the backend, unchanged).
  */
 export default async function HomePage() {
-  const cookieStore = cookies();
+  const cookieStore = cookies( );
   const hasSessionCookie = cookieStore.has('session_id');
 
   return (
