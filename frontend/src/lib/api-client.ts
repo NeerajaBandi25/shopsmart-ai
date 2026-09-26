@@ -47,6 +47,32 @@ interface ApiError {
   status_code: number;
 }
 
+export interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  sku: string;
+  price: number;
+  stock_quantity: number;
+  max_purchase_quantity: number;
+}
+
+export interface ProductPage {
+  items: Product[];
+  skip: number;
+  limit: number;
+}
+
+export async function getProducts(skip = 0, limit = 24): Promise<ProductPage> {
+  if (!API_BASE_URL) {
+    throw new Error('Product catalog is unavailable right now.');
+  }
+
+  const query = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+  const response = await fetch(`${API_BASE_URL}/products?${query}`);
+  return handleApiResponse<ProductPage>(response);
+}
+
 /**
  * Register a new user.
  *

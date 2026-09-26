@@ -43,6 +43,35 @@ The backend image includes the project-locked Alembic dependency and migration
 files. The Compose backend disables the application's existing development
 `create_all` startup behavior so Alembic remains the schema authority there.
 
+## Optional Local Demo Products
+
+Demo seeding is a manual, local-development-only operation. It is not run by
+application startup, migrations, Docker startup, CI, or deployment. It inserts
+only missing demo SKUs and leaves existing product records unchanged. Never
+point it at a production or shared database.
+
+From `backend/` in PowerShell, after configuring `DATABASE_URL` for a local
+database and applying migrations:
+
+```powershell
+$previousDemoSeedSetting = $env:SHOPSMART_ALLOW_DEMO_SEEDING
+try {
+	$env:SHOPSMART_ALLOW_DEMO_SEEDING = "true"
+	.\.venv\Scripts\python.exe -m scripts.seed_demo_products --apply
+}
+finally {
+	if ($null -eq $previousDemoSeedSetting) {
+		Remove-Item Env:SHOPSMART_ALLOW_DEMO_SEEDING -ErrorAction SilentlyContinue
+	}
+	else {
+		$env:SHOPSMART_ALLOW_DEMO_SEEDING = $previousDemoSeedSetting
+	}
+}
+```
+
+Both `--apply` and `SHOPSMART_ALLOW_DEMO_SEEDING=true` are required. Without
+both, the command refuses and makes no database connection or changes.
+
 ## Stop
 
 ```sh

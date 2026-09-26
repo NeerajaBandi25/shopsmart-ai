@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { register } from '@/lib/api-client';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
@@ -76,28 +77,15 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     }
 
     try {
-      // Same-origin call — proxied to the backend by next.config.mjs.
-      const response = await fetch('/api/v1/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (response.ok) {
-        onSuccess?.();
-        // Show success message for 2 seconds, then redirect to login with success message
-        setSuccess('Account created successfully. Redirecting to login...');
-        setTimeout(() => {
-          router.push('/auth/login?message=Account%20created%20successfully');
-        }, 2000);
-      } else {
-        const errorData = await response.json();
-        setError(errorData.detail || 'Registration failed');
-      }
+      await register(email, password);
+      onSuccess?.();
+      // Show success message for 2 seconds, then redirect to login with success message
+      setSuccess('Account created successfully. Redirecting to login...');
+      setTimeout(() => {
+        router.push('/auth/login?message=Account%20created%20successfully');
+      }, 2000);
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError(err instanceof Error ? err.message : 'Registration failed');
       console.error('Registration error:', err);
     } finally {
       setLoading(false);
@@ -181,7 +169,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
         label="Confirm Password"
         value={confirmPassword}
         onChange={setConfirmPassword}
-        error={error ? 'Passwords do not match' : undefined}
+        error={error === 'Passwords do not match' ? error : undefined}
         className={fieldClassName}
         inputProps={{
           type: 'password',

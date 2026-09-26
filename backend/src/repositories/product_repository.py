@@ -103,7 +103,8 @@ class ProductRepository:
         query = select(Product)
         if active_only:
             query = query.where(Product.is_active == True)
-        query = query.offset(skip).limit(limit).order_by(Product.created_at.desc())
+        query = query.order_by(Product.created_at.desc(), Product.id.desc())
+        query = query.offset(skip).limit(limit)
 
         result = await self.db.execute(query)
         return result.scalars().all()
