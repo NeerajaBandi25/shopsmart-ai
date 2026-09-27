@@ -1,3 +1,5 @@
+import { getCsrfToken } from '@/lib/api-client';
+
 export interface CheckoutItem {
   product_id: string;
   quantity: number;
@@ -20,25 +22,6 @@ export interface Order {
   items: OrderItem[];
 }
 
-const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
-
-function apiUrl(path: string): string {
-  if (!apiBase) throw new Error('Order services are unavailable right now.');
-  return `${apiBase}${path}`;
-}
-
-async function getCsrfToken(): Promise<string> {
-  const response = await fetch(apiUrl('/auth/csrf'), {
-    credentials: 'include',
-    cache: 'no-store',
-  });
-  if (!response.ok) {
-    throw new Error(await responseError(response));
-  }
-  const payload = (await response.json()) as { csrf_token: string };
-  return payload.csrf_token;
-}
-
 async function responseError(response: Response): Promise<string> {
   try {
     const payload = (await response.json()) as { detail?: unknown };
@@ -51,7 +34,7 @@ async function responseError(response: Response): Promise<string> {
 
 export async function checkoutOrder(items: CheckoutItem[], idempotencyKey: string): Promise<Order> {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(apiUrl('/orders/checkout'), {
+  const response = await fetch('/api/orders/checkout', {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -66,7 +49,7 @@ export async function checkoutOrder(items: CheckoutItem[], idempotencyKey: strin
 }
 
 export async function getOrders(): Promise<Order[]> {
-  const response = await fetch(apiUrl('/orders'), {
+  const response = await fetch('/api/orders', {
     credentials: 'include',
     cache: 'no-store',
   });

@@ -19,7 +19,7 @@ export interface Cart {
   currency: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const CART_API_BASE_PATH = '/api/cart';
 
 async function parseCartResponse(response: Response): Promise<Cart> {
   const data = (await response.json()) as Cart | { detail?: string };
@@ -30,15 +30,8 @@ async function parseCartResponse(response: Response): Promise<Cart> {
   return data as Cart;
 }
 
-function getCartUrl(path: string): string {
-  if (!API_BASE_URL) {
-    throw new Error('The cart is unavailable right now.');
-  }
-  return `${API_BASE_URL}${path}`;
-}
-
 export async function getCart(): Promise<Cart> {
-  const response = await fetch(getCartUrl('/cart'), {
+  const response = await fetch(CART_API_BASE_PATH, {
     method: 'GET',
     credentials: 'include',
   });
@@ -51,7 +44,7 @@ async function mutateCart(
   body?: { product_id?: string; quantity?: number }
 ): Promise<Cart> {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(getCartUrl(path), {
+  const response = await fetch(`${CART_API_BASE_PATH}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -64,13 +57,13 @@ async function mutateCart(
 }
 
 export function addCartItem(productId: string, quantity: number): Promise<Cart> {
-  return mutateCart('/cart/items', 'POST', { product_id: productId, quantity });
+  return mutateCart('/items', 'POST', { product_id: productId, quantity });
 }
 
 export function setCartItemQuantity(productId: string, quantity: number): Promise<Cart> {
-  return mutateCart(`/cart/items/${productId}`, 'PUT', { quantity });
+  return mutateCart(`/items/${productId}`, 'PUT', { quantity });
 }
 
 export function removeCartItem(productId: string): Promise<Cart> {
-  return mutateCart(`/cart/items/${productId}`, 'DELETE');
+  return mutateCart(`/items/${productId}`, 'DELETE');
 }
