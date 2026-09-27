@@ -67,8 +67,7 @@ GET  /api/v1/auth/me
 
 **Side Effects**:
 - Creates User record in database
-- Logs LoginAttempt with success = TRUE
-- Does NOT create session (user must log in separately)
+- Does not create a session or send an email; the user must log in separately
 
 ---
 
@@ -105,14 +104,14 @@ GET  /api/v1/auth/me
 **Set-Cookie Header** (automatic, not visible in response body):
 
 ```
-Set-Cookie: session_id=550e8400-e29b-41d4-a716-446655440001; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=2592000
+Set-Cookie: session_id=<opaque-session-token>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=2592000
 ```
 
 **Cookie Fields**:
 - `HttpOnly`: Prevents JavaScript access (security)
 - `Secure`: Transmitted only over HTTPS
 - `SameSite=Strict`: Prevents CSRF attacks
-- `Max-Age=2592000`: 30 days (matches session expiry in database)
+- `Max-Age=2592000`: 30 days; server-side expiry is based on rolling inactivity
 
 **Error Responses**:
 
@@ -124,9 +123,9 @@ Set-Cookie: session_id=550e8400-e29b-41d4-a716-446655440001; HttpOnly; Secure; S
 
 **Side Effects**:
 - Logs LoginAttempt with success = TRUE or FALSE
-- If successful: Creates Session record, sets session cookie
-- If rate-limited: LoginAttempt logged but session NOT created
-- If email not found or password wrong: Invalidates any previous single-session for this user (single-session enforcement); creates new session
+- If successful: Creates a Session record, invalidates any previous active session for the user, and sets the session cookie
+- If rate-limited: No session is created
+- If email is not found or password is wrong: Returns the same generic 401 response and does not invalidate an existing session
 
 **Single-Session Enforcement**: If user logs in from a new device, any previous session is invalidated immediately.
 
@@ -210,8 +209,7 @@ Set-Cookie: session_id=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0; E
 2. Look up Session by id in database
 3. Verify:
    - Session.is_active = TRUE (not logged out)
-   - Session.expires_at > NOW() (not expired by absolute time)
-   - NOW() - Session.last_activity < 30 days (not expired by inactivity)
+  - NOW() - Session.last_activity <= 30 days (not expired by inactivity; no absolute expiry field or cap)
    - Session.user_id references existing User
 4. If invalid: Return 401 Unauthorized
 5. If valid: Update Session.last_activity = NOW() and continue
@@ -236,14 +234,14 @@ All error responses use this structure:
 
 ### HTTPS & Security
 
-- All endpoints **MUST** be served over HTTPS (no HTTP)
+- Deployed endpoints **MUST** be served over HTTPS (no HTTP); deployment verification remains pending
 - Session cookies are `Secure` flagged (not sent over HTTP)
-- CSRF protection: State-changing endpoints (register, login, logout, password change) require CSRF token in request header or body (or use SameSite=Strict cookie policy)
+- CSRF protection: Authenticated state-changing endpoints (logout and password change) require the session-bound token in `X-CSRF-Token`. Registration and login are unauthenticated and do not require that token.
 
 ### Rate Limiting
 
 - **Login endpoint**: Max 5 failed attempts per IP per 15-minute window
-- **Registration endpoint**: Max 10 registrations per IP per hour (prevent spam)
+- Registration rate limiting is not implemented in this feature
 - Rate-limit headers (optional but recommended):
 
 ```

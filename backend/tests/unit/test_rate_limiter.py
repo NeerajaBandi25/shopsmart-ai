@@ -13,9 +13,7 @@ class FakeRedis:
     def zremrangebyscore(self, key, _minimum, maximum):
         self.values.setdefault(key, {})
         self.values[key] = {
-            member: score
-            for member, score in self.values[key].items()
-            if score > float(maximum)
+            member: score for member, score in self.values[key].items() if score > float(maximum)
         }
 
     def zcard(self, key):
@@ -69,3 +67,15 @@ def test_rate_limiter_falls_back_to_memory_when_redis_fails(monkeypatch):
     limiter.record_attempt("192.0.2.2")
 
     assert limiter.check_rate_limit("192.0.2.2") is True
+
+
+def test_rate_limited_ip_does_not_affect_another_ip():
+    limiter = RateLimiter(max_attempts=2, window_seconds=60, clock=lambda: 1000)
+    limited_ip = "192.0.2.10"
+    other_ip = "192.0.2.11"
+
+    limiter.record_attempt(limited_ip)
+    limiter.record_attempt(limited_ip)
+
+    assert limiter.check_rate_limit(limited_ip) is True
+    assert limiter.check_rate_limit(other_ip) is False

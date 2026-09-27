@@ -23,13 +23,21 @@ describe('Nav', () => {
     expect(screen.getByText(/shopsmart ai/i)).toBeInTheDocument();
   });
 
-  it('shows logout button when authenticated', async () => {
-    (getProfile as jest.Mock).mockResolvedValue({});
+  it('restores authenticated navigation after current-user validation succeeds', async () => {
+    (getProfile as jest.Mock).mockResolvedValue({
+      user_id: 'user-1',
+      email: 'test@example.com',
+      created_at: '2026-01-01T00:00:00Z',
+    });
     render(<Nav />);
     await screen.findByRole('button', { name: /log out/i });
     expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Cart' })).toHaveAttribute('href', '/cart');
     expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute('href', '/orders');
+    expect(getProfile).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Account' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Sign In' })).not.toBeInTheDocument();
   });
 
   it('hides logout button when not authenticated', async () => {

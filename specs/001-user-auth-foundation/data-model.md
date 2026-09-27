@@ -36,7 +36,7 @@
 
 **Relationships**:
 - One-to-Many with Session (one user can have multiple sessions over time, but only one active at a time per single-session policy)
-- One-to-Many with LoginAttempt (audit trail)
+- Login attempts are recorded separately and are not related to User by a database foreign key
 
 ---
 
@@ -59,12 +59,12 @@
 | is_active | boolean | NOT NULL, DEFAULT TRUE | Logical soft-delete for logout |
 
 **Validation Rules**:
-- id: Cryptographically random, 256-bit entropy (sufficient for ~128-bit security margin)
+- id: Opaque, cryptographically random session token; see the implementation's token generator
 - user_id: Must reference existing User; foreign key enforced
 - last_activity: Updated on every authenticated request; inactivity expiration computed as NOW() - last_activity > 30 days
-- ip_address: Stored for audit/security; not used for session validation (multi-device access allowed)
+- ip_address: Stored for audit/security; not used for session validation
 - is_active: Set to FALSE on logout; queries filter is_active = TRUE
-- **Session Timeout Logic (Rolling Inactivity Only)**: Session expires when NOW() - last_activity > 30 days. There is no absolute expiration cap; sessions remain valid indefinitely while the user is active. On each authenticated request, last_activity is updated, extending the timeout to last_activity + 30 days.
+- **Session Timeout Logic (Rolling Inactivity Only)**: Session expires when NOW() - last_activity > 30 days. There is no absolute expiration cap; sessions remain valid indefinitely while the user is active. On each authenticated request, last_activity is updated, extending the timeout to last_activity + 30 days. Each user has at most one active session under the current single-session policy.
 
 **Indexes**:
 - PRIMARY KEY on id (fast session lookup)
@@ -85,7 +85,6 @@ Active Session:
 
 **Relationships**:
 - Many-to-One with User (many sessions belong to one user; single-session policy means at most one active session per user)
-- One-to-Many with LoginAttempt (optional; for failed-login audit per session)
 
 ---
 
@@ -119,7 +118,7 @@ Active Session:
 
 **State Transitions**: None (audit log is immutable append-only)
 
-**Relationships**: Optional Many-to-One with Session (if succeeded and session created, can link to Session.id)
+**Relationships**: No Session foreign key is defined; login attempts remain an independent audit record.
 
 ---
 
@@ -127,7 +126,7 @@ Active Session:
 
 ### Foreign Key Constraints
 
-- Session.user_id → User.id (RESTRICT on delete; users cannot be deleted while sessions exist, or use CASCADE with caution)
+- Session.user_id → User.id (CASCADE on delete, as declared by the migration)
 
 ### Uniqueness Constraints
 
@@ -137,8 +136,8 @@ Active Session:
 ### Check Constraints
 
 - User.email: Valid email format (basic regex or trigger)
-- Session.expires_at > Session.created_at (integrity check)
-- Session.last_activity <= NOW() (activity cannot be in future)
+- LoginAttempt.success and failure_reason must be consistent
+- No persisted expires_at field or absolute session-expiration constraint; expiry is derived from is_active and last_activity.
 
 ---
 
@@ -147,48 +146,50 @@ Active Session:
 ```sql
 -- Users table
 CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}$')
 );
 
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_created_at ON users(created_at);
+CREATE INDEX ix_users_email ON users(email);
+CREATE INDEX ix_users_created_at ON users(created_at);
 
 -- Sessions table
 CREATE TABLE sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_activity TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ip_address INET NOT NULL,
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_activity TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ip_address VARCHAR(45) NOT NULL,
     user_agent VARCHAR(500) NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    CHECK (last_activity <= CURRENT_TIMESTAMP)
+  is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
-CREATE INDEX idx_sessions_user_id_active ON sessions(user_id, is_active);
-CREATE INDEX idx_sessions_last_activity ON sessions(last_activity);
+CREATE INDEX ix_sessions_user_id_is_active ON sessions(user_id, is_active);
+CREATE INDEX ix_sessions_last_activity ON sessions(last_activity);
 
 -- LoginAttempts table (audit log)
 CREATE TABLE login_attempts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY,
     email VARCHAR(255) NOT NULL,
-    ip_address INET NOT NULL,
-    attempted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ip_address VARCHAR(45) NOT NULL,
+  attempted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     success BOOLEAN NOT NULL,
     failure_reason VARCHAR(100),
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (
         (success = TRUE AND failure_reason IS NULL) OR
         (success = FALSE AND failure_reason IS NOT NULL)
     )
 );
 
-CREATE INDEX idx_login_attempts_ip_timestamp ON login_attempts(ip_address, attempted_at);
-CREATE INDEX idx_login_attempts_timestamp ON login_attempts(attempted_at);
+CREATE INDEX ix_login_attempts_ip_attempted_at ON login_attempts(ip_address, attempted_at);
+CREATE INDEX ix_login_attempts_email_attempted_at ON login_attempts(email, attempted_at);
 ```
 
 ---
@@ -202,7 +203,7 @@ CREATE INDEX idx_login_attempts_timestamp ON login_attempts(attempted_at);
 3. Password must be ≥8 characters, include uppercase, lowercase, digit, special char → ERROR 400 if weak
 4. Hash password using bcrypt (12 rounds) before storing
 5. Create User record with email and password_hash
-6. Log LoginAttempt with success = TRUE
+6. Registration does not create a LoginAttempt row; LoginAttempt records login attempts only
 
 ### Login (Session Creation with Single-Session Enforcement)
 
@@ -279,7 +280,7 @@ This is simpler and more performant than SERIALIZABLE isolation (which adds over
 4. Update User.password_hash
 5. Update User.updated_at = now()
 6. Invalidate all existing sessions for user (set is_active = FALSE) to force re-login on all devices
-7. Create new session for current device (re-authenticate after password change)
+7. Return 204; the user must authenticate again because all active sessions, including the current one, were invalidated.
 8. Return 204 No Content
 
 ---
@@ -288,7 +289,7 @@ This is simpler and more performant than SERIALIZABLE isolation (which adds over
 
 ### Initial Schema Creation (Alembic migration)
 
-File: `migrations/versions/001_create_user_auth_tables.py`
+File: `backend/migrations/versions/001_create_users_sessions_tables.py`
 
 Operations:
 1. Create users table with indexes
@@ -321,13 +322,13 @@ Operations:
 - Index: COMPOSITE on (ip_address, attempted_at) (essential for frequent checks)
 - Estimated: <10ms (even for busy IPs with thousands of attempts)
 
-**Cleanup Expired Sessions**: `DELETE FROM sessions WHERE expires_at < NOW() AND is_active = FALSE`
-- Index: on expires_at (supports efficient cleanup)
+**Cleanup Inactive Sessions**: `DELETE FROM sessions WHERE last_activity < NOW() - INTERVAL '30 days' AND is_active = FALSE`
+- Index: on last_activity (supports cleanup of inactive sessions)
 - Estimated: Batch job, non-blocking
 
 ### Caching Strategy (Optional Redis)
 
-- Session cache key: `session:{session_id}` → {user_id, expires_at} (TTL = 30 days or session expiry)
+- Session cache key: `session:{session_id}` → {user_id, is_active, last_activity} (TTL no longer than the 30-day inactivity window)
   - Reduces database load for session lookups
   - On logout, invalidate cache immediately
   - Redis miss falls back to database lookup
@@ -350,8 +351,8 @@ Operations:
 
 ### Test Sessions
 
-- **Active Session**: created_at = now, expires_at = now + 30 days, is_active = TRUE
-- **Expired Session**: created_at = 31 days ago, expires_at = 1 day ago, is_active = TRUE (should be rejected)
+- **Active Session**: created_at = now, last_activity = now, is_active = TRUE
+- **Expired Session**: last_activity = 31 days ago, is_active = TRUE (should be rejected by inactivity validation)
 - **Logged-out Session**: is_active = FALSE (should be rejected)
 
 ### Rate Limit Test Data

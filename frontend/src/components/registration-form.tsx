@@ -79,14 +79,12 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     try {
       await register(email, password);
       onSuccess?.();
-      // Show success message for 2 seconds, then redirect to login with success message
       setSuccess('Account created successfully. Redirecting to login...');
       setTimeout(() => {
         router.push('/auth/login?message=Account%20created%20successfully');
       }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
-      console.error('Registration error:', err);
     } finally {
       setLoading(false);
     }
@@ -97,7 +95,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
   // itself remains frozen.
   const fieldClassName = 'premium-field';
   const fieldInputClasses =
-    'border-ink-100! bg-white! rounded-tile! shadow-tile! focus:ring-accent-500! focus-visible:ring-accent-500! transition-shadow!';
+    'border-ink-100! bg-white! rounded-tile! shadow-tile! placeholder:text-gray-600! focus:ring-accent-500! focus-visible:ring-accent-500! transition-shadow!';
 
   const strengthItems = [
     { ok: passwordStrength.length, label: 'At least 8 characters' },
@@ -147,22 +145,23 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
       />
 
       {/* Password strength indicator */}
-      <div
+      <ul
         className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-sm"
         aria-label="Password requirements"
       >
         {strengthItems.map((item) => (
-          <div
+          <li
             key={item.label}
             className={`flex items-center gap-2 transition-colors duration-200 ${
-              item.ok ? 'text-status-success' : 'text-ink-300'
+              item.ok ? 'text-leaf-600' : 'text-ink-500'
             }`}
           >
             <span aria-hidden="true">{item.ok ? '✓' : '○'}</span>
             {item.label}
-          </div>
+            <span className="sr-only">{item.ok ? ' met' : ' not met'}</span>
+          </li>
         ))}
-      </div>
+      </ul>
 
       {/* Confirm password input */}
       <Input
@@ -185,7 +184,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
         size="md"
         className="w-full bg-accent-600! hover:bg-accent-700! focus-visible:ring-accent-500! focus-visible:ring-offset-2! rounded-tile! py-3!"
         disabled={loading || !isPasswordStrong}
-        onClick={handleSubmit}
+        type="submit"
       >
         {loading ? 'Creating account...' : 'Create Account'}
       </Button>

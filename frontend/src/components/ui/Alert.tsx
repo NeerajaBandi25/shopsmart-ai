@@ -21,6 +21,7 @@ export function Alert({ variant = 'info', message, className = '' }: AlertProps)
           'bg-blue-50/50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200 border border-blue-200',
         className,
       ].join(' ')}
+      role={variant === 'error' ? 'alert' : variant === 'success' ? 'status' : undefined}
     >
       {message}
     </div>

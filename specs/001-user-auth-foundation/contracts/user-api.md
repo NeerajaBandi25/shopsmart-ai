@@ -8,7 +8,7 @@
 
 ## Overview
 
-The User Profile API provides endpoints for authenticated users to view and manage their account information. All endpoints require a valid session cookie and enforce user-scoped authorization (users can only access/modify their own data).
+The User Profile API provides endpoints for authenticated users to view their own account information and change their own password. Feature 001 defines no endpoint that accepts a caller-supplied target user ID; future user-scoped resource routes must apply the shared ownership policy.
 
 ---
 
@@ -31,7 +31,7 @@ PUT  /api/v1/users/password
 
 **Authentication**: Required (session cookie must be valid)
 
-**Authorization**: User can only access their own profile
+**Authorization**: Returns only the profile belonging to the authenticated session; no target user ID is accepted
 
 **Request**: No body
 
@@ -107,23 +107,7 @@ No response body. User's password is updated and all other sessions are terminat
 
 ### Resource Ownership
 
-Each user-scoped endpoint enforces that the authenticated user can only access their own data.
-
-**Example**: User A attempting to access User B's profile:
-
-```bash
-# User A is logged in as user_id = 550e8400-...0000
-# User A attempts to GET User B's profile (user_id = 550e8400-...0001)
-curl -X GET https://localhost/api/v1/users/550e8400-...0001/profile \
-  -b cookies.txt
-# Response: 403 Forbidden (cross-user access denied)
-```
-
-**Implementation**:
-1. Extract user_id from session cookie
-2. Extract target_user_id from request (path parameter or resource ownership check)
-3. If user_id ≠ target_user_id: Return 403 Forbidden
-4. Otherwise: Proceed with request
+Feature 001's self-profile and password endpoints derive the target user from the authenticated session. Routes introduced by later features that accept or resolve a user-owned resource must call the shared ownership policy and return 403 for a non-owner. Feature 001 does not define a target-user profile or commerce resource route, so it has no route-level cross-user example to execute.
 
 ---
 
@@ -133,7 +117,7 @@ curl -X GET https://localhost/api/v1/users/550e8400-...0001/profile \
 
 All requests validate session:
 1. Extract session_id from cookie
-2. Verify session is active, not expired (by absolute time or inactivity)
+2. Verify session is active and has not exceeded 30 days of rolling inactivity; there is no absolute expiration field or cap
 3. If invalid: Return 401 Unauthorized
 4. If valid: Update Session.last_activity (extends timeout)
 
@@ -181,10 +165,10 @@ curl -X GET https://localhost/api/v1/users/profile \
   -b cookies.txt
 # Response: 200 OK with user_id, email, created_at
 
-# 3. Change password (with CSRF token from login response)
+# 3. Fetch the session-bound CSRF token from GET /api/v1/auth/csrf, then change password
 curl -X PUT https://localhost/api/v1/users/password \
   -H "Content-Type: application/json" \
-  -H "X-CSRF-Token: <csrf_token>" \
+  -H "X-CSRF-Token: <csrf_token-from-auth-csrf>" \
   -b cookies.txt \
   -d '{"current_password": "Secure123!", "new_password": "NewSecure456!"}'
 # Response: 204 No Content
@@ -202,20 +186,9 @@ curl -X POST https://localhost/api/v1/auth/login \
 # Response: 200 OK
 ```
 
-### Cross-User Access Denied
+### Future User-Owned Resource Authorization
 
-```bash
-# Logged in as User A
-curl -X GET https://localhost/api/v1/users/profile \
-  -b cookies.txt
-# Response: 200 OK (User A's profile)
-
-# User A attempts to access User B's profile (by knowing B's user_id)
-# Assuming GET /api/v1/users/{user_id}/profile endpoint exists:
-curl -X GET https://localhost/api/v1/users/550e8400-...user-b.../profile \
-  -b cookies.txt
-# Response: 403 Forbidden
-```
+Feature 001 defines no endpoint that accepts another user's ID or addresses a user-owned commerce resource. When a later feature introduces one, test owner success and cross-user 403 against that concrete route; do not treat the self-profile endpoint as a cross-user route.
 
 ### Weak Password Rejection
 
@@ -262,7 +235,7 @@ curl -X GET https://localhost/api/v1/users/profile \
 ### On Inactivity
 
 1. If user doesn't make request for 30 days:
-   - Session.expires_at < NOW()
+  - NOW() - Session.last_activity > 30 days
    - GET /api/v1/users/profile returns 401 Unauthorized
    - Frontend redirects to login page
 
