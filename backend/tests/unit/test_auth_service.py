@@ -1,13 +1,13 @@
 """Unit tests for authentication service (TDD)."""
 
-import pytest
 from uuid import UUID
 
-from src.core.exceptions import ValidationError, ConflictError, AuthenticationError, RateLimitError
-from src.services.auth_service import AuthService
-from src.repositories.user_repository import UserRepository
+import pytest
+
+from src.core.exceptions import AuthenticationError, ConflictError, RateLimitError, ValidationError
 from src.repositories.session_repository import SessionRepository
-from src.repositories.login_attempt_repository import LoginAttemptRepository
+from src.repositories.user_repository import UserRepository
+from src.services.auth_service import AuthService
 
 
 @pytest.fixture
@@ -39,9 +39,7 @@ class TestRegistrationValidation:
             "test_user@sub.example.com",
         ]
         for email in valid_emails:
-            result = await auth_service.register_user(
-                email=email, password="Secure123!"
-            )
+            result = await auth_service.register_user(email=email, password="Secure123!")
             assert result["email"] == email
             assert "user_id" in result
             assert isinstance(result["user_id"], (str, UUID))
@@ -75,16 +73,12 @@ class TestPasswordStrengthEnforcement:
         ]
         for password in weak_passwords:
             with pytest.raises(ValidationError) as exc_info:
-                await auth_service.register_user(
-                    email="test@example.com", password=password
-                )
+                await auth_service.register_user(email="test@example.com", password=password)
             assert exc_info.value.status_code == 400
 
     async def test_strong_password_accepted(self, auth_service):
         """Strong passwords (≥8 chars, uppercase, lowercase, digit, special) should succeed."""
-        result = await auth_service.register_user(
-            email="test@example.com", password="Secure123!"
-        )
+        result = await auth_service.register_user(email="test@example.com", password="Secure123!")
         assert "user_id" in result
         assert result["email"] == "test@example.com"
 
@@ -97,9 +91,7 @@ class TestDuplicateEmailPrevention:
         email = "duplicate@example.com"
 
         # First registration should succeed
-        result1 = await auth_service.register_user(
-            email=email, password="Secure123!"
-        )
+        result1 = await auth_service.register_user(email=email, password="Secure123!")
         assert result1["email"] == email
 
         # Second registration with same email should fail
@@ -109,12 +101,8 @@ class TestDuplicateEmailPrevention:
 
     async def test_different_emails_allowed(self, auth_service):
         """Multiple registrations with different emails should succeed."""
-        result1 = await auth_service.register_user(
-            email="user1@example.com", password="Secure123!"
-        )
-        result2 = await auth_service.register_user(
-            email="user2@example.com", password="Secure456!"
-        )
+        result1 = await auth_service.register_user(email="user1@example.com", password="Secure123!")
+        result2 = await auth_service.register_user(email="user2@example.com", password="Secure456!")
         assert result1["user_id"] != result2["user_id"]
 
 
@@ -168,6 +156,68 @@ class TestPasswordHashing:
         assert verify_password("WrongPassword456!", user.password_hash) is False
 
 
+class TestPasswordChange:
+    async def test_wrong_current_password_is_rejected(
+        self, auth_service, test_user_data_in_db, user_repo
+    ):
+        user = await user_repo.get_user_by_email(test_user_data_in_db["email"])
+
+        with pytest.raises(ValidationError) as exc_info:
+            await auth_service.change_password(user.id, "WrongCurrent123!", "ChangedPassword123!")
+
+        assert exc_info.value.error_code == "invalid_current_password"
+
+    async def test_weak_new_password_is_rejected(
+        self, auth_service, test_user_data_in_db, user_repo
+    ):
+        user = await user_repo.get_user_by_email(test_user_data_in_db["email"])
+
+        with pytest.raises(ValidationError) as exc_info:
+            await auth_service.change_password(user.id, test_user_data_in_db["password"], "weak")
+
+        assert exc_info.value.error_code == "weak_password"
+
+    async def test_strong_new_password_is_stored_as_a_hash(
+        self, auth_service, test_user_data_in_db, user_repo
+    ):
+        user = await user_repo.get_user_by_email(test_user_data_in_db["email"])
+        new_password = "ChangedPassword123!"
+
+        await auth_service.change_password(user.id, test_user_data_in_db["password"], new_password)
+
+        updated_user = await user_repo.get_user_by_id(user.id)
+        from src.core.security import verify_password
+
+        assert updated_user.password_hash != new_password
+        assert verify_password(new_password, updated_user.password_hash)
+
+    async def test_password_change_invalidates_every_active_session(
+        self, auth_service, test_user_data_in_db, user_repo, test_db
+    ):
+        from src.repositories.session_repository import SessionRepository
+
+        user = await user_repo.get_user_by_email(test_user_data_in_db["email"])
+        session_repo = SessionRepository(test_db)
+        sessions = [
+            await session_repo.create_session(
+                user_id=user.id,
+                ip_address=f"192.0.2.{index}",
+                user_agent="password-change-test",
+                csrf_token=f"csrf-token-{index}",
+            )
+            for index in (1, 2)
+        ]
+        await test_db.commit()
+
+        await auth_service.change_password(
+            user.id, test_user_data_in_db["password"], "ChangedPassword123!"
+        )
+
+        for session in sessions:
+            stored_session = await session_repo.get_session(str(session.id))
+            assert stored_session.is_active is False
+
+
 # ============================================================================
 # User Story 2 Tests: Login (T042-T044)
 # ============================================================================
@@ -193,6 +243,7 @@ class TestLoginValidation:
         assert "session_id" in result
         # Get the actual user ID from the database to compare
         from src.repositories.user_repository import UserRepository
+
         user_repo = UserRepository(db=test_db)
         user = await user_repo.get_user_by_email(email)
         assert result["user_id"] == str(user.id)
@@ -217,9 +268,7 @@ class TestLoginValidation:
         # Should be generic message, not revealing whether email exists
         assert exc_info.value.message == "Invalid email or password"
 
-    async def test_login_with_nonexistent_email(
-        self, auth_service: AuthService
-    ):
+    async def test_login_with_nonexistent_email(self, auth_service: AuthService):
         """Login with non-existent email should raise AuthenticationError (401)."""
         email = "nonexistent@example.com"
         password = "anyPassword123!"
@@ -332,9 +381,7 @@ class TestSingleSessionEnforcement:
 class TestRateLimitingLogic:
     """T044: Test rate limiting logic."""
 
-    async def test_five_failed_attempts_allowed(
-        self, auth_service: AuthService
-    ):
+    async def test_five_failed_attempts_allowed(self, auth_service: AuthService):
         """Up to 5 failed login attempts from same IP should be allowed."""
         email = "nonexistent@example.com"  # Use non-existent email to guarantee failure
         password = "wrong123!"
@@ -352,9 +399,7 @@ class TestRateLimitingLogic:
             assert exc_info.value.status_code == 401
             assert exc_info.value.error_code == "invalid_credentials"
 
-    async def test_sixth_failed_attempt_rate_limited(
-        self, auth_service: AuthService
-    ):
+    async def test_sixth_failed_attempt_rate_limited(self, auth_service: AuthService):
         """6th failed login attempt from same IP should raise RateLimitError (429)."""
         email = "nonexistent@example.com"  # Use non-existent email to guarantee failure
         password = "wrong123!"
@@ -430,16 +475,17 @@ class TestRateLimitingLogic:
 # User Story 3 Tests: Logout (T059-T062)
 # ============================================================================
 
+
 class TestLogout:
     """T059: Test logout invalidation."""
 
-    async def test_logout_invalidation(self, auth_service: AuthService, user_repo: UserRepository, test_db):
+    async def test_logout_invalidation(
+        self, auth_service: AuthService, user_repo: UserRepository, test_db
+    ):
         """Test logout invalidation: session is_active set to FALSE; subsequent session lookup fails"""
         # Create a user
         password = "Secure123!"
-        user_result = await auth_service.register_user(
-            email="logout_test@example.com", password=password
-        )
+        await auth_service.register_user(email="logout_test@example.com", password=password)
 
         # Login to create a session
         login_result = await auth_service.login_user(

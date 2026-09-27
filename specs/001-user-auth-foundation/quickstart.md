@@ -10,6 +10,8 @@
 
 This guide provides runnable validation scenarios to prove the authentication feature works end-to-end. Each scenario is independent and can be tested in isolation.
 
+Browser authentication uses the same-origin Next.js `/api/auth/*` BFF, which forwards to FastAPI. The curl examples below call FastAPI directly to validate its API contract; they do not replace browser/BFF testing. Because session cookies are `Secure`, every cookie-based curl or browser scenario requires an HTTPS origin (for example, a local HTTPS reverse proxy); plain HTTP can exercise public registration/login responses but cannot validate authenticated cookie continuity.
+
 ---
 
 ## Prerequisites
@@ -17,7 +19,7 @@ This guide provides runnable validation scenarios to prove the authentication fe
 ### Environment Setup
 
 1. **Database**: PostgreSQL running (local or containerized)
-   - Connection string: `postgresql://user:password@localhost:5432/shopsmart_auth_test`
+  - Connection string: `postgresql+asyncpg://user:password@localhost:5432/shopsmart_auth_test`
    - Tables created (users, sessions, login_attempts)
    - See [data-model.md](../data-model.md) for schema
 
@@ -25,12 +27,13 @@ This guide provides runnable validation scenarios to prove the authentication fe
    - URL: `http://localhost:8000` (development) or `https://api.shopsmart.local` (staging)
    - Environment variables configured:
      - `DATABASE_URL=postgresql://...`
-     - `SESSION_SECRET_KEY=<random-32-byte-key>`
+    - `SECRET_KEY=<unique-random-secret>`
      - `REDIS_URL=redis://localhost:6379` (optional, for rate limiting)
 
 3. **Frontend Application**: Next.js running
    - URL: `http://localhost:3000` (development)
-   - BFF routes configured for auth endpoints
+  - `API_INTERNAL_URL=http://localhost:8000/api/v1` (server-only BFF target)
+  - Auth calls use same-origin `/api/auth/*`; `NEXT_PUBLIC_API_URL` is only for the product catalog
 
 4. **Tools**:
    - `curl` (CLI for API testing)
@@ -139,9 +142,20 @@ curl -X GET http://localhost:8000/api/v1/auth/me \
 
 #### 1.4 Log Out
 
+First retrieve the session-bound CSRF token:
+
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/logout \
+curl -X GET http://localhost:8000/api/v1/auth/csrf \
   -b cookies.txt
+```
+
+Copy the returned `csrf_token` into `CSRF_TOKEN` for the logout request:
+
+```bash
+CSRF_TOKEN="<csrf-token-from-response>"
+curl -X POST http://localhost:8000/api/v1/auth/logout \
+  -b cookies.txt \
+  -H "X-CSRF-Token: $CSRF_TOKEN"
 ```
 
 **Expected Response**: 204 No Content
@@ -181,84 +195,9 @@ curl -X GET http://localhost:8000/api/v1/auth/me \
 
 ---
 
-## Scenario 2: Authorization Boundary — Cross-User Access Denied
+## Scenario 2: Authorization Boundary — Deferred Until a Resource Route Exists
 
-**Objective**: Verify users cannot access other users' data
-
-**Expected Duration**: 3 minutes
-
-### Setup
-
-Create two users:
-
-```bash
-# User A
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email": "usera@example.com", "password": "PasswordA123!"}'
-
-# Save user_id_a from response
-USER_ID_A="550e8400-e29b-41d4-a716-446655440001"
-
-# User B
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email": "userb@example.com", "password": "PasswordB456!"}'
-
-# Save user_id_b from response
-USER_ID_B="550e8400-e29b-41d4-a716-446655440002"
-```
-
-### Steps
-
-#### 2.1 Log In as User A
-
-```bash
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -c cookies_a.txt \
-  -d '{"email": "usera@example.com", "password": "PasswordA123!"}'
-```
-
-**Verification**: 200 OK, session_id set
-
-#### 2.2 Access User A's Own Profile (Should Succeed)
-
-```bash
-curl -X GET http://localhost:8000/api/v1/users/profile \
-  -b cookies_a.txt
-```
-
-**Expected Response**: 200 OK with User A's profile
-
-**Verification**: HTTP status is 200
-
-#### 2.3 Attempt to Access User B's Profile (Should Fail with 403)
-
-Note: Assuming API supports user-id-scoped access. If not, this test verifies that User A can only see their own data in generic `/profile` endpoint.
-
-```bash
-# If API has: GET /api/v1/users/{user_id}/profile
-curl -X GET "http://localhost:8000/api/v1/users/$USER_ID_B/profile" \
-  -b cookies_a.txt
-
-# Expected: 403 Forbidden
-```
-
-**Expected Response**: 403 Forbidden
-
-```json
-{
-  "detail": "Forbidden",
-  "status_code": 403,
-  "error_code": "forbidden"
-}
-```
-
-**Verification**:
-- HTTP status is 403
-- User A cannot access User B's data
-- Error message generic (no hints about why access denied)
+**Status**: Not executable in Feature 001. This feature exposes only the authenticated self-profile endpoint `/api/v1/users/profile`; it does not expose a caller-supplied user ID or any order/cart/document resource route. Do not call the hypothetical `/api/v1/users/{user_id}/profile` path or treat an unimplemented endpoint as a 403 proof. `verify_user_owns_resource()` has unit coverage; route-level owner/non-owner behavior is deferred until a concrete user-owned resource API is approved and implemented.
 
 ---
 
@@ -418,10 +357,13 @@ Option A: Directly update database
 
 ```bash
 psql -U postgres -d shopsmart_auth_test -c "
-  UPDATE sessions 
-  SET last_activity = NOW() - INTERVAL '31 days' 
-  WHERE is_active = TRUE 
-  ORDER BY created_at DESC LIMIT 1;
+  WITH latest AS (
+    SELECT id FROM sessions WHERE is_active = TRUE
+    ORDER BY created_at DESC LIMIT 1
+  )
+  UPDATE sessions
+  SET last_activity = NOW() - INTERVAL '31 days'
+  WHERE id = (SELECT id FROM latest);
 "
 ```
 
@@ -477,8 +419,12 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 #### 6.2 Change Password
 
 ```bash
-# Extract CSRF token from login response (stored in session)
-CSRF_TOKEN="<csrf-token-from-login>"
+# Fetch the session-bound CSRF token after login.
+curl -X GET http://localhost:8000/api/v1/auth/csrf \
+  -b cookies_pwd.txt
+
+# Copy csrf_token from the response.
+CSRF_TOKEN="<csrf-token-from-response>"
 
 curl -X PUT http://localhost:8000/api/v1/users/password \
   -H "Content-Type: application/json" \

@@ -6,9 +6,7 @@
 
 ## Summary
 
-Implement production-ready user authentication system for ShopSmart AI enabling email/password registration, login, logout, secure session management, and authorization boundaries. This is the foundational feature required for all downstream features (cart, checkout, orders, document uploads, AI chat). The implementation uses a server-side session model (database/Redis storage, secure httpOnly cookies), enforces single-session-per-user concurrency, and follows security-by-default principles: parameterized queries, CSRF protection, bcrypt password hashing, rate limiting on login, and 403/401 authorization enforcement.
-
-## Technical Context
+The current Feature 001 implementation provides email/password registration and login, PostgreSQL-backed sessions, logout, current-user/self-profile access, password changes, rate limiting, session-bound CSRF validation, and rolling session-cookie refresh. Browser auth uses the same-origin Next.js BFF (`/api/auth/*`) to FastAPI; middleware forwards the session cookie and distinguishes 401 from upstream/network failures. A shared owner-policy helper is available for future resource routes, but this feature defines no target-user resource endpoint. Deployed HTTPS/CORS verification remains environment-dependent.
 
 ## Technical Context
 
@@ -41,17 +39,17 @@ Implement production-ready user authentication system for ShopSmart AI enabling 
 **Primary Dependencies**: 
 - Backend: FastAPI, SQLAlchemy, bcrypt, asyncpg (PostgreSQL async driver)
 - Frontend: Next.js 14+, TypeScript, React Hook Form or similar for validation
-- Infrastructure: PostgreSQL (users, sessions), Redis (optional: rate limiting, session cache)
+- Infrastructure: PostgreSQL (users and sessions), Redis for shared login rate limiting when available
 
-**Storage**: PostgreSQL (system of record for users and sessions); optional Redis for rate limiting
+**Storage**: PostgreSQL is the system of record for users, sessions, and login-attempt audit data; Redis is not a session store or general product cache
 
 **Testing**: pytest (backend unit/integration), pytest-asyncio (async DB tests), Playwright or Cypress (frontend integration tests)
 
 **Target Platform**: Web browser (modern browsers supporting secure cookies, HTTPS)
 
-**Project Type**: Full-stack web application (backend REST API + Next.js frontend + BFF)
+**Project Type**: Full-stack web application (Next.js frontend and same-origin auth BFF → FastAPI backend)
 
-**Performance Goals**: 
+**Performance Goals (targets; not verified by this implementation review)**:
 - Registration/login < 1 minute / < 30 seconds (user-perceived)
 - API response time < 200ms p95 (typical auth endpoints)
 - Support 1000+ concurrent authenticated users
@@ -136,36 +134,42 @@ backend/
 ├── src/
 │   ├── core/
 │   │   ├── config.py           # Environment variables, settings
-│   │   ├── security.py         # Password hashing, CSRF, session logic
+│   │   ├── security.py         # Password hashing and token utilities
+│   │   ├── csrf.py             # CSRF token manager
+│   │   ├── rate_limiter.py     # Redis limiter with process-local fallback
 │   │   ├── exceptions.py       # Custom exception classes
-│   │   └── logging.py          # Structured logging
+│   │   └── observability.py    # Structured logging, request IDs, security audit events
 │   ├── models/
-│   │   ├── user.py             # Pydantic schemas for User input/output
-│   │   └── session.py          # Pydantic schemas for Session
+│   │   ├── user.py             # SQLAlchemy User entity
+│   │   ├── session.py          # SQLAlchemy Session entity and CSRF token
+│   │   └── login_attempt.py    # Login-attempt audit entity
 │   ├── repositories/
 │   │   ├── user_repository.py  # Database access layer (SQLAlchemy)
-│   │   └── session_repository.py
+│   │   ├── session_repository.py
+│   │   └── login_attempt_repository.py
 │   ├── services/
-│   │   ├── auth_service.py     # Business logic (registration, login, authorization)
-│   │   └── session_service.py  # Session management
+│   │   └── auth_service.py     # Registration, login, logout, password change
+│   ├── middleware/
+│   │   └── session_refresh.py  # Refresh cookie after authenticated requests
 │   ├── api/
 │   │   ├── v1/
 │   │   │   ├── auth_routes.py  # POST /auth/register, /auth/login, /auth/logout
 │   │   │   ├── user_routes.py  # GET /users/profile, PUT /users/password
 │   │   │   └── deps.py         # Dependency injection (current_user, db_session)
-│   │   └── health.py           # Health/readiness checks
+│   ├── main.py                 # App, CORS, error handlers, /health, /readiness
 │   ├── database.py             # SQLAlchemy setup, session factory
-│   └── main.py                 # FastAPI app initialization, middleware
+│   └── __init__.py
 ├── migrations/                 # Alembic migrations (User, Session tables)
 └── tests/
     ├── unit/
     │   ├── test_auth_service.py
-    │   ├── test_password_hashing.py
-    │   └── test_session_logic.py
+   │   └── test_rate_limiter.py
     ├── integration/
     │   ├── test_auth_endpoints.py
-    │   ├── test_authorization.py
-    │   └── test_rate_limiting.py
+   │   ├── test_observability.py
+   │   └── test_transaction_persistence.py
+   ├── contract/
+   │   └── test_auth_api.py
     └── conftest.py             # Pytest fixtures (db, client, test users)
 
 # Frontend (Next.js)
@@ -175,35 +179,27 @@ frontend/
 │   │   ├── auth/
 │   │   │   ├── register/page.tsx
 │   │   │   ├── login/page.tsx
-│   │   │   └── logout/route.ts (BFF handler)
+│   │   ├── api/auth/               # Same-origin BFF handlers for auth operations
 │   │   ├── account/
 │   │   │   └── page.tsx          # Profile/settings page
+│   │   ├── dashboard/
+│   │   │   └── page.tsx
 │   │   ├── layout.tsx            # Root layout with nav/logout
 │   │   └── page.tsx              # Public home or redirect logic
 │   ├── components/
-│   │   ├── auth-form.tsx         # Registration/login form component
-│   │   ├── password-input.tsx    # Password strength indicator
-│   │   └── error-alert.tsx       # Error state display
+│   │   ├── registration-form.tsx
+│   │   ├── login-form.tsx
+│   │   ├── logout-button.tsx
+│   │   └── nav.tsx
 │   ├── lib/
-│   │   ├── api-client.ts         # HTTP client for API calls
-│   │   ├── auth-context.ts       # (Optional: minimal client state for loading/error)
-│   │   └── validation.ts         # Email/password validation functions
+│   │   └── api-client.ts         # Same-origin auth client; catalog retains its configured API URL
 │   └── types/
 │       └── auth.ts               # TypeScript types (User, LoginRequest, etc.)
-├── middleware.ts                 # Next.js middleware for protected routes
-└── tests/
-    ├── integration/
-    │   ├── register.test.tsx
-    │   ├── login.test.tsx
-    │   └── logout.test.tsx
-    └── unit/
-        └── validation.test.ts
+└── middleware.ts                 # Protected-route session validation through the same-origin BFF
 
 # Database
-migrations/
-└── alembic/
-    └── versions/
-        └── 001_create_users_and_sessions.py
+backend/migrations/versions/
+└── 001_create_users_sessions_tables.py
 ```
 
 **Structure Decision**: Full-stack web application (Option 2) with clear backend/frontend/database separation. Backend is FastAPI + PostgreSQL; frontend is Next.js + TypeScript. Follows constitution's layered architecture requirement: routes → services → repositories → models for backend; pages → components → API client → types for frontend.
@@ -255,9 +251,8 @@ No Constitution Check violations. Feature is straightforward authentication with
    - Alternatives: Memcached (no transactions), in-memory (not distributed)
 
 5. **CSRF Protection Strategy**
-   - Decision: Double-submit cookie pattern via FastAPI middleware + SameSite=Strict
-   - Rationale: Works with httpOnly cookies, easy to test, standard in FastAPI ecosystem
-   - Alternatives: Synchronizer token pattern (same browser complexity), custom headers
+   - Current implementation: Session-bound token stored with the PostgreSQL session row, obtained from `GET /api/v1/auth/csrf`, and sent in `X-CSRF-Token` for logout and password change
+   - This is not a double-submit cookie pattern; tests cover missing, invalid, cross-session, revoked-session, and expired-session rejection
 
 6. **Rate Limiting Implementation**
    - Decision: Redis-backed rate limiter (with fallback to in-memory if Redis unavailable)
@@ -265,9 +260,8 @@ No Constitution Check violations. Feature is straightforward authentication with
    - Alternatives: Database-backed (simpler but slower), sliding window (more complex)
 
 7. **Frontend Session Validation**
-   - Decision: Middleware-level (Next.js middleware) + BFF routes for protected endpoints
-   - Rationale: Server-side redirect on 401 (better UX), clear authorization boundary
-   - Alternatives: Client-side redirect (less reliable), JWT validation in browser (violates httpOnly requirement)
+   - Implemented: Next.js middleware validates protected routes through same-origin `/api/auth/me`, forwards the incoming Cookie, relays refresh cookies, redirects only on 401, and returns upstream/network failures without treating them as logout.
+   - Implemented: Same-origin BFF handlers cover register, login, logout, current-user, CSRF, and password operations; focused route/client/middleware tests cover forwarding and cookie behavior.
 
 **Output**: Decisions embedded in this plan; all clarifications resolved in spec phase (no separate research.md needed).
 
@@ -293,17 +287,18 @@ No Constitution Check violations. Feature is straightforward authentication with
    - id (UUID, primary key)
    - user_id (UUID, foreign key to User)
    - created_at (timestamp)
-   - expires_at (timestamp, 30 days from creation or last activity)
    - last_activity (timestamp, updated on each request)
    - ip_address (string, for audit/security)
    - user_agent (string, for device tracking)
-   - Constraints: Foreign key enforces user exists; expires_at updated on activity; on user logout, soft-delete or set expires_at to now
+   - csrf_token (session-bound token for state-changing request validation)
+   - is_active (boolean)
+   - Constraints: Foreign key enforces user exists; inactivity is evaluated from last_activity; logout/password change set is_active to false
 
 3. **LoginAttempt** (audit/rate limiting)
    - id (UUID, primary key)
    - email (string, not null)
    - ip_address (string, not null)
-   - timestamp (timestamp)
+   - attempted_at (timestamp)
    - success (boolean)
    - Constraint: Composite index on (ip_address, timestamp) for rate-limit queries
 

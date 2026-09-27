@@ -8,6 +8,10 @@
 
 **Input**: User description: "Implement production-ready user authentication and account foundation for ShopSmart AI using email/password registration and login, secure session management, logout, authenticated user identity, authorization boundaries, validation, and the backend/frontend foundations required for future cart, checkout, orders, document uploads, and AI chat features."
 
+## Implementation Reconciliation
+
+The original reviewed implementation baseline was `origin/main` at `8d84fc35a6aae3e6b396fd3375ccccf8a2cadd76`. The current working branch adds same-origin Next.js auth BFF handlers and protected-route middleware validation, plus browser-restart, logout-redirect, account/password, and auth-boundary coverage. The backend provides PostgreSQL-backed sessions, self-profile access, session-bound CSRF, and rolling inactivity refresh. A reusable resource-owner policy is available, but this feature defines no target-user profile or concrete user-owned resource route; route-level cross-user behavior remains deferred until such a resource API is scoped. Production HTTPS and deployed CORS behavior have not been verified; SC-011 remains an unverified deployment criterion. This status note does not change the Draft approval status.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - New User Registration (Priority: P1)
@@ -65,28 +69,28 @@ A logged-in user clicks a logout button or link, and their session is immediatel
 
 ### User Story 4 - Authenticated User Identity & Authorization Boundaries (Priority: P1)
 
-The system correctly identifies the authenticated user and enforces authorization boundaries. Users can only access their own data (orders, cart, documents, chat history). If a user attempts to access another user's data, the request is denied with a 403 Forbidden response. The system maintains user identity throughout their session.
+The system correctly identifies the authenticated user and enforces authorization boundaries. Users can only access their own data when user-scoped resource endpoints are provided. If a user attempts to access another user's data, the request is denied with a 403 Forbidden response. The system maintains user identity throughout their session. Resource-specific authorization remains a requirement for the features that introduce those endpoints; this authentication baseline does not define a generic user-id-scoped profile route.
 
 **Why this priority**: Authorization is a non-negotiable security requirement. Without proper authorization enforcement, users could access each other's payment info, orders, uploaded documents, and AI chat history. This is a critical privacy and security issue that must work from day one.
 
-**Independent Test**: Can be fully tested by logging in as one user, attempting to access another user's resource (e.g., /api/orders/999 where 999 belongs to a different user), and verifying a 403 error. Delivers security value.
+**Independent Test**: Verify authenticated identity through `/api/v1/auth/me` and `/api/v1/users/profile`, and verify the shared owner policy returns 403 for a non-owner. Route-level cross-user tests become executable when a concrete user-owned resource endpoint is introduced; this auth foundation does not define one.
 
 **Acceptance Scenarios**:
 
-1. **Given** a logged-in user (User A), **When** they request their own orders via /api/orders, **Then** they receive their order history.
-2. **Given** a logged-in user (User A), **When** they attempt to request another user's (User B) orders via /api/orders/user-b-id, **Then** they receive a 403 Forbidden error.
-3. **Given** a logged-in user, **When** the API response includes user identity, **Then** the identity field correctly identifies the logged-in user.
+1. **Given** a logged-in user, **When** they request their own data through a user-scoped endpoint introduced by a feature, **Then** that endpoint returns only data owned by the authenticated user.
+2. **Given** a logged-in user, **When** they attempt to access another user's resource through a user-scoped endpoint introduced by a feature, **Then** that endpoint applies the shared ownership policy and returns 403 Forbidden.
+3. **Given** a logged-in user, **When** they attempt to access another user's resource through a user-scoped endpoint introduced by a feature, **Then** that endpoint applies the shared ownership policy and returns 403 Forbidden.
 4. **Given** a user logs out, **When** their session cookie/token is invalidated, **Then** API requests using that session fail with 401 Unauthorized.
 
 ---
 
 ### User Story 5 - Account Information Access (Priority: P2)
 
-A logged-in user can view their account information (email, account creation date). They can update their password and other profile details. The system requires current password verification before allowing password changes.
+A logged-in user can view their account information (email, account creation date) and change their password. The system requires current password verification before allowing password changes. Other profile fields are outside this feature's defined data model.
 
 **Why this priority**: P2 - Core account management feature, enables user control over their account. Not blocking any other critical flow but important for user autonomy and account security.
 
-**Independent Test**: Can be fully tested by logging in, navigating to account settings, viewing and updating profile information, and verifying changes persist. Delivers user autonomy value.
+**Independent Test**: Can be fully tested by logging in, viewing the authenticated email and account creation date, changing the password with the current password, and verifying that only the new password works. Editing other profile fields is outside this feature.
 
 **Acceptance Scenarios**:
 
@@ -102,7 +106,7 @@ A logged-in user can view their account information (email, account creation dat
 - How does the system handle concurrent login attempts from multiple devices? Single-session-per-user (new login terminates previous session).
 - What happens if a user tries to register with a password that matches common patterns (123456, password, etc.)? System should reject weak passwords.
 - How does the system handle rapid failed login attempts? Should implement rate limiting to prevent brute-force attacks (max 5 failed attempts per IP per 15-minute rolling window).
-- Email service failure during registration: Account is created immediately, email delivery is best-effort. If email service is unavailable, account succeeds but user is informed that email delivery may be delayed. System logs email-send failures for monitoring.
+- Registration does not send email in v1. The optional email-provider abstraction is infrastructure for future notifications; registration succeeds without invoking it, and there is no email-delay UI or delivery-failure path in this feature.
 
 ## Requirements *(mandatory)*
 
@@ -133,7 +137,7 @@ A logged-in user can view their account information (email, account creation dat
 ### Key Entities
 
 - **User**: Represents a registered account. Core attributes: id (unique identifier), email (unique, required), password_hash (hashed and salted), created_at (timestamp), updated_at (timestamp). No other personally identifiable information stored initially.
-- **Session**: Represents an authenticated browser session. Attributes: session_id/token (cryptographically random, unique), user_id (foreign key to User), created_at, expires_at, last_activity (for timeout tracking).
+- **Session**: Represents an authenticated browser session. Attributes: session_id/token (cryptographically random, unique), user_id (foreign key to User), created_at, last_activity, is_active, and a session-bound csrf_token. Expiration is derived from `is_active` and rolling inactivity since `last_activity`; there is no persisted `expires_at` field or absolute expiration cap.
 
 ## Success Criteria *(mandatory)*
 

@@ -46,6 +46,7 @@ export default function AccountPage() {
   // Handle password change
   const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const form = e.currentTarget;
     setError(null);
     setSuccess(null);
     setPasswordChangeLoading(true);
@@ -88,7 +89,7 @@ export default function AccountPage() {
 
       // Success: show success message, then logout
       setSuccess('Password changed successfully. You will be logged out.');
-      e.currentTarget.reset();
+      form.reset();
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -109,6 +110,13 @@ export default function AccountPage() {
     }
   };
 
+  const isFieldValidationError = [
+    'Current password is required',
+    'New password is required',
+    'New password must be at least 8 characters',
+    'New passwords do not match',
+  ].includes(error ?? '');
+
   if (loading) {
     return (
       <AuthenticatedLayout>
@@ -119,7 +127,7 @@ export default function AccountPage() {
     );
   }
 
-  if (error) {
+  if (error && !profile) {
     return (
       <AuthenticatedLayout>
         <div className="flex flex-col items-center justify-center py-8">
@@ -165,17 +173,16 @@ export default function AccountPage() {
 
         {/* Password Change Form Section */}
         <Card className="space-y-6">
-          <h1 className="text-2xl font-bold text-gray-900">Change Password</h1>
+          <h2 className="text-2xl font-bold text-gray-900">Change Password</h2>
           <form onSubmit={handlePasswordChange} className="space-y-6">
             {/* Current Password */}
             <Input
               label="Current Password"
               value={currentPassword}
               onChange={setCurrentPassword}
-              error={error ? 'Current password is required' : undefined}
+              error={error === 'Current password is required' ? error : undefined}
               inputProps={{
                 type: 'password',
-                id: 'currentPassword',
                 name: 'currentPassword',
                 autoComplete: 'current-password',
                 required: true,
@@ -188,14 +195,13 @@ export default function AccountPage() {
               value={newPassword}
               onChange={setNewPassword}
               error={
-                error &&
-                (error.includes('New password') || error.includes('Passwords do not match'))
+                error === 'New password is required' ||
+                error === 'New password must be at least 8 characters'
                   ? error
                   : undefined
               }
               inputProps={{
                 type: 'password',
-                id: 'newPassword',
                 name: 'newPassword',
                 autoComplete: 'new-password',
                 required: true,
@@ -208,10 +214,9 @@ export default function AccountPage() {
               label="Confirm New Password"
               value={confirmPassword}
               onChange={setConfirmPassword}
-              error={error && error.includes('Passwords do not match') ? error : undefined}
+              error={error === 'New passwords do not match' ? error : undefined}
               inputProps={{
                 type: 'password',
-                id: 'confirmPassword',
                 name: 'confirmPassword',
                 autoComplete: 'new-password',
                 required: true,
@@ -219,7 +224,9 @@ export default function AccountPage() {
             />
 
             {/* Error Message */}
-            {error && <Alert variant="error" message={error} className="mt-4" />}
+            {error && !isFieldValidationError && (
+              <Alert variant="error" message={error} className="mt-4" />
+            )}
 
             {/* Success Message */}
             {success && <Alert variant="success" message={success} className="mt-4" />}

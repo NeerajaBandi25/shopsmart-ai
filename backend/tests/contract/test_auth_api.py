@@ -1,8 +1,6 @@
 """Contract tests for authentication API (TDD)."""
 
-import pytest
 from httpx import AsyncClient
-
 
 # ============================================================================
 # User Story 2 Tests: Login Endpoint Contract Compliance (T051)
@@ -47,9 +45,7 @@ class TestLoginEndpointContract:
         assert "samesite=strict" in cookie_header.lower()
         assert "Max-Age=2592000" in cookie_header  # 30 days
 
-    async def test_login_invalid_credentials_error_response(
-        self, test_client: AsyncClient
-    ):
+    async def test_login_invalid_credentials_error_response(self, test_client: AsyncClient):
         """Login with invalid credentials returns 401 with error envelope."""
         response = await test_client.post(
             "/api/v1/auth/login",
@@ -72,9 +68,7 @@ class TestLoginEndpointContract:
         # Verify generic message (no email existence hints)
         assert data["detail"] == "Invalid email or password"
 
-    async def test_login_rate_limited_error_response(
-        self, test_client: AsyncClient
-    ):
+    async def test_login_rate_limited_error_response(self, test_client: AsyncClient):
         """Login with rate limiting returns 429 with error envelope."""
         # Use non-existent email to guarantee failed attempts
         email = "ratelimit_contract_test@example.com"
@@ -109,9 +103,7 @@ class TestLoginEndpointContract:
         # Verify message
         assert data["detail"] == "Too many login attempts. Please try again in 15 minutes."
 
-    async def test_login_missing_fields_return_422(
-        self, test_client: AsyncClient
-    ):
+    async def test_login_missing_fields_return_422(self, test_client: AsyncClient):
         """Login with missing fields returns 422 (validation error)."""
         # Missing email
         response = await test_client.post(
@@ -126,3 +118,93 @@ class TestLoginEndpointContract:
             json={"email": "user@example.com"},
         )
         assert response.status_code == 422
+
+
+class TestUserProfileContract:
+    async def test_profile_returns_authenticated_user_and_full_schema(
+        self, test_client: AsyncClient, test_user_data_in_db: dict
+    ):
+        login = await test_client.post("/api/v1/auth/login", json=test_user_data_in_db)
+        profile = await test_client.get("/api/v1/users/profile", cookies=login.cookies)
+
+        assert login.status_code == 200
+        assert profile.status_code == 200
+        assert set(profile.json()) == {"user_id", "email", "created_at"}
+        assert profile.json()["user_id"] == login.json()["user_id"]
+        assert profile.json()["email"] == test_user_data_in_db["email"]
+        assert isinstance(profile.json()["created_at"], str)
+
+    async def test_profile_requires_authentication(self, test_client: AsyncClient):
+        response = await test_client.get("/api/v1/users/profile")
+
+        assert response.status_code == 401
+        assert response.json()["status_code"] == 401
+        assert response.json()["error_code"]
+
+
+class TestPasswordChangeContract:
+    async def test_password_change_success_and_validation_contract(
+        self, test_client: AsyncClient, test_user_data_in_db: dict
+    ):
+        login = await test_client.post("/api/v1/auth/login", json=test_user_data_in_db)
+        csrf = await test_client.get("/api/v1/auth/csrf", cookies=login.cookies)
+        assert login.status_code == 200
+        assert csrf.status_code == 200
+        cookies = login.cookies
+        csrf_token = csrf.json()["csrf_token"]
+
+        missing_csrf = await test_client.put(
+            "/api/v1/users/password",
+            cookies=cookies,
+            json={
+                "current_password": test_user_data_in_db["password"],
+                "new_password": "ChangedPassword123!",
+            },
+        )
+        assert missing_csrf.status_code == 403
+        assert missing_csrf.json()["error_code"] == "csrf_invalid"
+
+        invalid_csrf = await test_client.put(
+            "/api/v1/users/password",
+            cookies=cookies,
+            headers={"X-CSRF-Token": "invalid-token"},
+            json={
+                "current_password": test_user_data_in_db["password"],
+                "new_password": "ChangedPassword123!",
+            },
+        )
+        assert invalid_csrf.status_code == 403
+        assert invalid_csrf.json()["error_code"] == "csrf_invalid"
+
+        weak_password = await test_client.put(
+            "/api/v1/users/password",
+            cookies=cookies,
+            headers={"X-CSRF-Token": csrf_token},
+            json={
+                "current_password": test_user_data_in_db["password"],
+                "new_password": "weak",
+            },
+        )
+        assert weak_password.status_code == 400
+        assert weak_password.json()["error_code"] == "weak_password"
+
+        changed = await test_client.put(
+            "/api/v1/users/password",
+            cookies=cookies,
+            headers={"X-CSRF-Token": csrf_token},
+            json={
+                "current_password": test_user_data_in_db["password"],
+                "new_password": "ChangedPassword123!",
+            },
+        )
+        assert changed.status_code == 204
+        assert changed.content == b""
+
+    async def test_password_change_requires_authentication(self, test_client: AsyncClient):
+        response = await test_client.put(
+            "/api/v1/users/password",
+            json={"current_password": "OldPassword123!", "new_password": "NewPassword123!"},
+        )
+
+        assert response.status_code == 401
+        assert response.json()["status_code"] == 401

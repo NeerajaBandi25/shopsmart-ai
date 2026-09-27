@@ -70,7 +70,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   // itself remains frozen.
   const fieldClassName = 'premium-field';
   const fieldInputClasses =
-    'border-ink-100! bg-white! rounded-tile! shadow-tile! focus:ring-accent-500! focus-visible:ring-accent-500! transition-shadow!';
+    'border-ink-100! bg-white! rounded-tile! shadow-tile! placeholder:text-gray-600! focus:ring-accent-500! focus-visible:ring-accent-500! transition-shadow!';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 w-full max-w-md">
@@ -114,7 +114,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         size="md"
         className="w-full bg-accent-600! hover:bg-accent-700! focus-visible:ring-accent-500! focus-visible:ring-offset-2! rounded-tile! py-3!"
         disabled={loading}
-        onClick={handleSubmit}
+        type="submit"
       >
         {loading ? 'Logging in...' : 'Log In'}
       </Button>

@@ -1,4 +1,4 @@
-import { logout } from './api-client';
+import { changePassword, getCsrfToken, getProfile, login, logout, register } from './api-client';
 
 // Mock fetch
 const mockedFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
@@ -37,11 +37,164 @@ describe('api-client.logout()', () => {
     await logout();
     expect(mockedFetch).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining('/auth/logout'),
+      '/api/auth/logout',
       expect.objectContaining({
         credentials: 'include',
         headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' }),
       })
     );
+  });
+});
+
+describe('same-origin authentication API routes', () => {
+  const originalPublicApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.NEXT_PUBLIC_API_URL = 'https://backend.example.test/api/v1';
+  });
+
+  afterAll(() => {
+    if (originalPublicApiUrl === undefined) delete process.env.NEXT_PUBLIC_API_URL;
+    else process.env.NEXT_PUBLIC_API_URL = originalPublicApiUrl;
+  });
+
+  it('sends registration and login to same-origin BFF paths with credentials and JSON bodies', async () => {
+    mockedFetch
+      .mockResolvedValueOnce(
+        jsonResponse({ user_id: 'user-1', email: 'a@example.com', created_at: 'now' }, 201)
+      )
+      .mockResolvedValueOnce(jsonResponse({ user_id: 'user-1', email: 'a@example.com' }, 200));
+
+    await register('a@example.com', 'Secret123!');
+    await login('a@example.com', 'Secret123!');
+
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/auth/register',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({ email: 'a@example.com', password: 'Secret123!' }),
+      })
+    );
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({ email: 'a@example.com', password: 'Secret123!' }),
+      })
+    );
+    expect(
+      mockedFetch.mock.calls.every(
+        ([url]) => url === '/api/auth/register' || url === '/api/auth/login'
+      )
+    ).toBe(true);
+  });
+
+  it('loads the current user and CSRF token through same-origin routes with credentials', async () => {
+    mockedFetch
+      .mockResolvedValueOnce(
+        jsonResponse({ user_id: 'user-1', email: 'a@example.com', created_at: 'now' }, 200)
+      )
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }, 200));
+
+    await expect(getProfile()).resolves.toEqual({
+      user_id: 'user-1',
+      email: 'a@example.com',
+      created_at: 'now',
+    });
+    await expect(getCsrfToken()).resolves.toBe('csrf-token');
+
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/auth/me',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include',
+      })
+    );
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/auth/csrf',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include',
+      })
+    );
+  });
+
+  it('posts logout and password change with the CSRF header and same-origin credentials', async () => {
+    mockedFetch
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }, 200))
+      .mockResolvedValueOnce(jsonResponse(undefined, 204))
+      .mockResolvedValueOnce(jsonResponse(undefined, 204));
+
+    await logout();
+    await changePassword('OldSecret123!', 'NewSecret123!', 'provided-token');
+
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/auth/logout',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' }),
+      })
+    );
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      3,
+      '/api/auth/password',
+      expect.objectContaining({
+        method: 'PUT',
+        credentials: 'include',
+        headers: expect.objectContaining({ 'X-CSRF-Token': 'provided-token' }),
+        body: JSON.stringify({ current_password: 'OldSecret123!', new_password: 'NewSecret123!' }),
+      })
+    );
+  });
+
+  it('fetches a same-origin CSRF token before password change when none is supplied', async () => {
+    mockedFetch
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }, 200))
+      .mockResolvedValueOnce(jsonResponse(undefined, 204));
+
+    await changePassword('OldSecret123!', 'NewSecret123!');
+
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/auth/csrf',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include',
+      })
+    );
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/auth/password',
+      expect.objectContaining({
+        method: 'PUT',
+        credentials: 'include',
+        headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' }),
+      })
+    );
+  });
+
+  it('preserves login error messages and status handling for existing callers', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          detail: 'Too many login attempts',
+          error_code: 'rate_limited',
+          status_code: 429,
+        },
+        429
+      )
+    );
+
+    await expect(login('a@example.com', 'wrong')).rejects.toThrow('Too many login attempts');
+    expect(mockedFetch).toHaveBeenCalledWith('/api/auth/login', expect.any(Object));
   });
 });

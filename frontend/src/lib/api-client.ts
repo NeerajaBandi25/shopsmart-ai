@@ -3,6 +3,7 @@
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const AUTH_API_BASE_PATH = '/api/auth';
 
 // Helper to handle API responses and redirect on 401
 async function handleApiResponse<T>(response: Response): Promise<T> {
@@ -82,7 +83,7 @@ export async function getProducts(skip = 0, limit = 24): Promise<ProductPage> {
  * @throws Error if registration fails
  */
 export async function register(email: string, password: string): Promise<RegisterResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+  const response = await fetch(`${AUTH_API_BASE_PATH}/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -101,7 +102,7 @@ export async function register(email: string, password: string): Promise<Registe
  * @throws Error if not authenticated or request fails
  */
 export async function getProfile(): Promise<RegisterResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+  const response = await fetch(`${AUTH_API_BASE_PATH}/me`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -121,7 +122,7 @@ export async function getProfile(): Promise<RegisterResponse> {
  * @throws Error if login fails (invalid credentials, rate limited, etc.)
  */
 export async function login(email: string, password: string): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  const response = await fetch(`${AUTH_API_BASE_PATH}/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -141,7 +142,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
  */
 export async function logout(): Promise<void> {
   const csrfToken = await getCsrfToken();
-  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+  const response = await fetch(`${AUTH_API_BASE_PATH}/logout`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -164,7 +165,7 @@ export async function logout(): Promise<void> {
  * X-CSRF-Token on state-changing requests such as password change.
  */
 export async function getCsrfToken(): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/csrf`, {
+  const response = await fetch(`${AUTH_API_BASE_PATH}/csrf`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -179,7 +180,7 @@ export async function getCsrfToken(): Promise<string> {
 /**
  * Change the current user's password (canonical contract).
  *
- * PUT /api/v1/users/password with {current_password, new_password} and
+ * PUT /api/auth/password with {current_password, new_password} and
  * X-CSRF-Token header. Missing/invalid CSRF yields 403; missing/invalid
  * session yields 401.
  *
@@ -194,7 +195,7 @@ export async function changePassword(
   csrfToken?: string
 ): Promise<void> {
   const token = csrfToken ?? (await getCsrfToken());
-  const response = await fetch(`${API_BASE_URL}/users/password`, {
+  const response = await fetch(`${AUTH_API_BASE_PATH}/password`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
