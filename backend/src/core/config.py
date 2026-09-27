@@ -3,7 +3,7 @@
 import os
 from typing import Optional
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 
     # Redis (optional for rate limiting, session cache)
     redis_url: Optional[str] = os.getenv("REDIS_URL", None)
+    product_catalog_cache_ttl_seconds: int = Field(default=60, gt=0)
 
     # API
     api_prefix: str = "/api/v1"

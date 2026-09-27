@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.exceptions import AppException, ConflictError
 from src.models.order import Order, OrderItem
 from src.repositories.order_repository import OrderRepository
+from src.services.product_catalog_cache import invalidate_product_catalog_cache
 
 
 class OrderService:
@@ -34,9 +35,7 @@ class OrderService:
             )
         return order
 
-    async def checkout(
-        self, user_id: UUID, key: str, items: list[tuple[UUID, int]]
-    ) -> Order:
+    async def checkout(self, user_id: UUID, key: str, items: list[tuple[UUID, int]]) -> Order:
         key = key.strip()
         if not key:
             raise AppException("Idempotency-Key is required", 400, "idempotency_key_required")
@@ -49,6 +48,7 @@ class OrderService:
             raise AppException("Quantities must be positive", 422, "invalid_quantity")
 
         request_hash = self._request_hash(items)
+        products_changed = False
         try:
             async with self.db.begin_nested():
                 existing = await self.repository.get_by_idempotency_key(user_id, key)
@@ -85,8 +85,7 @@ class OrderService:
                                 )
 
                         total_cents = sum(
-                            products[product_id].price * quantity
-                            for product_id, quantity in items
+                            products[product_id].price * quantity for product_id, quantity in items
                         )
                         order = Order(
                             user_id=user_id,
@@ -104,6 +103,7 @@ class OrderService:
                                     f"Insufficient stock for {product.sku}",
                                     error_code="insufficient_stock",
                                 )
+                            products_changed = True
                             order.items.append(
                                 OrderItem(
                                     product_id=product.id,
@@ -116,6 +116,8 @@ class OrderService:
                             )
                         await self.db.flush()
             await self.db.commit()
+            if products_changed:
+                await invalidate_product_catalog_cache()
             return order
         except IntegrityError:
             await self.db.rollback()

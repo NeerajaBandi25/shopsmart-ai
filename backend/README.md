@@ -4,7 +4,7 @@
 
 - Python 3.11 or newer
 - PostgreSQL for normal development and PostgreSQL-specific concurrency/persistence checks
-- Redis is optional; login rate limiting falls back to process-local memory when Redis is unavailable
+- Redis is optional; login rate limiting and product catalog reads retain their database/process-local fallback when Redis is unavailable
 
 ## Setup
 
@@ -17,7 +17,9 @@ python -m pip install -e ".[test]"
 Copy-Item .env.example .env
 ```
 
-Set `DATABASE_URL` to a PostgreSQL `postgresql+asyncpg://` URL, set a unique non-empty `SECRET_KEY`, and set `CORS_ORIGINS` to a JSON array of exact frontend origins. `REDIS_URL` is optional. Do not commit `.env` or reuse production secrets locally.
+Set `DATABASE_URL` to a PostgreSQL `postgresql+asyncpg://` URL, set a unique non-empty `SECRET_KEY`, and set `CORS_ORIGINS` to a JSON array of exact frontend origins. `REDIS_URL` is optional. `PRODUCT_CATALOG_CACHE_TTL_SECONDS` controls public catalog cache freshness (default 60, must be positive). Do not commit `.env` or reuse production secrets locally.
+
+The public product catalog caches only successful pages under the `shopsmart:product-catalog:v1` namespace. Keys include the current pagination parameters and a generation token. A successful checkout advances that generation after its stock transaction commits, invalidating every cached page. No product-administration API exists; product edits made directly in the database become visible after the configured TTL. PostgreSQL remains the source of truth, and catalog reads fall back to it when Redis is disabled or unavailable.
 
 Apply migrations and start the API:
 

@@ -5,8 +5,10 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from src.models.product import Product
+from src.services import product_catalog_cache as product_catalog_cache_module
 
 
 def _product(
@@ -112,21 +114,43 @@ class TestPublicProductCatalog:
         assert response.status_code == 200
         assert response.json()["limit"] == 100
 
-    async def test_list_returns_empty_items_when_catalog_is_empty(
-        self, test_client: AsyncClient
-    ):
+    async def test_list_returns_empty_items_when_catalog_is_empty(self, test_client: AsyncClient):
         response = await test_client.get("/api/v1/products")
 
         assert response.status_code == 200
         assert response.json() == {"items": [], "skip": 0, "limit": 24}
 
+    async def test_list_falls_back_to_database_when_redis_is_unavailable(
+        self, test_client: AsyncClient, test_db, monkeypatch
+    ):
+        test_db.add(
+            _product(
+                "REDIS-OFFLINE",
+                datetime(2026, 9, 1),
+                product_id=UUID("00000000-0000-0000-0000-000000000005"),
+            )
+        )
+        await test_db.flush()
+
+        class UnavailableRedis:
+            async def get(self, _key):
+                raise RedisConnectionError("Redis unavailable")
+
+        monkeypatch.setattr(
+            product_catalog_cache_module.settings, "redis_url", "redis://unavailable.test/0"
+        )
+        monkeypatch.setattr(product_catalog_cache_module, "get_redis_client", UnavailableRedis)
+
+        response = await test_client.get("/api/v1/products")
+
+        assert response.status_code == 200
+        assert [item["sku"] for item in response.json()["items"]] == ["REDIS-OFFLINE"]
+
     @pytest.mark.parametrize(
         "query",
         ["skip=-1", "limit=0", "limit=101"],
     )
-    async def test_list_rejects_invalid_pagination(
-        self, test_client: AsyncClient, query: str
-    ):
+    async def test_list_rejects_invalid_pagination(self, test_client: AsyncClient, query: str):
         response = await test_client.get(f"/api/v1/products?{query}")
 
         assert response.status_code == 422

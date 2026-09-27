@@ -1,37 +1,13 @@
 """Public product catalog API."""
 
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.v1.deps import get_db
-from src.repositories.product_repository import ProductRepository
+from src.schemas.product import ProductPageResponse
+from src.services.product_catalog_service import ProductCatalogService
 
 router = APIRouter(prefix="/products", tags=["Products"])
-
-
-class ProductResponse(BaseModel):
-    """Public fields for an active catalog product."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    name: str
-    description: str | None
-    sku: str
-    price: int
-    stock_quantity: int
-    max_purchase_quantity: int
-
-
-class ProductPageResponse(BaseModel):
-    """A bounded page of catalog products."""
-
-    items: list[ProductResponse]
-    skip: int
-    limit: int
 
 
 @router.get("", response_model=ProductPageResponse, summary="List active products")
@@ -41,5 +17,4 @@ async def list_products(
     db: AsyncSession = Depends(get_db),
 ) -> ProductPageResponse:
     """Return active products, newest first, without requiring authentication."""
-    products = await ProductRepository(db).get_products(skip=skip, limit=limit)
-    return ProductPageResponse(items=products, skip=skip, limit=limit)
+    return await ProductCatalogService(db).list_products(skip=skip, limit=limit)
