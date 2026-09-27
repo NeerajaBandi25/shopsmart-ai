@@ -1,4 +1,12 @@
-import { changePassword, getCsrfToken, getProfile, login, logout, register } from './api-client';
+import {
+  changePassword,
+  getCsrfToken,
+  getProducts,
+  getProfile,
+  login,
+  logout,
+  register,
+} from './api-client';
 
 // Mock fetch
 const mockedFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
@@ -50,8 +58,20 @@ describe('same-origin authentication API routes', () => {
   const originalPublicApiUrl = process.env.NEXT_PUBLIC_API_URL;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    mockedFetch.mockReset();
     process.env.NEXT_PUBLIC_API_URL = 'https://backend.example.test/api/v1';
+  });
+
+  it('loads the product catalog through the same-origin BFF', async () => {
+    mockedFetch.mockResolvedValueOnce(jsonResponse({ items: [], skip: 24, limit: 24 }, 200));
+
+    await expect(getProducts(24, 24)).resolves.toEqual({ items: [], skip: 24, limit: 24 });
+
+    expect(mockedFetch).toHaveBeenCalledWith(
+      '/api/products?skip=24&limit=24',
+      expect.objectContaining({ credentials: 'include' })
+    );
+    expect(mockedFetch.mock.calls[0][0]).not.toContain('backend.example.test');
   });
 
   afterAll(() => {

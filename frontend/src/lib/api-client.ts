@@ -1,8 +1,7 @@
 /**
- * API client for authentication and user operations.
+ * API client for same-origin authentication and commerce operations.
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 const AUTH_API_BASE_PATH = '/api/auth';
 
 // Helper to handle API responses and redirect on 401
@@ -65,12 +64,8 @@ export interface ProductPage {
 }
 
 export async function getProducts(skip = 0, limit = 24): Promise<ProductPage> {
-  if (!API_BASE_URL) {
-    throw new Error('Product catalog is unavailable right now.');
-  }
-
   const query = new URLSearchParams({ skip: String(skip), limit: String(limit) });
-  const response = await fetch(`${API_BASE_URL}/products?${query}`);
+  const response = await fetch(`/api/products?${query}`, { credentials: 'include' });
   return handleApiResponse<ProductPage>(response);
 }
 
