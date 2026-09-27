@@ -13,6 +13,13 @@ contains localhost origins for local development; set it to the actual
 frontend origin(s) in each deployment environment. The application does not
 assume or hard-code a production domain, and wildcard origins are rejected.
 
+The backend connects to the Compose Redis service using `REDIS_URL` from the
+root environment. Public catalog pages use a 60-second default TTL, configured
+in the backend as `PRODUCT_CATALOG_CACHE_TTL_SECONDS`; Redis remains optional
+for catalog availability, which falls back to PostgreSQL. Checkout invalidates
+the catalog namespace after committed stock changes. Product edits made outside
+the application are reflected no later than the cache TTL.
+
 `NEXT_PUBLIC_API_URL` is embedded into browser JavaScript during the frontend
 image build, so use a URL the browser can reach (by default,
 `http://localhost:8000/api/v1`). Next.js middleware uses the private

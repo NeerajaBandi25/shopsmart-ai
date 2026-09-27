@@ -22,6 +22,7 @@ from src.core.observability import (
     configure_structured_logging,
     security_audit_event,
 )
+from src.core.redis_client import close_redis_client
 from src.database import close_db, engine, init_db
 from src.middleware.session_refresh import SessionRefreshMiddleware
 
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     logger.info("Shutting down application...")
+    await close_redis_client()
     await close_db()
 
 

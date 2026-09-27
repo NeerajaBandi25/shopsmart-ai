@@ -28,6 +28,23 @@ def test_secret_key_must_not_be_empty(monkeypatch):
         Settings(_env_file=None)
 
 
+def test_product_catalog_cache_ttl_is_configurable_and_positive(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+    monkeypatch.delenv("PRODUCT_CATALOG_CACHE_TTL_SECONDS", raising=False)
+
+    assert Settings(_env_file=None).product_catalog_cache_ttl_seconds == 60
+
+    monkeypatch.setenv("PRODUCT_CATALOG_CACHE_TTL_SECONDS", "90")
+
+    configured_settings = Settings(_env_file=None)
+
+    assert configured_settings.product_catalog_cache_ttl_seconds == 90
+
+    monkeypatch.setenv("PRODUCT_CATALOG_CACHE_TTL_SECONDS", "0")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
 def test_cors_origins_parse_json_array_from_environment(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "test-secret-key")
     monkeypatch.setenv(

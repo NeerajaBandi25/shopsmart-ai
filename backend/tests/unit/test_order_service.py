@@ -1,5 +1,6 @@
 """Transactional checkout service tests."""
 
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -14,8 +15,20 @@ from src.services.order_service import OrderService
 
 class TestOrderService:
     async def test_checkout_snapshots_prices_and_replays_same_payload(
-        self, test_db
+        self, test_db, fresh_test_session, monkeypatch
     ):
+        from src.services import order_service as order_service_module
+
+        async def assert_committed_stock_before_invalidation():
+            stock = await fresh_test_session.scalar(
+                select(Product.stock_quantity).where(Product.id == product_id)
+            )
+            assert stock == 4
+
+        invalidate_cache = AsyncMock(side_effect=assert_committed_stock_before_invalidation)
+        monkeypatch.setattr(
+            order_service_module, "invalidate_product_catalog_cache", invalidate_cache
+        )
         user_id = uuid4()
         product_id = uuid4()
         product = Product(
@@ -37,10 +50,12 @@ class TestOrderService:
 
         service = OrderService(test_db)
         first = await service.checkout(user_id, "retry-key", [(product_id, 2)])
+        invalidate_cache.assert_awaited_once()
         product.name = "Renamed later"
         product.price = 2500
         await test_db.commit()
         replay = await service.checkout(user_id, "retry-key", [(product_id, 2)])
+        invalidate_cache.assert_awaited_once()
 
         assert replay.id == first.id
         assert replay.total_cents == 2598
@@ -94,14 +109,18 @@ class TestOrderService:
             await OrderService(test_db).checkout(user_id, "stock", [(low_stock_id, 2)])
         await test_db.rollback()
 
-        stock = await test_db.scalar(
-            select(Product.stock_quantity).where(Product.id == product_id)
-        )
+        stock = await test_db.scalar(select(Product.stock_quantity).where(Product.id == product_id))
         assert stock == 3
 
     async def test_late_failure_rolls_back_all_stock_and_orders(
         self, test_db, fresh_test_session, monkeypatch
     ):
+        from src.services import order_service as order_service_module
+
+        invalidate_cache = AsyncMock()
+        monkeypatch.setattr(
+            order_service_module, "invalidate_product_catalog_cache", invalidate_cache
+        )
         user_id = uuid4()
         first_id = uuid4()
         second_id = uuid4()
@@ -146,6 +165,7 @@ class TestOrderService:
                 [(first_id, 2), (second_id, 3)],
             )
 
+        invalidate_cache.assert_not_awaited()
         await test_db.rollback()
         first_stock = await fresh_test_session.scalar(
             select(Product.stock_quantity).where(Product.id == first_id)
