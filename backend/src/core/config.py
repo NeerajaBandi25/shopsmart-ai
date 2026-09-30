@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     observability_metrics_token: Optional[str] = None
 
+    # Governed AI provider gateway. External providers remain disabled without their keys.
+    ai_provider: str = "deterministic"
+    openrouter_api_key: Optional[str] = None
+    openrouter_model: str = "openai/gpt-4o-mini"
+    groq_api_key: Optional[str] = None
+    groq_model: str = "llama-3.1-8b-instant"
+    gemini_api_key: Optional[str] = None
+    gemini_model: str = "gemini-2.0-flash"
+
     # CORS
     cors_origins: list[str] = []
     cors_allow_credentials: bool = True
