@@ -121,6 +121,12 @@ jobs:
       - name: Audit backend dependencies (pip-audit)
         run: uvx --from pip-audit==2.10.1 pip-audit .
 
+      - name: Test deployment preflight and ECS rollback helpers
+        run: |
+          python ../.github/scripts/deploy_preflight.py --self-test
+          python ../.github/scripts/deploy_ecs.py --self-test
+          python ../.github/scripts/deploy_workflow_tests.py --self-test
+
   frontend-tests:
     name: Frontend tests (jest, lint, prettier)
     runs-on: ubuntu-latest
@@ -153,6 +159,9 @@ jobs:
 
       - name: Check formatting (prettier)
         run: npm run format:check
+
+      - name: Parse deployment workflow and Vercel configuration
+        run: npx prettier --check ../.github/workflows/deploy-production.yml vercel.json
 
   docker-compose-smoke:
     name: Docker Compose smoke test
