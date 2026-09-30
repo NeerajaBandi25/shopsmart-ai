@@ -24,11 +24,9 @@ router = APIRouter(prefix="/ai", tags=["AI assistant"])
 
 
 async def _ingest(
-    user_id: UUID, title: str, source_name: str, content: str, classification: str, db: AsyncSession
+    user_id: UUID, title: str, source_name: str, content: str, db: AsyncSession
 ) -> DocumentResponse:
-    document = await DocumentIngestionService(db).ingest(
-        user_id, title, source_name, content, classification
-    )
+    document = await DocumentIngestionService(db).ingest(user_id, title, source_name, content)
     chunk_count = len(
         (
             await db.execute(
@@ -54,9 +52,7 @@ async def ingest_document(
     _csrf: None = Depends(require_csrf_token),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentResponse:
-    return await _ingest(
-        user_id, request.title, request.source_name, request.content, request.classification, db
-    )
+    return await _ingest(user_id, request.title, request.source_name, request.content, db)
 
 
 @router.post("/documents/upload", response_model=DocumentResponse, status_code=201)
@@ -72,10 +68,7 @@ async def upload_document(
     body = await request.body()
     if len(body) > 2_500_000:
         raise ValidationError("Document exceeds the maximum size", "document_too_large")
-    classification = request.headers.get("x-data-classification", "PRIVATE").upper()
-    return await _ingest(
-        user_id, title, source_name, extract_document_text(body, content_type), classification, db
-    )
+    return await _ingest(user_id, title, source_name, extract_document_text(body, content_type), db)
 
 
 @router.get("/documents", response_model=list[DocumentResponse])

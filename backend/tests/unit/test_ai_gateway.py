@@ -108,7 +108,9 @@ async def test_quota_exhaustion_uses_next_eligible_provider():
         usage,
     )
     result = await gateway.answer(
-        "question", [Evidence("c1", "answer", "source", None, 0)], DataClassification.PUBLIC
+        "question",
+        [Evidence("c1", "answer", "source", None, 0, DataClassification.PUBLIC)],
+        DataClassification.PUBLIC,
     )
     assert result.provider == "next"
     assert exhausted.calls == 0

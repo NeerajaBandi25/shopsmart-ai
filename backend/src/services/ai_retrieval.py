@@ -70,6 +70,7 @@ class RetrievalService:
                 item.chunk.source_label,
                 item.chunk.page_number,
                 item.chunk.chunk_index,
+                item.classification,
             )
             for item in items
         ]
