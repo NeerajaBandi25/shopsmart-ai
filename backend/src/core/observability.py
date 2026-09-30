@@ -33,7 +33,17 @@ _SECURITY_EVENTS = frozenset(
         "authorization_denied",
     }
 )
-_AI_EVENTS = frozenset({"ai_retrieval", "ai_no_answer", "ai_provider_failure", "ai_evaluation"})
+_AI_EVENTS = frozenset(
+    {
+        "ai_retrieval",
+        "ai_no_answer",
+        "ai_provider_failure",
+        "ai_evaluation",
+        "ai_provider_success",
+        "ai_provider_fallback",
+        "ai_policy_denied",
+    }
+)
 _LOG_CONTEXT_FIELDS = frozenset(
     {
         "event",
@@ -47,6 +57,12 @@ _LOG_CONTEXT_FIELDS = frozenset(
         "user_agent",
         "reason",
         "exception_type",
+        "provider",
+        "model",
+        "data_classification",
+        "fallback_used",
+        "latency_ms",
+        "routing_policy",
     }
 )
 

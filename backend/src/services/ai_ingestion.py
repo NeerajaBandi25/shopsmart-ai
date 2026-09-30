@@ -29,10 +29,10 @@ def normalize_text(content: str) -> str:
 def extract_document_text(content: bytes, content_type: str) -> str:
     """Extract text from bounded plain text or text-bearing PDF bytes."""
     if content_type == "text/plain":
-            try:
-                return normalize_text(content.decode("utf-8"))
-            except UnicodeDecodeError as exc:
-                raise ValidationError("Document text is not valid UTF-8", "malformed_document") from exc
+        try:
+            return normalize_text(content.decode("utf-8"))
+        except UnicodeDecodeError as exc:
+            raise ValidationError("Document text is not valid UTF-8", "malformed_document") from exc
     if content_type == "application/pdf":
         if not content.startswith(b"%PDF"):
             raise ValidationError("Malformed PDF document", "malformed_document")
@@ -42,7 +42,9 @@ def extract_document_text(content: bytes, content_type: str) -> str:
     raise ValidationError("Unsupported document type", "unsupported_document_type")
 
 
-def chunk_text(content: str, source_label: str, size: int = 900, overlap: int = 120) -> list[ChunkDraft]:
+def chunk_text(
+    content: str, source_label: str, size: int = 900, overlap: int = 120
+) -> list[ChunkDraft]:
     normalized = normalize_text(content)
     if not normalized:
         return []
@@ -54,7 +56,11 @@ def chunk_text(content: str, source_label: str, size: int = 900, overlap: int = 
         end = min(len(words), start + size // 5)
         text = " ".join(words[start:end]).strip()
         if text:
-            drafts.append(ChunkDraft(text, index, hashlib.sha256(text.encode()).hexdigest(), source_label, None))
+            drafts.append(
+                ChunkDraft(
+                    text, index, hashlib.sha256(text.encode()).hexdigest(), source_label, None
+                )
+            )
             index += 1
         if end == len(words):
             break
@@ -67,33 +73,82 @@ class DocumentIngestionService:
         self.db = db
         self.embedder = embedder or EmbeddingProvider()
 
-    async def ingest(self, owner_id: UUID, title: str, source_name: str, content: str) -> Document:
+    async def ingest(
+        self,
+        owner_id: UUID,
+        title: str,
+        source_name: str,
+        content: str,
+        classification: str = "PRIVATE",
+    ) -> Document:
+        if classification not in {"PUBLIC", "INTERNAL", "PRIVATE", "SENSITIVE"}:
+            raise ValidationError("Unsupported data classification", "invalid_data_classification")
         normalized = normalize_text(content)
         if not normalized:
             raise ValidationError("Document is empty", "empty_document")
         if len(normalized) > 2_000_000:
             raise ValidationError("Document exceeds the maximum size", "document_too_large")
         content_hash = hashlib.sha256(normalized.encode()).hexdigest()
-        existing = await self.db.scalar(select(Document).where(Document.owner_id == owner_id, Document.content_hash == content_hash))
+        existing = await self.db.scalar(
+            select(Document).where(
+                Document.owner_id == owner_id, Document.content_hash == content_hash
+            )
+        )
         if existing:
             return existing
-        existing = await self.db.scalar(select(Document).where(Document.owner_id == owner_id, Document.title == title.strip(), Document.source_name == source_name.strip()))
+        existing = await self.db.scalar(
+            select(Document).where(
+                Document.owner_id == owner_id,
+                Document.title == title.strip(),
+                Document.source_name == source_name.strip(),
+            )
+        )
         if existing:
             existing.content_hash = content_hash
         drafts = chunk_text(normalized, source_name)
         if not drafts:
             raise ValidationError("Document produced no usable text", "empty_document")
-        document = existing or Document(owner_id=owner_id, title=title.strip(), source_name=source_name.strip(), content_hash=content_hash)
+        document = existing or Document(
+            owner_id=owner_id,
+            title=title.strip(),
+            source_name=source_name.strip(),
+            classification=classification,
+            content_hash=content_hash,
+        )
+        document.classification = classification
         if not existing:
             self.db.add(document)
             await self.db.flush()
-        version_number = (await self.db.scalar(select(func.count(DocumentVersion.id)).where(DocumentVersion.document_id == document.id)) or 0) + 1
-        version = DocumentVersion(document_id=document.id, version_number=version_number, status="processing", extracted_text=normalized)
+        version_number = (
+            await self.db.scalar(
+                select(func.count(DocumentVersion.id)).where(
+                    DocumentVersion.document_id == document.id
+                )
+            )
+            or 0
+        ) + 1
+        version = DocumentVersion(
+            document_id=document.id,
+            version_number=version_number,
+            status="processing",
+            extracted_text=normalized,
+        )
         self.db.add(version)
         await self.db.flush()
         try:
             for draft in drafts:
-                self.db.add(DocumentChunk(document_id=document.id, version_id=version.id, chunk_index=draft.index, text=draft.text, content_hash=draft.content_hash, source_label=draft.source_label, page_number=draft.page_number, embedding=self.embedder.embed(draft.text)))
+                self.db.add(
+                    DocumentChunk(
+                        document_id=document.id,
+                        version_id=version.id,
+                        chunk_index=draft.index,
+                        text=draft.text,
+                        content_hash=draft.content_hash,
+                        source_label=draft.source_label,
+                        page_number=draft.page_number,
+                        embedding=self.embedder.embed(draft.text),
+                    )
+                )
             version.status = "ready"
             document.active_version_id = version.id
             await self.db.commit()
