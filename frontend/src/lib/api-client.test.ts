@@ -7,6 +7,7 @@ import {
   logout,
   register,
 } from './api-client';
+import { useCommerceStore } from './commerce-store';
 
 // Mock fetch
 const mockedFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
@@ -36,6 +37,28 @@ describe('api-client.logout()', () => {
       .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }, 200))
       .mockResolvedValueOnce(jsonResponse(undefined, 204));
     await expect(logout()).resolves.toBeUndefined();
+  });
+
+  it('clears private commerce state after logout succeeds', async () => {
+    useCommerceStore.getState().syncCartCount({ items: [{ quantity: 3 }] });
+    mockedFetch
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }, 200))
+      .mockResolvedValueOnce(jsonResponse(undefined, 204));
+
+    await logout();
+
+    expect(useCommerceStore.getState().cartItemCount).toBe(0);
+  });
+
+  it('clears private commerce state when logout discovers an invalid session', async () => {
+    useCommerceStore.getState().syncCartCount({ items: [{ quantity: 3 }] });
+    mockedFetch
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }, 200))
+      .mockResolvedValueOnce(jsonResponse({ detail: 'Unauthorized' }, 401));
+
+    await expect(logout()).rejects.toThrow('Unauthorized');
+
+    expect(useCommerceStore.getState().cartItemCount).toBe(0);
   });
 
   it('includes credentials: include', async () => {
@@ -80,6 +103,7 @@ describe('same-origin authentication API routes', () => {
   });
 
   it('sends registration and login to same-origin BFF paths with credentials and JSON bodies', async () => {
+    useCommerceStore.getState().syncCartCount({ items: [{ quantity: 2 }] });
     mockedFetch
       .mockResolvedValueOnce(
         jsonResponse({ user_id: 'user-1', email: 'a@example.com', created_at: 'now' }, 201)
@@ -88,6 +112,8 @@ describe('same-origin authentication API routes', () => {
 
     await register('a@example.com', 'Secret123!');
     await login('a@example.com', 'Secret123!');
+
+    expect(useCommerceStore.getState().cartItemCount).toBe(0);
 
     expect(mockedFetch).toHaveBeenNthCalledWith(
       1,
@@ -146,6 +172,15 @@ describe('same-origin authentication API routes', () => {
     );
   });
 
+  it('clears private commerce state when profile validation returns 401', async () => {
+    useCommerceStore.getState().syncCartCount({ items: [{ quantity: 2 }] });
+    mockedFetch.mockResolvedValueOnce(jsonResponse({ detail: 'Unauthorized' }, 401));
+
+    await expect(getProfile()).rejects.toThrow('Unauthorized');
+
+    expect(useCommerceStore.getState().cartItemCount).toBe(0);
+  });
+
   it('posts logout and password change with the CSRF header and same-origin credentials', async () => {
     mockedFetch
       .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }, 200))
@@ -200,6 +235,26 @@ describe('same-origin authentication API routes', () => {
         headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' }),
       })
     );
+  });
+
+  it('clears private commerce state after password change succeeds', async () => {
+    useCommerceStore.getState().syncCartCount({ items: [{ quantity: 2 }] });
+    mockedFetch.mockResolvedValueOnce(jsonResponse(undefined, 204));
+
+    await changePassword('OldSecret123!', 'NewSecret123!', 'provided-token');
+
+    expect(useCommerceStore.getState().cartItemCount).toBe(0);
+  });
+
+  it('clears private commerce state when password change reports an invalid session', async () => {
+    useCommerceStore.getState().syncCartCount({ items: [{ quantity: 2 }] });
+    mockedFetch.mockResolvedValueOnce(jsonResponse({ detail: 'Unauthorized' }, 401));
+
+    await expect(
+      changePassword('OldSecret123!', 'NewSecret123!', 'provided-token')
+    ).rejects.toThrow('Unauthorized');
+
+    expect(useCommerceStore.getState().cartItemCount).toBe(0);
   });
 
   it('preserves login error messages and status handling for existing callers', async () => {

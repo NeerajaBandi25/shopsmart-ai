@@ -4,8 +4,11 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { getCart, removeCartItem, type Cart } from '@/lib/cart-api';
 import { CheckoutForm } from '@/components/CheckoutForm';
+import { useCommerceStore } from '@/lib/commerce-store';
 
 export function CheckoutFlow() {
+  const syncCartCount = useCommerceStore((state) => state.syncCartCount);
+  const clearPrivateCommerce = useCommerceStore((state) => state.clearPrivateCommerce);
   const [cart, setCart] = useState<Cart | null>(null);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
@@ -15,7 +18,10 @@ export function CheckoutFlow() {
     setError('');
     getCart()
       .then((result) => {
-        if (active) setCart(result);
+        if (active) {
+          setCart(result);
+          syncCartCount(result);
+        }
       })
       .catch((cause: unknown) => {
         if (active) {
@@ -25,7 +31,7 @@ export function CheckoutFlow() {
     return () => {
       active = false;
     };
-  }, [retry]);
+  }, [retry, syncCartCount]);
 
   async function clearPurchasedItems() {
     if (!cart) return true;
@@ -33,7 +39,16 @@ export function CheckoutFlow() {
       cart.items.map((item) => removeCartItem(item.product_id))
     );
     const failed = results.some((result) => result.status === 'rejected');
-    if (!failed) setCart({ items: [], subtotal: 0, currency: cart.currency });
+    if (!failed) {
+      clearPrivateCommerce();
+      setCart({ items: [], subtotal: 0, currency: cart.currency });
+    } else {
+      try {
+        syncCartCount(await getCart());
+      } catch {
+        // Preserve the existing order-success cleanup warning if refresh fails.
+      }
+    }
     return failed;
   }
 

@@ -1,4 +1,5 @@
 import { checkoutOrder, getOrders } from './order-api';
+import { useCommerceStore } from './commerce-store';
 
 const mockedFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 global.fetch = mockedFetch;
@@ -11,6 +12,7 @@ describe('same-origin order API routes', () => {
 
   beforeEach(() => {
     mockedFetch.mockReset();
+    useCommerceStore.getState().clearPrivateCommerce();
     process.env.NEXT_PUBLIC_API_URL = 'https://backend.invalid/api/v1';
   });
 
@@ -54,5 +56,14 @@ describe('same-origin order API routes', () => {
       '/api/orders',
       expect.objectContaining({ credentials: 'include', cache: 'no-store' })
     );
+  });
+
+  it('clears private commerce state when an order response reports an invalid session', async () => {
+    useCommerceStore.getState().syncCartCount({ items: [{ quantity: 2 }] });
+    mockedFetch.mockResolvedValueOnce(jsonResponse({ detail: 'Unauthorized' }, 401));
+
+    await expect(getOrders()).rejects.toThrow('Unauthorized');
+
+    expect(useCommerceStore.getState().cartItemCount).toBe(0);
   });
 });

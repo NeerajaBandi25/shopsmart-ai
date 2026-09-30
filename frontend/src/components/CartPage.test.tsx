@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { CartPage } from './CartPage';
+import { useCommerceStore } from '@/lib/commerce-store';
 
 jest.mock('@/lib/cart-api', () => ({
   getCart: jest.fn(),
@@ -29,7 +30,10 @@ const filledCart = {
 };
 
 describe('CartPage', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useCommerceStore.getState().clearPrivateCommerce();
+  });
 
   it('shows loading and empty states', async () => {
     (getCart as jest.Mock).mockResolvedValue(emptyCart);
@@ -38,6 +42,7 @@ describe('CartPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/loading your cart/i);
     expect(await screen.findByText(/your cart is empty/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /browse products/i })).toHaveAttribute('href', '/');
+    expect(useCommerceStore.getState().cartItemCount).toBe(0);
   });
 
   it('shows a load error and allows retry', async () => {
@@ -67,6 +72,7 @@ describe('CartPage', () => {
 
     await waitFor(() => expect(setCartItemQuantity).toHaveBeenCalledWith('lamp-1', 2));
     expect(await screen.findAllByText('$25.98')).toHaveLength(2);
+    expect(useCommerceStore.getState().cartItemCount).toBe(2);
   });
 
   it('removes a cart item using the server response', async () => {
@@ -78,5 +84,20 @@ describe('CartPage', () => {
 
     await waitFor(() => expect(removeCartItem).toHaveBeenCalledWith('lamp-1'));
     expect(await screen.findByText(/your cart is empty/i)).toBeInTheDocument();
+    expect(useCommerceStore.getState().cartItemCount).toBe(0);
+  });
+
+  it('does not change the shared count when a quantity update fails', async () => {
+    (getCart as jest.Mock).mockResolvedValue(filledCart);
+    (setCartItemQuantity as jest.Mock).mockRejectedValue(new Error('Update failed.'));
+    render(<CartPage />);
+
+    fireEvent.change(await screen.findByRole('spinbutton', { name: /quantity for desk lamp/i }), {
+      target: { value: '2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /update/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Update failed.');
+    expect(useCommerceStore.getState().cartItemCount).toBe(1);
   });
 });

@@ -1,4 +1,5 @@
 import { getCsrfToken } from '@/lib/api-client';
+import { useCommerceStore } from '@/lib/commerce-store';
 
 export interface CheckoutItem {
   product_id: string;
@@ -23,6 +24,7 @@ export interface Order {
 }
 
 async function responseError(response: Response): Promise<string> {
+  if (response.status === 401) useCommerceStore.getState().clearPrivateCommerce();
   try {
     const payload = (await response.json()) as { detail?: unknown };
     if (typeof payload.detail === 'string') return payload.detail;

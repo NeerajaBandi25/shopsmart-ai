@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { getCart, removeCartItem, setCartItemQuantity, type Cart } from '@/lib/cart-api';
+import { useCommerceStore } from '@/lib/commerce-store';
 
 const priceFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -10,6 +11,7 @@ const priceFormatter = new Intl.NumberFormat('en-US', {
 });
 
 export function CartPage() {
+  const syncCartCount = useCommerceStore((state) => state.syncCartCount);
   const [cart, setCart] = useState<Cart | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -25,6 +27,7 @@ export function CartPage() {
       .then((result) => {
         if (currentRequest) {
           setCart(result);
+          syncCartCount(result);
           setQuantities({});
           setStatus('success');
         }
@@ -38,7 +41,7 @@ export function CartPage() {
     return () => {
       currentRequest = false;
     };
-  }, [retry]);
+  }, [retry, syncCartCount]);
 
   async function updateQuantity(productId: string, quantity: number) {
     setBusyProductId(productId);
@@ -46,6 +49,7 @@ export function CartPage() {
     try {
       const updated = await setCartItemQuantity(productId, quantity);
       setCart(updated);
+      syncCartCount(updated);
       setQuantities({});
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'Quantity could not be updated.');
@@ -60,6 +64,7 @@ export function CartPage() {
     try {
       const updated = await removeCartItem(productId);
       setCart(updated);
+      syncCartCount(updated);
       setQuantities({});
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'Item could not be removed.');

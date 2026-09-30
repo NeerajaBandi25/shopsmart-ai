@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Nav from './nav';
+import { useCommerceStore } from '@/lib/commerce-store';
 
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(() => ({ push: jest.fn() })),
@@ -16,6 +17,7 @@ import { getProfile } from '@/lib/api-client';
 describe('Nav', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useCommerceStore.getState().clearPrivateCommerce();
   });
 
   it('renders application title', () => {
@@ -32,12 +34,29 @@ describe('Nav', () => {
     render(<Nav />);
     await screen.findByRole('button', { name: /log out/i });
     expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Cart' })).toHaveAttribute('href', '/cart');
+    expect(screen.getByRole('link', { name: 'Cart, 0 items' })).toHaveAttribute('href', '/cart');
     expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute('href', '/orders');
     expect(getProfile).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Account' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Sign In' })).not.toBeInTheDocument();
+  });
+
+  it('shows the shared cart item count in the authenticated navigation', async () => {
+    useCommerceStore.getState().syncCartCount({ items: [{ quantity: 2 }, { quantity: 1 }] });
+    (getProfile as jest.Mock).mockResolvedValue({
+      user_id: 'user-1',
+      email: 'test@example.com',
+      created_at: '2026-01-01T00:00:00Z',
+    });
+
+    render(<Nav />);
+
+    expect(await screen.findByRole('link', { name: 'Cart, 3 items' })).toHaveAttribute(
+      'href',
+      '/cart'
+    );
+    expect(screen.getByText('(3)')).toBeInTheDocument();
   });
 
   it('hides logout button when not authenticated', async () => {
