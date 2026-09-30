@@ -1,6 +1,7 @@
 """Application configuration and settings."""
 
 import os
+import re
 from typing import Optional
 
 from pydantic import Field, field_validator
@@ -40,6 +41,7 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    observability_metrics_token: Optional[str] = None
 
     # CORS
     cors_origins: list[str] = []
@@ -61,6 +63,16 @@ class Settings(BaseSettings):
         if "*" in origins:
             raise ValueError("CORS_ORIGINS must not contain '*' when credentials are enabled")
         return origins
+
+    @field_validator("observability_metrics_token", mode="before")
+    @classmethod
+    def validate_observability_metrics_token(cls, token: Optional[str]) -> Optional[str]:
+        """Allow metrics to be disabled, but require a strong URL-safe bearer token when set."""
+        if token is None or token == "":
+            return None
+        if not re.fullmatch(r"[A-Za-z0-9._~-]{32,}", token):
+            raise ValueError("OBSERVABILITY_METRICS_TOKEN must be at least 32 URL-safe characters")
+        return token
 
     class Config:
         """Pydantic config."""

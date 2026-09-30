@@ -9,7 +9,14 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.api.v1 import auth_routes, cart_routes, order_routes, product_routes, user_routes
+from src.api.v1 import (
+    auth_routes,
+    cart_routes,
+    observability_routes,
+    order_routes,
+    product_routes,
+    user_routes,
+)
 from src.core.config import settings
 from src.core.exceptions import (
     AppException,
@@ -20,6 +27,7 @@ from src.core.exceptions import (
 from src.core.observability import (
     RequestObservabilityMiddleware,
     configure_structured_logging,
+    normalize_http_method,
     security_audit_event,
 )
 from src.core.redis_client import close_redis_client
@@ -111,7 +119,14 @@ async def general_exception_handler(request: Request, exc: Exception):
     """Handle general exceptions (never expose stack traces)."""
     logger.error(
         "unhandled_exception",
-        extra={"event": "unhandled_exception", "exception_type": type(exc).__name__},
+        extra={
+            "event": "unhandled_exception",
+            "exception_type": type(exc).__name__,
+            "request_id": getattr(request.state, "request_id", None),
+            "method": normalize_http_method(request.method),
+            "route": getattr(request.scope.get("route"), "path", "unmatched"),
+            "status_code": 500,
+        },
     )
     response_headers = {}
     request_id = getattr(request.state, "request_id", None)
@@ -156,6 +171,7 @@ async def readiness_check():
 app.include_router(auth_routes.router, prefix="/api/v1")
 app.include_router(cart_routes.router, prefix="/api/v1")
 app.include_router(order_routes.router, prefix="/api/v1")
+app.include_router(observability_routes.router, prefix="/api/v1")
 app.include_router(product_routes.router, prefix="/api/v1")
 app.include_router(user_routes.router, prefix="/api/v1")
 

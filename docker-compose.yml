@@ -6,6 +6,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the root .env file}
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in the root .env file}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      OBSERVABILITY_METRICS_TOKEN: ${OBSERVABILITY_METRICS_TOKEN:-}
       CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS as a JSON array in the root .env file}
       AUTO_CREATE_TABLES: "false"
     extra_hosts:
