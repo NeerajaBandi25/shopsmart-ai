@@ -1,0 +1,310 @@
+name: Production deployment
+
+on:
+  workflow_dispatch:
+
+run-name: Production deployment ${{ github.sha }}
+
+permissions: {}
+
+concurrency:
+  group: shopsmart-production-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  preflight:
+    name: Verify current main and required CI
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out the dispatched commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify current main and latest required checks
+        run: python3 .github/scripts/deploy_preflight.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  release-approval:
+    name: Wait for human release approval
+    needs: preflight
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: release-approval
+      url: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+    steps:
+      - name: Record approval gate
+        run: |
+          printf 'Approved release candidate: %s\n' "$GITHUB_SHA"
+
+  backend-deploy:
+    name: Deploy backend to ECS Fargate
+    needs: [preflight, release-approval]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: ${{ vars.BACKEND_READINESS_URL }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    outputs:
+      previous_task_definition: ${{ steps.deploy_ecs.outputs.previous_task_definition }}
+      deployed_task_definition: ${{ steps.deploy_ecs.outputs.deployed_task_definition }}
+    steps:
+      - name: Check out the approved commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Recheck the release gate before AWS authentication
+        run: python3 .github/scripts/deploy_preflight.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Configure short-lived AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: shopsmart-${{ github.run_id }}-${{ github.run_attempt }}
+          unset-current-credentials: true
+
+      - name: Build and push the immutable backend image
+        id: image
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          registry_uri="$(aws ecr describe-repositories \
+            --repository-names "$ECR_REPOSITORY" \
+            --query 'repositories[0].repositoryUri' \
+            --output text)"
+          if [[ -z "$registry_uri" || "$registry_uri" == "None" ]]; then
+            printf 'Configured ECR repository was not found.\n' >&2
+            exit 1
+          fi
+          registry_host="${registry_uri%%/*}"
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "$registry_host" >/dev/null
+
+          image_tag="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          tagged_image="${registry_uri}:${image_tag}"
+          docker build --file backend/Dockerfile --tag "$tagged_image" backend
+          docker push "$tagged_image"
+
+          image_digest="$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids "imageTag=${image_tag}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          if [[ ! "$image_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            printf 'ECR did not return a valid image digest.\n' >&2
+            exit 1
+          fi
+          printf 'image_ref=%s@%s\n' "$registry_uri" "$image_digest" >> "$GITHUB_OUTPUT"
+          printf 'image_digest=%s\n' "$image_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Recheck the release gate before ECS mutation
+        run: python3 .github/scripts/deploy_preflight.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Run migrations and deploy the ECS service
+        id: deploy_ecs
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+          ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+          BACKEND_READINESS_URL: ${{ vars.BACKEND_READINESS_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+        run: python3 .github/scripts/deploy_ecs.py deploy --image "$IMAGE_REF"
+
+  frontend-deploy:
+    name: Deploy frontend to Vercel
+    needs: [preflight, release-approval, backend-deploy]
+    if: github.ref == 'refs/heads/main' && needs.backend-deploy.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      promotion_attempted: ${{ steps.promote.outputs.promotion_attempted }}
+      rollback_succeeded: ${{ steps.rollback.outputs.rollback_succeeded }}
+    environment:
+      name: production
+      url: ${{ vars.VERCEL_PRODUCTION_URL }}
+    permissions:
+      actions: read
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+        shell: bash
+    steps:
+      - name: Check out the approved commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
+
+      - name: Install the pinned Vercel CLI
+        run: |
+          npm install --global vercel@61.1.0
+          vercel --version
+
+      - name: Verify the approved commit before reading production settings
+        run: python3 ../.github/scripts/deploy_preflight.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Link project, pull production settings, and build
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          vercel link --yes --project "$VERCEL_PROJECT_ID" --scope "$VERCEL_ORG_ID"
+          vercel pull --yes --environment=production --scope "$VERCEL_ORG_ID"
+          vercel build --prod --yes --scope "$VERCEL_ORG_ID"
+
+      - name: Recheck the release gate before Vercel production promotion
+        run: python3 ../.github/scripts/deploy_preflight.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Deploy, validate, and promote the frontend
+        id: promote
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PRODUCTION_URL: ${{ vars.VERCEL_PRODUCTION_URL }}
+        run: |
+          set -euo pipefail
+          printf 'promotion_attempted=false\n' >> "$GITHUB_OUTPUT"
+          if [[ ! "$VERCEL_PRODUCTION_URL" =~ ^https://[A-Za-z0-9.-]+$ ]]; then
+            printf 'VERCEL_PRODUCTION_URL must be an HTTPS origin.\n' >&2
+            exit 1
+          fi
+          deployment_url="$(vercel deploy --prebuilt --prod --skip-domain --yes \
+            --scope "$VERCEL_ORG_ID")"
+          if [[ ! "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]; then
+            printf 'Vercel did not return a valid deployment URL.\n' >&2
+            exit 1
+          fi
+          printf 'deployment_url=%s\n' "$deployment_url" >> "$GITHUB_OUTPUT"
+          deployment_status="$(curl --fail --silent --show-error --output /dev/null \
+            --retry 10 --retry-all-errors --retry-delay 2 --retry-max-time 30 \
+            --write-out '%{http_code}' "$deployment_url/")"
+          if [[ "$deployment_status" != "200" ]]; then
+            printf 'Deployment health check expected HTTP 200, received %s.\n' \
+              "$deployment_status" >&2
+            exit 1
+          fi
+
+          printf 'promotion_attempted=true\n' >> "$GITHUB_OUTPUT"
+          vercel promote "$deployment_url" --yes --scope "$VERCEL_ORG_ID"
+          production_status="$(curl --fail --silent --show-error --output /dev/null \
+            --retry 10 --retry-all-errors --retry-delay 2 --retry-max-time 30 \
+            --write-out '%{http_code}' "$VERCEL_PRODUCTION_URL")"
+          if [[ "$production_status" != "200" ]]; then
+            printf 'Production health check expected HTTP 200, received %s.\n' \
+              "$production_status" >&2
+            exit 1
+          fi
+
+      - name: Restore the previous Vercel production deployment
+        id: rollback
+        if: (failure() || cancelled()) && steps.promote.outputs.promotion_attempted == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PRODUCTION_URL: ${{ vars.VERCEL_PRODUCTION_URL }}
+        run: |
+          set -euo pipefail
+          printf 'rollback_succeeded=false\n' >> "$GITHUB_OUTPUT"
+          vercel rollback --non-interactive --scope "$VERCEL_ORG_ID"
+          rollback_status="$(curl --fail --silent --show-error --output /dev/null \
+            --retry 10 --retry-all-errors --retry-delay 2 --retry-max-time 30 \
+            --write-out '%{http_code}' "$VERCEL_PRODUCTION_URL")"
+          if [[ "$rollback_status" != "200" ]]; then
+            printf 'Vercel rollback health check expected HTTP 200, received %s.\n' \
+              "$rollback_status" >&2
+            exit 1
+          fi
+          printf 'rollback_succeeded=true\n' >> "$GITHUB_OUTPUT"
+
+  rollback-backend:
+    name: Roll back backend after frontend failure
+    needs: [preflight, release-approval, backend-deploy, frontend-deploy]
+    if: >-
+      always() && needs.preflight.result == 'success' &&
+      needs.release-approval.result == 'success' &&
+      needs.backend-deploy.outputs.previous_task_definition != '' &&
+      needs.backend-deploy.outputs.deployed_task_definition != '' &&
+      (
+        needs.backend-deploy.result != 'success' ||
+        (
+          needs.frontend-deploy.result != 'success' &&
+          (
+            needs.frontend-deploy.outputs.promotion_attempted != 'true' ||
+            needs.frontend-deploy.outputs.rollback_succeeded == 'true'
+          )
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.BACKEND_READINESS_URL }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out the approved commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Configure short-lived AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: shopsmart-rollback-${{ github.run_id }}
+          unset-current-credentials: true
+
+      - name: Restore the previous ECS task definition
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+          ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+          BACKEND_READINESS_URL: ${{ vars.BACKEND_READINESS_URL }}
+          PREVIOUS_TASK_DEFINITION: ${{ needs.backend-deploy.outputs.previous_task_definition }}
+          EXPECTED_TASK_DEFINITION: ${{ needs.backend-deploy.outputs.deployed_task_definition }}
+        run: >-
+          python3 .github/scripts/deploy_ecs.py rollback
+          --previous-task-definition "$PREVIOUS_TASK_DEFINITION"
+          --expected-task-definition "$EXPECTED_TASK_DEFINITION"
