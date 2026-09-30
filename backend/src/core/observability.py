@@ -33,6 +33,7 @@ _SECURITY_EVENTS = frozenset(
         "authorization_denied",
     }
 )
+_AI_EVENTS = frozenset({"ai_retrieval", "ai_no_answer", "ai_provider_failure", "ai_evaluation"})
 _LOG_CONTEXT_FIELDS = frozenset(
     {
         "event",
@@ -88,6 +89,7 @@ class ApplicationMetrics:
             lambda: [0.0, 0.0, 0.0]
         )
         self._security_event_counts: Counter[str] = Counter()
+        self._ai_event_counts: Counter[str] = Counter()
 
     def record_request(self, method: str, status_code: int, duration_ms: float) -> None:
         method_label = normalize_http_method(method)
@@ -106,6 +108,12 @@ class ApplicationMetrics:
         with self._lock:
             self._security_event_counts[event] += 1
 
+    def record_ai_event(self, event: str) -> None:
+        if event not in _AI_EVENTS:
+            return
+        with self._lock:
+            self._ai_event_counts[event] += 1
+
     def snapshot(self) -> dict[str, dict]:
         """Return a copy of metrics, with only bounded method/status/event keys."""
         with self._lock:
@@ -123,6 +131,7 @@ class ApplicationMetrics:
                     for (method, status), values in self._request_durations.items()
                 },
                 "security_events": dict(self._security_event_counts),
+                "ai_events": dict(self._ai_event_counts),
             }
 
 

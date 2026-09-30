@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.v1 import (
+    ai_routes,
     auth_routes,
     cart_routes,
     observability_routes,
@@ -169,6 +170,7 @@ async def readiness_check():
 
 # Include API routes
 app.include_router(auth_routes.router, prefix="/api/v1")
+app.include_router(ai_routes.router, prefix="/api/v1")
 app.include_router(cart_routes.router, prefix="/api/v1")
 app.include_router(order_routes.router, prefix="/api/v1")
 app.include_router(observability_routes.router, prefix="/api/v1")
