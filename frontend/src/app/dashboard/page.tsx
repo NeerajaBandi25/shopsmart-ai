@@ -142,7 +142,9 @@ export default function DashboardPage() {
               className="group rounded-tile border border-ink-100 bg-white p-6 shadow-tile transition-all duration-300 ease-luxe hover:shadow-tile-hover hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
             >
               <p className="font-semibold text-ink-900">Document Assistant</p>
-              <p className="mt-1 text-sm text-ink-500">Ask grounded questions about your private sources.</p>
+              <p className="mt-1 text-sm text-ink-500">
+                Ask grounded questions about your private sources.
+              </p>
             </Link>
             <Link
               href="/account"
