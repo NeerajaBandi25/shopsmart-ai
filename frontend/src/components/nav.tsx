@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { getProfile } from '@/lib/api-client';
 import { LogoutButton } from './logout-button';
 import Link from 'next/link';
+import { useCommerceStore } from '@/lib/commerce-store';
 
 interface NavProps {
   /**
@@ -19,6 +20,7 @@ interface NavProps {
 }
 
 export default function Nav({ probeAuth = true }: NavProps) {
+  const cartItemCount = useCommerceStore((state) => state.cartItemCount);
   const [isLoading, setIsLoading] = useState(probeAuth);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -144,8 +146,12 @@ export default function Nav({ probeAuth = true }: NavProps) {
               <Link href="/dashboard" className={navLinkClasses}>
                 Dashboard
               </Link>
-              <Link href="/cart" className={navLinkClasses}>
-                Cart
+              <Link
+                href="/cart"
+                className={navLinkClasses}
+                aria-label={`Cart, ${cartItemCount} ${cartItemCount === 1 ? 'item' : 'items'}`}
+              >
+                Cart <span aria-hidden="true">({cartItemCount})</span>
               </Link>
               <Link href="/orders" className={navLinkClasses}>
                 Orders

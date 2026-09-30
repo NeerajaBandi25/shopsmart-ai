@@ -2,6 +2,8 @@
  * API client for same-origin authentication and commerce operations.
  */
 
+import { useCommerceStore } from '@/lib/commerce-store';
+
 const AUTH_API_BASE_PATH = '/api/auth';
 
 // Helper to handle API responses and redirect on 401
@@ -12,6 +14,7 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
     const error = data as ApiError;
     // Redirect to login on 401 Unauthorized, throw error that can be caught by components to redirect to login
     if (response.status === 401) {
+      useCommerceStore.getState().clearPrivateCommerce();
       throw new Error(error.detail || 'Unauthorized - please log in');
     }
     throw new Error(error.detail || 'API request failed');
@@ -126,7 +129,9 @@ export async function login(email: string, password: string): Promise<LoginRespo
     credentials: 'include',
   });
 
-  return handleApiResponse<LoginResponse>(response);
+  const result = await handleApiResponse<LoginResponse>(response);
+  useCommerceStore.getState().clearPrivateCommerce();
+  return result;
 }
 
 /**
@@ -148,8 +153,10 @@ export async function logout(): Promise<void> {
 
   if (!response.ok) {
     const error = (await response.json()) as ApiError;
+    if (response.status === 401) useCommerceStore.getState().clearPrivateCommerce();
     throw new Error(error.detail || 'Logout failed');
   }
+  useCommerceStore.getState().clearPrivateCommerce();
 }
 
 /**
@@ -205,6 +212,8 @@ export async function changePassword(
 
   if (!response.ok) {
     const error = (await response.json()) as ApiError;
+    if (response.status === 401) useCommerceStore.getState().clearPrivateCommerce();
     throw new Error(error.detail || 'Password change failed');
   }
+  useCommerceStore.getState().clearPrivateCommerce();
 }

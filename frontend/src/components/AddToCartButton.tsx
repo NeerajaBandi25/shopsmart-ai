@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { addCartItem } from '@/lib/cart-api';
+import { useCommerceStore } from '@/lib/commerce-store';
 
 interface AddToCartButtonProps {
   productId: string;
@@ -15,6 +16,7 @@ export function AddToCartButton({
   maxPurchaseQuantity,
 }: AddToCartButtonProps) {
   const maximum = Math.min(stockQuantity, maxPurchaseQuantity);
+  const syncCartCount = useCommerceStore((state) => state.syncCartCount);
   const [quantity, setQuantity] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -25,7 +27,8 @@ export function AddToCartButton({
     setMessage('');
     setError('');
     try {
-      await addCartItem(productId, quantity);
+      const cart = await addCartItem(productId, quantity);
+      syncCartCount(cart);
       setMessage('Added to cart.');
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'Could not add this item.');

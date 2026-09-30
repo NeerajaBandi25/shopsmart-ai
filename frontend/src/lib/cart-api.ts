@@ -1,6 +1,7 @@
 'use client';
 
 import { getCsrfToken } from '@/lib/api-client';
+import { useCommerceStore } from '@/lib/commerce-store';
 
 export interface CartItem {
   product_id: string;
@@ -24,6 +25,7 @@ const CART_API_BASE_PATH = '/api/cart';
 async function parseCartResponse(response: Response): Promise<Cart> {
   const data = (await response.json()) as Cart | { detail?: string };
   if (!response.ok) {
+    if (response.status === 401) useCommerceStore.getState().clearPrivateCommerce();
     const detail = 'detail' in data ? data.detail : undefined;
     throw new Error(detail || 'Cart request failed.');
   }
