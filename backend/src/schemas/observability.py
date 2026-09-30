@@ -1,6 +1,6 @@
 """Response schemas for operator-facing observability data."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RequestDurationMetric(BaseModel):
@@ -13,3 +13,4 @@ class MetricsSnapshot(BaseModel):
     requests: dict[str, int]
     request_duration_ms: dict[str, RequestDurationMetric]
     security_events: dict[str, int]
+    ai_events: dict[str, int] = Field(default_factory=dict)

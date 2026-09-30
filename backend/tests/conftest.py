@@ -20,6 +20,13 @@ from src.models.login_attempt import LoginAttempt
 from src.models.product import Product  # noqa: F401
 from src.models.cart import Cart, CartItem  # noqa: F401
 from src.models.order import Order, OrderItem  # noqa: F401
+from src.models.ai import (  # noqa: F401
+    ChatMessage,
+    Conversation,
+    Document,
+    DocumentChunk,
+    DocumentVersion,
+)
 
 
 @pytest.fixture(autouse=True)
