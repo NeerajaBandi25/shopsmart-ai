@@ -3,15 +3,18 @@
 import json
 import logging
 import re
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from httpx import AsyncClient
+from starlette.requests import Request
 
+from src.core.config import settings
 from src.core.observability import JsonLogFormatter, metrics, security_audit_event
+from src.main import general_exception_handler
 
 
-async def test_request_id_is_generated_logged_and_counted(
-    test_client: AsyncClient, caplog
-):
+async def test_request_id_is_generated_logged_and_counted(test_client: AsyncClient, caplog):
     caplog.set_level(logging.INFO)
     before = metrics.snapshot()
 
@@ -62,9 +65,7 @@ async def test_application_error_response_retains_request_id_and_audits_auth_fai
 ):
     caplog.set_level(logging.INFO)
     request_id = "auth-failure-request-1"
-    response = await test_client.get(
-        "/api/v1/auth/me", headers={"X-Request-ID": request_id}
-    )
+    response = await test_client.get("/api/v1/auth/me", headers={"X-Request-ID": request_id})
 
     assert response.status_code == 401
     assert response.headers["x-request-id"] == request_id
@@ -103,9 +104,7 @@ async def test_auth_audit_events_exclude_credentials_and_tokens(
     )
     assert denied.status_code == 403
 
-    csrf_response = await test_client.get(
-        "/api/v1/auth/csrf", cookies={"session_id": session_id}
-    )
+    csrf_response = await test_client.get("/api/v1/auth/csrf", cookies={"session_id": session_id})
     assert csrf_response.status_code == 200
     csrf_token = csrf_response.json()["csrf_token"]
 
@@ -163,9 +162,7 @@ async def test_registration_and_password_change_audit_events_are_secret_safe(
     assert registered.status_code == 201
     assert rejected.status_code == 400
 
-    login = await test_client.post(
-        "/api/v1/auth/login", json=test_user_data_in_db
-    )
+    login = await test_client.post("/api/v1/auth/login", json=test_user_data_in_db)
     session_id = login.cookies["session_id"]
     csrf = await test_client.get("/api/v1/auth/csrf", cookies={"session_id": session_id})
     csrf_token = csrf.json()["csrf_token"]
@@ -193,9 +190,7 @@ async def test_registration_and_password_change_audit_events_are_secret_safe(
         "password_change_success",
     }
     records = [
-        record
-        for record in caplog.records
-        if getattr(record, "event", None) in expected_events
+        record for record in caplog.records if getattr(record, "event", None) in expected_events
     ]
     assert {record.event for record in records} == expected_events
 
@@ -235,3 +230,119 @@ async def test_unknown_methods_use_bounded_metric_label(test_client: AsyncClient
     metric_key = "OTHER:4xx"
     assert after["requests"][metric_key] == before["requests"].get(metric_key, 0) + 1
     assert not any("CUSTOMVERB" in key for key in after["requests"])
+
+
+async def test_metrics_endpoint_is_disabled_without_a_token(test_client: AsyncClient, monkeypatch):
+    monkeypatch.setattr(settings, "observability_metrics_token", None)
+
+    response = await test_client.get("/api/v1/observability/metrics")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Not found"}
+
+
+async def test_metrics_endpoint_rejects_missing_and_malformed_authorization(
+    test_client: AsyncClient, monkeypatch
+):
+    monkeypatch.setattr(
+        settings,
+        "observability_metrics_token",
+        "metrics-access-token-0123456789abcdef",
+    )
+
+    for headers in ({}, {"Authorization": "Basic credentials"}, {"Authorization": "Bearer"}):
+        response = await test_client.get("/api/v1/observability/metrics", headers=headers)
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Unauthorized"}
+        assert response.headers["www-authenticate"] == "Bearer"
+
+
+async def test_metrics_endpoint_requires_bearer_token_and_returns_bounded_snapshot(
+    test_client: AsyncClient, monkeypatch, caplog
+):
+    caplog.set_level(logging.INFO)
+    token = "metrics-access-token-0123456789abcdef"
+    monkeypatch.setattr(settings, "observability_metrics_token", token)
+    before = metrics.snapshot()
+
+    denied = await test_client.get(
+        "/api/v1/observability/metrics", headers={"Authorization": "Bearer wrong-token"}
+    )
+    assert denied.status_code == 401
+    assert denied.headers["www-authenticate"] == "Bearer"
+
+    response = await test_client.get(
+        "/api/v1/observability/metrics", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["requests"]["GET:4xx"] == before["requests"].get("GET:4xx", 0) + 1
+    assert (
+        snapshot["request_duration_ms"]["GET:4xx"]["count"]
+        == before["request_duration_ms"].get("GET:4xx", {}).get("count", 0) + 1
+    )
+    assert snapshot["security_events"] == before["security_events"]
+    assert token not in response.text
+    assert not any("request_id" in key or "/" in key for key in snapshot["requests"])
+    serialized_logs = "\n".join(JsonLogFormatter().format(record) for record in caplog.records)
+    assert token not in serialized_logs
+
+
+async def test_unhandled_exception_log_has_safe_request_context_without_exception_message():
+    secret_message = "password=do-not-log-this"
+    request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "UNTRUSTED-METHOD",
+            "scheme": "https",
+            "path": "/api/v1/orders/checkout",
+            "raw_path": b"/api/v1/orders/checkout",
+            "query_string": b"",
+            "headers": [],
+            "server": ("test", 443),
+            "client": ("127.0.0.1", 12345),
+            "state": {"request_id": "safe-error-context-1"},
+            "route": SimpleNamespace(path="/api/v1/orders/checkout"),
+        }
+    )
+
+    with patch("src.main.logger.error") as error_log:
+        response = await general_exception_handler(request, RuntimeError(secret_message))
+
+    assert response.status_code == 500
+    assert response.body == (
+        b'{"detail":"Internal server error","status_code":500,' b'"error_code":"INTERNAL_ERROR"}'
+    )
+    error_log.assert_called_once_with(
+        "unhandled_exception",
+        extra={
+            "event": "unhandled_exception",
+            "exception_type": "RuntimeError",
+            "request_id": "safe-error-context-1",
+            "method": "OTHER",
+            "route": "/api/v1/orders/checkout",
+            "status_code": 500,
+        },
+    )
+    record = logging.LogRecord(
+        name="src.main",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=0,
+        msg="unhandled_exception",
+        args=(),
+        exc_info=None,
+    )
+    record.__dict__.update(error_log.call_args.kwargs["extra"])
+    structured = json.loads(JsonLogFormatter().format(record))
+    assert structured["request_id"] == "safe-error-context-1"
+    assert structured["context"] == {
+        "event": "unhandled_exception",
+        "exception_type": "RuntimeError",
+        "method": "OTHER",
+        "route": "/api/v1/orders/checkout",
+        "status_code": 500,
+    }
+    assert secret_message not in JsonLogFormatter().format(record)

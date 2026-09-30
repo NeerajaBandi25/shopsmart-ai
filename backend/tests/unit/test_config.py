@@ -75,3 +75,31 @@ def test_wildcard_origin_is_rejected_with_credentials_enabled(monkeypatch):
 
     with pytest.raises(ValidationError, match="must not contain"):
         Settings(_env_file=None)
+
+
+def test_observability_metrics_token_is_optional_and_validated(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+    monkeypatch.delenv("OBSERVABILITY_METRICS_TOKEN", raising=False)
+
+    assert Settings(_env_file=None).observability_metrics_token is None
+
+    monkeypatch.setenv("OBSERVABILITY_METRICS_TOKEN", "a" * 32)
+    assert Settings(_env_file=None).observability_metrics_token == "a" * 32
+
+    for invalid_token in (
+        "too-short",
+        "x" * 31,
+        "x" * 31 + " ",
+        "x" * 31 + "!",
+        "é" * 32,
+    ):
+        monkeypatch.setenv("OBSERVABILITY_METRICS_TOKEN", invalid_token)
+        with pytest.raises(ValidationError, match="OBSERVABILITY_METRICS_TOKEN"):
+            Settings(_env_file=None)
+
+
+def test_empty_observability_metrics_token_disables_endpoint(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("OBSERVABILITY_METRICS_TOKEN", "")
+
+    assert Settings(_env_file=None).observability_metrics_token is None

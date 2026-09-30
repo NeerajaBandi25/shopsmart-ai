@@ -55,9 +55,7 @@ class JsonLogFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         context = {
-            key: record.__dict__[key]
-            for key in _LOG_CONTEXT_FIELDS
-            if key in record.__dict__
+            key: record.__dict__[key] for key in _LOG_CONTEXT_FIELDS if key in record.__dict__
         }
         payload = {
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
@@ -92,7 +90,7 @@ class ApplicationMetrics:
         self._security_event_counts: Counter[str] = Counter()
 
     def record_request(self, method: str, status_code: int, duration_ms: float) -> None:
-        method_label = method.upper() if method.upper() in _HTTP_METHODS else "OTHER"
+        method_label = normalize_http_method(method)
         status_label = f"{status_code // 100}xx"
         key = (method_label, status_label)
         with self._lock:
@@ -129,6 +127,12 @@ class ApplicationMetrics:
 
 
 metrics = ApplicationMetrics()
+
+
+def normalize_http_method(method: str) -> str:
+    """Normalize methods to a bounded label shared by metrics and logs."""
+    normalized = method.upper()
+    return normalized if normalized in _HTTP_METHODS else "OTHER"
 
 
 def security_audit_event(
@@ -185,9 +189,7 @@ class RequestObservabilityMiddleware:
             ),
             "",
         )
-        request_id = (
-            incoming_id if _REQUEST_ID_PATTERN.fullmatch(incoming_id) else uuid4().hex
-        )
+        request_id = incoming_id if _REQUEST_ID_PATTERN.fullmatch(incoming_id) else uuid4().hex
         scope.setdefault("state", {})["request_id"] = request_id
         token = request_id_context.set(request_id)
         method = str(scope.get("method", "OTHER")).upper()
@@ -217,7 +219,7 @@ class RequestObservabilityMiddleware:
                 "request_completed",
                 extra={
                     "event": "request_completed",
-                    "method": method if method in _HTTP_METHODS else "OTHER",
+                    "method": normalize_http_method(method),
                     "route": route,
                     "status_code": status_code,
                     "duration_ms": round(duration_ms, 3),
