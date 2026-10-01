@@ -159,7 +159,7 @@ class ProviderPolicyRegistry:
 
 def normalize_classification(value: str) -> DataClassification:
     try:
-        return DataClassification(value.upper())
+        return DataClassification(value.strip().upper())
     except ValueError as exc:
         raise PolicyViolation("Unsupported data classification") from exc
 

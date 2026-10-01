@@ -6,7 +6,10 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from src.services.ai_governance import DataClassification
+from src.services.ai_governance import (
+    DataClassification,
+    normalize_classification,
+)
 
 
 @dataclass(frozen=True)
@@ -16,7 +19,10 @@ class Evidence:
     source_label: str
     page_number: int | None
     chunk_index: int
-    classification: DataClassification = DataClassification.PRIVATE
+    classification: DataClassification | str = DataClassification.PRIVATE
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "classification", normalize_classification(self.classification))
 
 
 @dataclass(frozen=True)

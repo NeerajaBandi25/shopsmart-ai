@@ -61,6 +61,35 @@ async def test_private_data_never_reaches_public_provider():
     assert local.calls == 1
 
 
+def test_evidence_normalizes_database_classification_and_rejects_unknown_values():
+    string_classification = Evidence("c1", "text", "source", None, 0, " public ")
+    enum_classification = Evidence("c2", "text", "source", None, 0, DataClassification.PRIVATE)
+
+    assert string_classification.classification is DataClassification.PUBLIC
+    assert enum_classification.classification is DataClassification.PRIVATE
+    with pytest.raises(PolicyViolation):
+        Evidence("c3", "text", "source", None, 0, "UNKNOWN")
+
+
+@pytest.mark.asyncio
+async def test_private_string_evidence_stays_out_of_public_provider_even_if_aggregate_says_public():
+    public = FakeProvider()
+    gateway = ProviderGateway(
+        registry(policy("public", frozenset({DataClassification.PUBLIC}))),
+        {"public": public},
+    )
+
+    result = await gateway.answer(
+        "question",
+        [Evidence("c1", "private text", "source", None, 0, "PRIVATE")],
+        DataClassification.PUBLIC,
+    )
+
+    assert result.answer.answerable is False
+    assert result.classification is DataClassification.PRIVATE
+    assert public.calls == 0
+
+
 @pytest.mark.asyncio
 async def test_user_cannot_override_provider_or_model_policy():
     gateway = ProviderGateway(
