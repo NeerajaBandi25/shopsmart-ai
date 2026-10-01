@@ -8,7 +8,7 @@ export async function proxyAiRequest(
   const backendUrl = process.env.API_INTERNAL_URL;
   if (!backendUrl)
     return new Response(JSON.stringify({ detail: 'AI service unavailable' }), {
-      status: 503,
+      status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
   const headers = new Headers({ Accept: 'application/json' });
@@ -35,7 +35,12 @@ export async function proxyAiRequest(
       status: upstream.status,
       headers: responseHeaders,
     });
-  } catch {
+  } catch (error) {
+    console.error('ai_backend_transport_error', {
+      endpoint,
+      method: options.method,
+      error_type: error instanceof Error ? error.name : 'UnknownError',
+    });
     return new Response(
       JSON.stringify({
         detail: 'AI service unavailable',

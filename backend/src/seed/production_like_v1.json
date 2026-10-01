@@ -1,0 +1,269 @@
+{
+  "version": "production-like-v1",
+  "product_count": 1000,
+  "namespace": "shopsmart-production-like-v1",
+  "brands": [
+    "Northstar",
+    "Harbor",
+    "Juniper",
+    "Meridian",
+    "Aster",
+    "Daybreak",
+    "Summit",
+    "Cedar Vale",
+    "Solace",
+    "Alpine"
+  ],
+  "categories": [
+    {
+      "key": "accessories",
+      "label": "Accessory",
+      "search_term": "accessories",
+      "min_price_cents": 499,
+      "max_price_cents": 49999,
+      "descriptions": [
+        "compact everyday accessories",
+        "reliable home-office essentials",
+        "portable technology accessories"
+      ]
+    },
+    {
+      "key": "phones",
+      "label": "Phone",
+      "search_term": "phones",
+      "min_price_cents": 5999,
+      "max_price_cents": 159999,
+      "descriptions": [
+        "mobile phones with a clear display and dependable battery",
+        "phones designed for everyday communication",
+        "smartphones with practical camera and storage options"
+      ]
+    },
+    {
+      "key": "laptops",
+      "label": "Laptop",
+      "search_term": "laptops",
+      "min_price_cents": 29999,
+      "max_price_cents": 249999,
+      "descriptions": [
+        "laptops for study and everyday productivity",
+        "portable laptops with practical memory and storage",
+        "work-ready laptops for home and office use"
+      ]
+    },
+    {
+      "key": "fashion",
+      "label": "Fashion",
+      "search_term": "fashion clothing",
+      "min_price_cents": 599,
+      "max_price_cents": 29999,
+      "descriptions": [
+        "comfortable clothing for everyday wear",
+        "versatile fashion basics with a relaxed fit",
+        "easy-care apparel for daily use"
+      ]
+    },
+    {
+      "key": "footwear",
+      "label": "Footwear",
+      "search_term": "footwear shoes",
+      "min_price_cents": 1299,
+      "max_price_cents": 39999,
+      "descriptions": [
+        "everyday footwear with a supportive fit",
+        "casual shoes for commuting and weekends",
+        "lightweight footwear for daily walks"
+      ]
+    },
+    {
+      "key": "home",
+      "label": "Home",
+      "search_term": "home",
+      "min_price_cents": 399,
+      "max_price_cents": 99999,
+      "descriptions": [
+        "useful home essentials for daily routines",
+        "simple home organization and comfort",
+        "practical home accessories for small spaces"
+      ]
+    },
+    {
+      "key": "appliances",
+      "label": "Appliance",
+      "search_term": "appliances",
+      "min_price_cents": 1499,
+      "max_price_cents": 229999,
+      "descriptions": [
+        "appliances for convenient everyday cooking",
+        "home appliances with straightforward controls",
+        "compact appliances for everyday household tasks"
+      ]
+    },
+    {
+      "key": "beauty",
+      "label": "Beauty",
+      "search_term": "beauty personal care",
+      "min_price_cents": 199,
+      "max_price_cents": 14999,
+      "descriptions": [
+        "beauty and personal-care essentials",
+        "daily grooming products with simple ingredients",
+        "personal care items for an everyday routine"
+      ]
+    },
+    {
+      "key": "groceries",
+      "label": "Grocery",
+      "search_term": "groceries pantry",
+      "min_price_cents": 99,
+      "max_price_cents": 19999,
+      "descriptions": [
+        "pantry groceries for everyday meals",
+        "shelf-stable grocery essentials",
+        "everyday pantry items for home cooking"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "key": "new-customer",
+      "email": "new-customer@shopsmart.local.invalid",
+      "cart": [],
+      "orders": []
+    },
+    {
+      "key": "returning-customer",
+      "email": "returning-customer@shopsmart.local.invalid",
+      "cart": [
+        { "sku": "SYNTH-EVAL-V1-00003", "quantity": 1 },
+        { "sku": "SYNTH-EVAL-V1-00006", "quantity": 2 }
+      ],
+      "orders": [
+        {
+          "status": "placed",
+          "items": [{ "sku": "SYNTH-EVAL-V1-00003", "quantity": 1 }]
+        },
+        {
+          "status": "confirmed",
+          "items": [{ "sku": "SYNTH-EVAL-V1-00006", "quantity": 2 }]
+        },
+        {
+          "status": "shipped",
+          "items": [
+            { "sku": "SYNTH-EVAL-V1-00011", "quantity": 1 },
+            { "sku": "SYNTH-EVAL-V1-00013", "quantity": 1 }
+          ]
+        },
+        {
+          "status": "delivered",
+          "items": [{ "sku": "SYNTH-EVAL-V1-00004", "quantity": 1 }]
+        },
+        {
+          "status": "cancelled",
+          "items": [{ "sku": "SYNTH-EVAL-V1-00007", "quantity": 1 }]
+        },
+        {
+          "status": "returned",
+          "items": [{ "sku": "SYNTH-EVAL-V1-00008", "quantity": 1 }]
+        },
+        {
+          "status": "refunded",
+          "items": [{ "sku": "SYNTH-EVAL-V1-00009", "quantity": 2 }]
+        }
+      ]
+    },
+    {
+      "key": "single-cart-customer",
+      "email": "single-cart-customer@shopsmart.local.invalid",
+      "cart": [{ "sku": "SYNTH-EVAL-V1-00002", "quantity": 1 }],
+      "orders": [
+        {
+          "status": "delivered",
+          "items": [{ "sku": "SYNTH-EVAL-V1-00002", "quantity": 1 }]
+        }
+      ]
+    },
+    {
+      "key": "quantity-update-customer",
+      "email": "quantity-update-customer@shopsmart.local.invalid",
+      "cart": [{ "sku": "SYNTH-EVAL-V1-00004", "quantity": 2 }],
+      "orders": []
+    },
+    {
+      "key": "no-orders-customer",
+      "email": "no-orders-customer@shopsmart.local.invalid",
+      "cart": [],
+      "orders": []
+    },
+    {
+      "key": "empty-cart-customer",
+      "email": "empty-cart-customer@shopsmart.local.invalid",
+      "cart": [],
+      "orders": [
+        {
+          "status": "delivered",
+          "items": [{ "sku": "SYNTH-EVAL-V1-00010", "quantity": 1 }]
+        },
+        {
+          "status": "shipped",
+          "items": [{ "sku": "SYNTH-EVAL-V1-00012", "quantity": 1 }]
+        }
+      ]
+    },
+    {
+      "key": "cross-user-customer",
+      "email": "cross-user-customer@shopsmart.local.invalid",
+      "cart": [{ "sku": "SYNTH-EVAL-V1-00008", "quantity": 1 }],
+      "orders": [
+        {
+          "status": "confirmed",
+          "items": [{ "sku": "SYNTH-EVAL-V1-00008", "quantity": 1 }]
+        }
+      ]
+    }
+  ],
+  "knowledge": [
+    {
+      "source_key": "local-eval-v1-returns",
+      "title": "Local Validation Return Policy (Synthetic)",
+      "category": "returns",
+      "content": "LOCAL VALIDATION ONLY. Synthetic policy sample, not approved production policy. Customers may request a return within 30 calendar days after delivery. Items should be unused and include original packaging. A request after 20 days is within this synthetic 30-day return window, subject to the stated item condition."
+    },
+    {
+      "source_key": "local-eval-v1-refunds",
+      "title": "Local Validation Refund Guidance (Synthetic)",
+      "category": "refunds",
+      "content": "LOCAL VALIDATION ONLY. Synthetic support guidance, not approved production policy. After an eligible return is received and inspected, the refund is issued to the original payment method. Processing time depends on the payment provider."
+    },
+    {
+      "source_key": "local-eval-v1-shipping",
+      "title": "Local Validation Shipping Guidance (Synthetic)",
+      "category": "shipping",
+      "content": "LOCAL VALIDATION ONLY. Synthetic support guidance, not approved production policy. Orders in this dataset use standard shipping estimates of three to five business days after dispatch. The order record is authoritative for its current status."
+    },
+    {
+      "source_key": "local-eval-v1-warranty",
+      "title": "Local Validation Warranty Guidance (Synthetic)",
+      "category": "warranty",
+      "content": "LOCAL VALIDATION ONLY. Synthetic support guidance, not approved for production. For this validation example only, eligible laptop products include a one-year limited warranty. Accidental damage is excluded from the example coverage."
+    },
+    {
+      "source_key": "local-eval-v1-payments",
+      "title": "Local Validation Payment FAQ (Synthetic)",
+      "category": "payments",
+      "content": "LOCAL VALIDATION ONLY. Synthetic support guidance, not approved production policy. Payment methods are confirmed during checkout. This local catalog does not model payment-method-specific discounts or offers."
+    },
+    {
+      "source_key": "local-eval-v1-cancellation",
+      "title": "Local Validation Cancellation Guidance (Synthetic)",
+      "category": "cancellation",
+      "content": "LOCAL VALIDATION ONLY. Synthetic support guidance, not approved production policy. A cancellation request can be reviewed before dispatch. The stored order status is authoritative; this assistant cannot change an order status."
+    },
+    {
+      "source_key": "local-eval-v1-buying-guide",
+      "title": "Local Validation Laptop Buying Guide (Synthetic)",
+      "category": "buying-guide",
+      "content": "LOCAL VALIDATION ONLY. Synthetic buying guidance, not an approved ShopSmart recommendation. Compare the actual catalog price, description, and available stock. Catalog data does not currently expose structured RAM, storage, or product variants."
+    }
+  ]
+}

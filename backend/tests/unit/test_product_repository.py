@@ -14,10 +14,16 @@ def deduplicate_product_indexes_for_sqlite(monkeypatch):
     monkeypatch.setattr(Product.__table__, "indexes", set(indexes.values()))
 
 
-def _product(sku: str, created_at: datetime, is_active: bool = True) -> Product:
+def _product(
+    sku: str,
+    created_at: datetime,
+    is_active: bool = True,
+    category: str | None = None,
+) -> Product:
     return Product(
         name=f"Product {sku}",
         description=None,
+        category=category,
         sku=sku,
         price=100,
         stock_quantity=10,
@@ -91,3 +97,103 @@ async def test_get_products_breaks_created_at_ties_by_id_descending(
     products = await ProductRepository(test_db).get_products(active_only=False)
 
     assert [product.sku for product in products] == ["TIE-HIGH", "TIE-LOW"]
+
+
+async def test_search_active_products_applies_price_stock_and_term_filters(test_db: AsyncSession):
+    test_db.add_all(
+        [
+            Product(
+                name="Wireless headphones",
+                description="Over-ear audio",
+                sku="HEADPHONES-IN",
+                price=4999,
+                stock_quantity=2,
+                max_purchase_quantity=5,
+                is_active=True,
+            ),
+            Product(
+                name="Wireless headphones",
+                description="Over-ear audio",
+                sku="HEADPHONES-OUT",
+                price=3999,
+                stock_quantity=0,
+                max_purchase_quantity=5,
+                is_active=True,
+            ),
+            Product(
+                name="Wireless headphones",
+                description="Over-ear audio",
+                sku="HEADPHONES-PRICE",
+                price=5000,
+                stock_quantity=3,
+                max_purchase_quantity=5,
+                is_active=True,
+            ),
+        ]
+    )
+    await test_db.flush()
+
+    products = await ProductRepository(test_db).search_active_products(
+        query_text="headphones", max_price_cents=4999, in_stock_only=True
+    )
+
+    assert [product.sku for product in products] == ["HEADPHONES-IN"]
+
+
+async def test_category_filter_ignores_category_words_in_product_descriptions(
+    test_db: AsyncSession,
+):
+    test_db.add_all(
+        [
+            Product(
+                name="Laptops 1",
+                description="Works with a USB-C charger",
+                category="laptops",
+                sku="CATEGORY-LAPTOP",
+                price=5999999,
+                stock_quantity=3,
+                max_purchase_quantity=5,
+                is_active=True,
+            ),
+            Product(
+                name="USB-C Charger",
+                description="Compatible with laptops",
+                category="accessories",
+                sku="CATEGORY-CHARGER",
+                price=4999,
+                stock_quantity=5,
+                max_purchase_quantity=5,
+                is_active=True,
+            ),
+        ]
+    )
+    await test_db.flush()
+
+    products = await ProductRepository(test_db).search_active_products(
+        query_text="laptops", category="laptops", max_price_cents=6_000_000
+    )
+
+    assert [product.sku for product in products] == ["CATEGORY-LAPTOP"]
+    assert all(product.category == "laptops" and product.price <= 6_000_000 for product in products)
+
+
+async def test_unknown_category_never_falls_back_to_text_search(test_db: AsyncSession):
+    test_db.add(
+        Product(
+            name="Laptop Drone",
+            description="A drone compatible with laptops",
+            category="accessories",
+            sku="UNKNOWN-CATEGORY",
+            price=10000,
+            stock_quantity=1,
+            max_purchase_quantity=1,
+            is_active=True,
+        )
+    )
+    await test_db.flush()
+
+    products = await ProductRepository(test_db).search_active_products(
+        query_text="laptop", category="drones"
+    )
+
+    assert products == []

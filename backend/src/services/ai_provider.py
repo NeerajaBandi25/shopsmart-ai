@@ -66,13 +66,22 @@ class GroundedAnswerProvider:
         "are",
         "does",
         "explain",
+        "for",
         "is",
         "of",
+        "policy",
         "the",
         "that",
         "to",
         "what",
         "which",
+        "a",
+        "after",
+        "can",
+        "i",
+        "my",
+        "on",
+        "this",
     }
 
     @classmethod
@@ -115,11 +124,12 @@ class GroundedAnswerProvider:
                 "I couldn't use the retrieved content safely to answer that.", False, 0
             )
         question_terms = set(re.findall(r"[a-z0-9]+", question.lower())) - self.stopwords
-        relevant = [
-            item
-            for item in safe
-            if question_terms & set(re.findall(r"[a-z0-9]+", item.text.lower()))
-        ]
+        minimum_matching_terms = 2 if len(question_terms) > 2 else 1
+        relevant = []
+        for item in safe:
+            matching_terms = question_terms & set(re.findall(r"[a-z0-9]+", item.text.lower()))
+            if len(matching_terms) >= minimum_matching_terms:
+                relevant.append(item)
         if not relevant:
             return ProviderAnswer(
                 "I couldn't find enough evidence in your documents to answer that.", False, 0

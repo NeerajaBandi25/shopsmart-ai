@@ -2,10 +2,10 @@
 
 from uuid import UUID
 
-from sqlalchemy import select, update, delete
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.product import Product
+from src.models.product import PRODUCT_CATEGORIES, Product
 
 
 class ProductRepository:
@@ -28,6 +28,7 @@ class ProductRepository:
         stock_quantity: int,
         max_purchase_quantity: int,
         is_active: bool = True,
+        category: str | None = None,
     ) -> Product:
         """Create new product.
 
@@ -46,6 +47,7 @@ class ProductRepository:
         product = Product(
             name=name,
             description=description,
+            category=category,
             sku=sku,
             price=price,
             stock_quantity=stock_quantity,
@@ -65,9 +67,7 @@ class ProductRepository:
         Returns:
             Product | None: Product object or None if not found
         """
-        result = await self.db.execute(
-            select(Product).where(Product.id == product_id)
-        )
+        result = await self.db.execute(select(Product).where(Product.id == product_id))
         return result.scalar_one_or_none()
 
     async def get_product_by_sku(self, sku: str) -> Product | None:
@@ -79,9 +79,7 @@ class ProductRepository:
         Returns:
             Product | None: Product object or None if not found
         """
-        result = await self.db.execute(
-            select(Product).where(Product.sku == sku)
-        )
+        result = await self.db.execute(select(Product).where(Product.sku == sku))
         return result.scalar_one_or_none()
 
     async def get_products(
@@ -109,6 +107,41 @@ class ProductRepository:
         result = await self.db.execute(query)
         return result.scalars().all()
 
+    async def search_active_products(
+        self,
+        query_text: str | None = None,
+        category: str | None = None,
+        min_price_cents: int | None = None,
+        max_price_cents: int | None = None,
+        in_stock_only: bool = False,
+        limit: int = 20,
+    ) -> list[Product]:
+        if category is not None and category not in PRODUCT_CATEGORIES:
+            return []
+        query = select(Product).where(Product.is_active.is_(True))
+        if category is not None:
+            query = query.where(Product.category == category)
+        if min_price_cents is not None:
+            query = query.where(Product.price >= min_price_cents)
+        if max_price_cents is not None:
+            query = query.where(Product.price <= max_price_cents)
+        if in_stock_only:
+            query = query.where(Product.stock_quantity > 0)
+        safe_query = query_text.strip()[:160] if query_text and query_text.strip() else None
+        if safe_query:
+            query = query.where(
+                or_(
+                    Product.name.ilike(f"%{safe_query}%"),
+                    Product.description.ilike(f"%{safe_query}%"),
+                )
+            )
+        result = await self.db.execute(
+            query.order_by(Product.created_at.desc(), Product.id.desc()).limit(
+                min(max(limit, 1), 20)
+            )
+        )
+        return list(result.scalars().all())
+
     async def update_product(
         self,
         product_id: UUID,
@@ -118,6 +151,7 @@ class ProductRepository:
         stock_quantity: int | None = None,
         max_purchase_quantity: int | None = None,
         is_active: bool | None = None,
+        category: str | None = None,
     ) -> Product | None:
         """Update product fields.
 
@@ -151,6 +185,8 @@ class ProductRepository:
             product.max_purchase_quantity = max_purchase_quantity
         if is_active is not None:
             product.is_active = is_active
+        if category is not None:
+            product.category = category
 
         await self.db.flush()
         return product

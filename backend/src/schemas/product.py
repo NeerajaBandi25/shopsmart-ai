@@ -13,6 +13,7 @@ class ProductResponse(BaseModel):
     id: UUID
     name: str
     description: str | None
+    category: str | None = None
     sku: str
     price: int
     stock_quantity: int

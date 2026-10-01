@@ -78,11 +78,13 @@ class TestPublicProductCatalog:
             "id",
             "name",
             "description",
+            "category",
             "sku",
             "price",
             "stock_quantity",
             "max_purchase_quantity",
         }
+        assert data["items"][0]["category"] is None
         assert data["items"][0]["price"] == 1299
         assert "is_active" not in data["items"][0]
 

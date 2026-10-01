@@ -1,7 +1,7 @@
 /** @jest-environment node */
 
 import { NextRequest } from 'next/server';
-import { middleware } from './middleware';
+import { middleware } from './src/middleware';
 
 const mockedFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 global.fetch = mockedFetch;
@@ -58,6 +58,15 @@ describe('authentication middleware', () => {
     expect(location.origin).toBe('https://shopsmart.test');
     expect(location.pathname).toBe('/auth/login');
     expect(location.searchParams.get('redirectTo')).toBe('/account');
+  });
+
+  it('redirects anonymous assistant page requests to login', async () => {
+    mockedFetch.mockResolvedValueOnce(response(401, '{"detail":"Unauthorized"}'));
+
+    const result = await middleware(makeRequest('/assistant'));
+
+    expect(result.status).toBe(307);
+    expect(new URL(result.headers.get('location')!).pathname).toBe('/auth/login');
   });
 
   it('redirects after logout when the BFF reports the session was invalidated', async () => {

@@ -1,5 +1,6 @@
 """Focused tests for cart persistence and business rules."""
 
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -56,6 +57,18 @@ async def test_add_increments_line_and_calculates_server_totals(test_db: AsyncSe
     ]
     assert cart["subtotal"] == 3897
     assert cart["currency"] == "USD"
+
+
+async def test_add_can_defer_commit_for_atomic_assistant_persistence(
+    test_db: AsyncSession, monkeypatch
+):
+    product = await _product(test_db)
+    commit = AsyncMock()
+    monkeypatch.setattr(test_db, "commit", commit)
+
+    await CartService(test_db).add_item(uuid4(), product.id, 1, commit=False)
+
+    commit.assert_not_awaited()
 
 
 async def test_set_quantity_is_exact_and_remove_clears_line(test_db: AsyncSession):

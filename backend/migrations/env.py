@@ -1,11 +1,12 @@
 """Alembic environment configuration."""
 
 import asyncio
+import sys
 from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
-from sqlalchemy import inspect, pool
+from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -17,22 +18,27 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Add the backend root so migrations use the same package imports as the app.
-import sys
 backend_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_root))
 
 from src.core.config import settings  # noqa: E402
-from src.models.base import Base  # noqa: E402
 from src.models.ai import (  # noqa: E402, F401
     ChatMessage,
     Conversation,
     Document,
     DocumentChunk,
     DocumentVersion,
+    KnowledgeChunk,
+    KnowledgeSource,
+    KnowledgeVersion,
 )
+from src.models.base import Base  # noqa: E402
 from src.models.cart import Cart, CartItem  # noqa: E402, F401
+from src.models.login_attempt import LoginAttempt  # noqa: E402, F401
 from src.models.order import Order, OrderItem  # noqa: E402, F401
 from src.models.product import Product  # noqa: E402, F401
+from src.models.session import Session  # noqa: E402, F401
+from src.models.user import User  # noqa: E402, F401
 
 # Set target_metadata for autogenerate support
 target_metadata = Base.metadata

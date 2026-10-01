@@ -22,7 +22,9 @@ class CartService:
             return {"items": [], "subtotal": 0, "currency": "USD"}
         return await self._cart_response(cart.id)
 
-    async def add_item(self, user_id: UUID, product_id: UUID, quantity: int) -> dict:
+    async def add_item(
+        self, user_id: UUID, product_id: UUID, quantity: int, *, commit: bool = True
+    ) -> dict:
         cart = await self.repository.get_or_create_cart(user_id)
         product = await self._get_available_product(product_id)
         existing = await self.repository.get_item(cart.id, product_id)
@@ -31,7 +33,8 @@ class CartService:
             requested_quantity, product.stock_quantity, product.max_purchase_quantity
         )
         await self.repository.set_item_quantity(cart.id, product_id, requested_quantity)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         return await self._cart_response(cart.id)
 
     async def set_item_quantity(self, user_id: UUID, product_id: UUID, quantity: int) -> dict:
@@ -42,12 +45,13 @@ class CartService:
         await self.db.commit()
         return await self._cart_response(cart.id)
 
-    async def remove_item(self, user_id: UUID, product_id: UUID) -> dict:
+    async def remove_item(self, user_id: UUID, product_id: UUID, *, commit: bool = True) -> dict:
         cart = await self.repository.get_cart(user_id)
         if cart is None:
             return {"items": [], "subtotal": 0, "currency": "USD"}
         await self.repository.delete_item(cart.id, product_id)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         return await self._cart_response(cart.id)
 
     async def _get_available_product(self, product_id: UUID):

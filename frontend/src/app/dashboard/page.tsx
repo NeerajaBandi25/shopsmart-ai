@@ -10,8 +10,7 @@ import AuthenticatedLayout from '@/app/authenticated-layout';
 /**
  * Member dashboard — the authenticated continuation of the homepage design
  * language. Displays only data that exists (user_id, email, created_at) and
- * only actions that already exist (account settings, sign out). No commerce,
- * analytics, or AI features are presented here.
+ * only data and actions available to the authenticated member.
  */
 export default function DashboardPage() {
   const [profile, setProfile] = useState<null | {
@@ -141,9 +140,9 @@ export default function DashboardPage() {
               href="/assistant"
               className="group rounded-tile border border-ink-100 bg-white p-6 shadow-tile transition-all duration-300 ease-luxe hover:shadow-tile-hover hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
             >
-              <p className="font-semibold text-ink-900">Document Assistant</p>
+              <p className="font-semibold text-ink-900">Shopping Assistant</p>
               <p className="mt-1 text-sm text-ink-500">
-                Ask grounded questions about your private sources.
+                Find products, check your cart and orders, and get ShopSmart policy help.
               </p>
             </Link>
             <Link

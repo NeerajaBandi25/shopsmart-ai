@@ -1,10 +1,21 @@
-# Specification Quality Checklist: AI/RAG and Reproducible Evaluations
+# Specification Quality Checklist: ShopSmart Commerce Assistant
 
-- [x] Authoritative roadmap scope and limitations are stated.
-- [x] User value, safety behavior, and scope are explicit.
-- [x] Requirements are testable and numbered.
-- [x] Data flow and sources of truth are explicit.
-- [x] Authorization, no-answer, citation, and injection behavior are covered.
-- [x] Evaluation dataset, metrics, baseline, and regression behavior are required.
-- [x] Non-goals and assumptions are documented.
+- [x] Product role is a commerce assistant, not customer-document chat.
+- [x] All eleven required intents are listed.
+- [x] Dynamic commerce facts and stable policy knowledge have separate sources of truth.
+- [x] RAG is explicitly non-authoritative for price, stock, offers, cart, and orders.
+- [x] Customer upload is absent from the primary workflow; backend-owned ingestion is defined.
+- [x] Assistant flow, bounded tools, owner checks, CSRF, and provider governance are explicit.
+- [x] Commerce, routing, RAG, tool, and security eval requirements are testable.
+- [x] Existing platform limits (no promotion engine and sparse product attributes) are documented.
+- [x] Product validation requires a realistic synthetic local dataset in addition to regression/unit fixtures.
+- [x] Dataset scale, unsupported schema dimensions, local-only seed/reset ownership, and no-PII constraints are explicit.
+- [x] Evaluation scenarios include commerce, multi-turn references, policy provenance, and cross-user/security negatives.
+- [x] Local synthetic knowledge cannot be confused with production-approved policy or transactional authority.
+- [x] Category, numeric, and availability constraints are specified as structured authoritative filters before text ranking.
+- [x] Product name/description mentions cannot satisfy category constraints; category aliases are allowlisted and unknown categories fail safely.
+- [x] Multi-turn comparison/cart references are scoped to the validated result set from the same conversation.
+- [x] Existing products with unknown categories are left unclassified rather than guessed during migration.
+- [x] Category precision, generic price-only behavior, negative text cross-mentions, and safe search logging have explicit acceptance tests.
+- [x] Response text, edge behavior, out-of-scope, and assumptions are documented.
 - [x] No unresolved clarification markers remain.

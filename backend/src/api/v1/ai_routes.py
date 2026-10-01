@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.v1.deps import get_current_user, get_db, require_csrf_token
-from src.core.exceptions import ValidationError
+from src.core.config import settings
+from src.core.exceptions import AuthorizationError, NotFoundError, ValidationError
 from src.models.ai import Document, DocumentChunk
 from src.schemas.ai import (
     ChatRequest,
@@ -17,10 +18,18 @@ from src.schemas.ai import (
     DocumentTextRequest,
     MessageResponse,
 )
-from src.services.ai_chat import ChatService
 from src.services.ai_ingestion import DocumentIngestionService, extract_document_text
+from src.services.ai_repository import ConversationRepository
+from src.services.commerce_assistant import CommerceAssistantService
 
 router = APIRouter(prefix="/ai", tags=["AI assistant"])
+
+
+def require_internal_document_capability() -> None:
+    if not settings.ai_user_documents_enabled:
+        raise AuthorizationError(
+            "Customer document ingestion is disabled", "document_ingestion_disabled"
+        )
 
 
 async def _ingest(
@@ -45,23 +54,29 @@ async def _ingest(
     )
 
 
-@router.post("/documents", response_model=DocumentResponse, status_code=201)
+@router.post(
+    "/documents", response_model=DocumentResponse, status_code=201, include_in_schema=False
+)
 async def ingest_document(
     request: DocumentTextRequest,
     user_id: UUID = Depends(get_current_user),
     _csrf: None = Depends(require_csrf_token),
+    _internal: None = Depends(require_internal_document_capability),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentResponse:
     return await _ingest(user_id, request.title, request.source_name, request.content, db)
 
 
-@router.post("/documents/upload", response_model=DocumentResponse, status_code=201)
+@router.post(
+    "/documents/upload", response_model=DocumentResponse, status_code=201, include_in_schema=False
+)
 async def upload_document(
     request: Request,
     title: str = Query(min_length=1, max_length=255),
     source_name: str = Query(min_length=1, max_length=255),
     user_id: UUID = Depends(get_current_user),
     _csrf: None = Depends(require_csrf_token),
+    _internal: None = Depends(require_internal_document_capability),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentResponse:
     content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
@@ -71,9 +86,11 @@ async def upload_document(
     return await _ingest(user_id, title, source_name, extract_document_text(body, content_type), db)
 
 
-@router.get("/documents", response_model=list[DocumentResponse])
+@router.get("/documents", response_model=list[DocumentResponse], include_in_schema=False)
 async def list_documents(
-    user_id: UUID = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    user_id: UUID = Depends(get_current_user),
+    _internal: None = Depends(require_internal_document_capability),
+    db: AsyncSession = Depends(get_db),
 ) -> list[DocumentResponse]:
     documents = (
         (
@@ -117,7 +134,9 @@ async def chat(
     db: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     return ChatResponse(
-        **await ChatService(db).answer(user_id, request.question, request.conversation_id)
+        **await CommerceAssistantService(db).answer(
+            user_id, request.question, request.conversation_id
+        )
     )
 
 
@@ -127,7 +146,7 @@ async def list_conversations(
 ) -> list[ConversationResponse]:
     return [
         ConversationResponse(id=item.id, title=item.title, created_at=item.created_at)
-        for item in await ChatService(db).conversations.list_owned(user_id)
+        for item in await ConversationRepository(db).list_owned(user_id)
     ]
 
 
@@ -137,9 +156,9 @@ async def conversation_messages(
     user_id: UUID = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[MessageResponse]:
-    repository = ChatService(db).conversations
+    repository = ConversationRepository(db)
     if not await repository.get_owned(conversation_id, user_id):
-        raise ValidationError("Conversation not found", "conversation_not_found")
+        raise NotFoundError("Conversation not found", "conversation_not_found")
     messages = await repository.history(conversation_id, user_id, limit=100)
     return [
         MessageResponse(
@@ -147,6 +166,7 @@ async def conversation_messages(
             role=item.role,
             content=item.content,
             citations=item.citations or [],
+            result_data=item.result_data,
             created_at=item.created_at,
         )
         for item in messages
@@ -160,6 +180,6 @@ async def delete_conversation(
     _csrf: None = Depends(require_csrf_token),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    if not await ChatService(db).conversations.delete_owned(conversation_id, user_id):
-        raise ValidationError("Conversation not found", "conversation_not_found")
+    if not await ConversationRepository(db).delete_owned(conversation_id, user_id):
+        raise NotFoundError("Conversation not found", "conversation_not_found")
     await db.commit()
