@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -30,6 +30,7 @@ from src.models.cart import Cart, CartItem
 from src.models.login_attempt import LoginAttempt
 from src.models.order import Order, OrderItem
 from src.models.product import Product
+from src.models.promotion import Promotion
 from src.models.session import Session
 from src.models.user import User
 
@@ -99,6 +100,40 @@ def build_products(manifest: dict | None = None) -> list[Product]:
             )
         )
     return products
+
+
+def build_promotions(
+    manifest: dict | None = None,
+    products_by_sku: dict[str, Product] | None = None,
+) -> list[Promotion]:
+    manifest = manifest or load_manifest()
+    products_by_sku = products_by_sku or {item.sku: item for item in build_products(manifest)}
+    promotions = []
+    for spec in manifest.get("promotions", []):
+        starts_at = datetime.fromisoformat(spec["starts_at"].replace("Z", "+00:00"))
+        ends_at = datetime.fromisoformat(spec["ends_at"].replace("Z", "+00:00"))
+        scope_sku = spec.get("scope_sku")
+        eligible_user_key = spec.get("eligible_user_key")
+        promotions.append(
+            Promotion(
+                id=stable_id("promotion", spec["key"]),
+                code=spec.get("code"),
+                name=spec["name"],
+                description=spec.get("description"),
+                promotion_type=spec["promotion_type"],
+                value=spec["value"],
+                starts_at=starts_at,
+                ends_at=ends_at,
+                active=spec["active"],
+                scope_type=spec["scope_type"],
+                scope_category=spec.get("scope_category"),
+                scope_product_id=(products_by_sku[scope_sku].id if scope_sku else None),
+                min_cart_total_cents=spec.get("min_cart_total_cents"),
+                max_discount_cents=spec.get("max_discount_cents"),
+                eligible_user_id=user_id(eligible_user_key) if eligible_user_key else None,
+            )
+        )
+    return promotions
 
 
 def user_id(user_key: str) -> UUID:
@@ -204,6 +239,50 @@ async def _validate_reserved_identities(session: AsyncSession, manifest: dict) -
                 "A reserved synthetic email belongs to another account."
             )
 
+    promotion_specs = manifest.get("promotions", [])
+    expected_promotion_ids = {
+        stable_id("promotion", spec["key"]): spec.get("code") for spec in promotion_specs
+    }
+    expected_codes = {
+        spec["code"].upper(): stable_id("promotion", spec["key"])
+        for spec in promotion_specs
+        if spec.get("code")
+    }
+    by_promotion_id = (
+        (
+            await session.execute(
+                select(Promotion).where(Promotion.id.in_(list(expected_promotion_ids)))
+            )
+        )
+        .scalars()
+        .all()
+        if expected_promotion_ids
+        else []
+    )
+    by_promotion_code = (
+        (
+            await session.execute(
+                select(Promotion).where(func.upper(Promotion.code).in_(list(expected_codes)))
+            )
+        )
+        .scalars()
+        .all()
+        if expected_codes
+        else []
+    )
+    for promotion in [*by_promotion_id, *by_promotion_code]:
+        has_expected_id = promotion.id in expected_promotion_ids
+        expected_code = expected_promotion_ids.get(promotion.id)
+        expected_id = expected_codes.get(promotion.code.upper()) if promotion.code else None
+        if not has_expected_id and expected_id is None:
+            raise SeedOwnershipConflictError(
+                "A reserved promotion code belongs to unexpected data."
+            )
+        if (has_expected_id and expected_code != promotion.code) or (
+            expected_id is not None and expected_id != promotion.id
+        ):
+            raise SeedOwnershipConflictError("A deterministic promotion identity changed.")
+
 
 async def seed_dataset(session: AsyncSession, password: str) -> dict[str, int]:
     """Insert/update only identities within the production-like-v1 namespace."""
@@ -249,6 +328,39 @@ async def seed_dataset(session: AsyncSession, password: str) -> dict[str, int]:
             session.add(
                 User(id=identifier, email=spec["email"], password_hash=hash_password(password))
             )
+    await session.flush()
+
+    generated_promotions = build_promotions(manifest, product_by_sku)
+    promotion_ids = [item.id for item in generated_promotions]
+    existing_promotions = (
+        (await session.execute(select(Promotion).where(Promotion.id.in_(promotion_ids))))
+        .scalars()
+        .all()
+    )
+    promotions_by_id = {item.id: item for item in existing_promotions}
+    promotion_fields = (
+        "code",
+        "name",
+        "description",
+        "promotion_type",
+        "value",
+        "starts_at",
+        "ends_at",
+        "active",
+        "scope_type",
+        "scope_category",
+        "scope_product_id",
+        "min_cart_total_cents",
+        "max_discount_cents",
+        "eligible_user_id",
+    )
+    for generated in generated_promotions:
+        existing = promotions_by_id.get(generated.id)
+        if existing is None:
+            session.add(generated)
+        else:
+            for field in promotion_fields:
+                setattr(existing, field, getattr(generated, field))
     await session.flush()
 
     cart_specs = []
@@ -366,7 +478,10 @@ async def seed_dataset(session: AsyncSession, password: str) -> dict[str, int]:
                         ]
                     ),
                     status=order_spec["status"],
+                    subtotal_cents=total,
+                    discount_total_cents=0,
                     total_cents=total,
+                    promotion_snapshot=[],
                     items=order_items,
                     created_at=created_at,
                     updated_at=created_at,
@@ -403,6 +518,7 @@ async def seed_dataset(session: AsyncSession, password: str) -> dict[str, int]:
         "carts": len(cart_specs),
         "cart_items": len(cart_items),
         "orders": len(order_specs),
+        "promotions": len(generated_promotions),
         "knowledge_sources": len(manifest["knowledge"]),
         "active_out_of_stock_products": out_of_stock,
     }
@@ -417,6 +533,9 @@ async def reset_seeded_data(session: AsyncSession) -> dict[str, int]:
     users = _user_specs(manifest)
     owned_user_ids = [user_id(spec["key"]) for spec in users]
     owned_emails = [spec["email"] for spec in users]
+    owned_promotions = build_promotions(manifest, {item.sku: item for item in products})
+    promotion_ids = [item.id for item in owned_promotions]
+    promotion_codes = [item.code for item in owned_promotions if item.code]
     cart_ids = [stable_id("cart", spec["key"]) for spec in users]
     order_markers = {
         stable_id("order", f"{spec['key']}:{index}"): (
@@ -459,7 +578,19 @@ async def reset_seeded_data(session: AsyncSession) -> dict[str, int]:
         .where(OrderItem.product_id.in_(product_ids), Order.id.not_in(list(order_markers)))
         .limit(1)
     )
-    if external_cart_reference or external_order_reference:
+    external_promotion_reference = await session.scalar(
+        select(Promotion.id)
+        .where(
+            Promotion.id.not_in(promotion_ids),
+            or_(
+                Promotion.scope_product_id.in_(product_ids),
+                Promotion.eligible_user_id.in_(owned_user_ids),
+                func.upper(Promotion.code).in_([code.upper() for code in promotion_codes]),
+            ),
+        )
+        .limit(1)
+    )
+    if external_cart_reference or external_order_reference or external_promotion_reference:
         raise SeedOwnershipConflictError(
             "A non-seeded shopper references a seeded product; reset refused without changes."
         )
@@ -520,6 +651,9 @@ async def reset_seeded_data(session: AsyncSession) -> dict[str, int]:
         await session.execute(delete(OrderItem).where(OrderItem.order_id.in_(order_ids)))
         await session.execute(delete(Order).where(Order.id.in_(order_ids)))
 
+    if promotion_ids:
+        await session.execute(delete(Promotion).where(Promotion.id.in_(promotion_ids)))
+
     await session.execute(delete(CartItem).where(CartItem.cart_id.in_(cart_ids)))
     await session.execute(
         delete(Cart).where(Cart.id.in_(cart_ids), Cart.user_id.in_(owned_user_ids))
@@ -577,6 +711,7 @@ async def reset_seeded_data(session: AsyncSession) -> dict[str, int]:
         "users": len(owned_user_ids),
         "carts": len(cart_ids),
         "orders": len(order_ids),
+        "promotions": len(promotion_ids),
         "knowledge_sources": len(source_ids),
     }
 

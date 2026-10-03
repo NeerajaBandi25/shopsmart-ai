@@ -1,8 +1,10 @@
 ﻿# ShopSmart AI — Project Status
 
-## Current Phase
+## Historical Phase
 
-ShopSmart AI — Agent Harness Phase 1C completed.
+The Agent Harness Phase 1C work below is a completed historical increment. Current
+portfolio-completion status is recorded later in this file and in
+`.factory/status.md`.
 
 ## Project Rule
 
@@ -93,28 +95,25 @@ The launcher/provider does not define project state.
 
 ## Current Application Work
 
-As of 2026-10-03, `origin/main` contains the authentication, catalog, shopping,
-commerce BFF, Redis cache, frontend state, observability, CI/CD foundation,
-AI/RAG, provider gateway, AI governance/security, and commerce-assistant work.
+The active portfolio-completion checkout is `feature/promotions-discount-engine`.
+The current local application is a unified commerce and AI assistant product,
+not the historical Phase 1C-only state above. Current verification and explicit
+remaining readiness gates are recorded in `.factory/status.md` and
+`docs/product-audit.md`.
 
-PR #44, `feat: add production commerce assistant and structured search`, is
-merged into `main` at `24c82e984f6d6658fc0676eb1223948a03d9eb46`. The merged
-increment includes structured category search and migration 012, production-like
-seed/evaluator data, cart/order assistant behavior, backend-owned policy RAG,
-and bounded assistant/search logging. Post-merge CI run [37112240926](https://github.com/NeerajaBandi25/shopsmart-ai/actions/runs/37112240926)
-passed all four required checks: backend tests, backend security gates, frontend
-tests/lint/Prettier, and Docker Compose smoke test.
-
-The current product contract is in `specs/008-ai-rag/spec.md`; the root
-`plan.md` is a historical authentication assessment, not the current plan.
+Latest verified state (2026-10-03): `shopsmart_portfolio` is at Alembic revision
+`017_order_delivery_images` with 1,200 products and repository-generated product
+art. The full SQLite backend run passed 282 tests with 6 database-specific
+skips; frontend TypeScript, 138 Jest tests, lint, and production build passed.
+This is not a portfolio-ready claim: reliable responsive captures and the
+accessibility, security, performance, journey, and independent-review gates are
+still outstanding.
 
 ## Next Engineering Work
 
-Specify the next product increment before implementation. Promotions/discounts,
-richer category hierarchy, and brand/variant modeling remain product gaps;
-live external-provider quality/cost validation also remains outstanding.
-Preserve the existing authentication, BFF, provider-governance, and harness
-boundaries.
+Close the remaining gates in `.factory/status.md`. Preserve the local-only
+database restrictions and existing records. Do not deploy, merge, commit, or
+push as part of this portfolio verification.
 
 ## Important Constraints
 

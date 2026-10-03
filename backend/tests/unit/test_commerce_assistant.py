@@ -42,9 +42,24 @@ class FakeProducts:
 
 class FakeCart:
     def __init__(self, _db):
-        self.get_cart = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "USD"})
-        self.add_item = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "USD"})
-        self.remove_item = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "USD"})
+        self.get_cart = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "INR"})
+        self.add_item = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "INR"})
+        self.remove_item = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "INR"})
+        self.get_available_promotions = AsyncMock(return_value=[])
+        self.check_coupon = AsyncMock(
+            return_value={
+                "coupon_evaluation": {
+                    "eligible": False,
+                    "reason_code": "unknown_or_ineligible",
+                    "discount_cents": 0,
+                },
+                "applied_promotions": [],
+                "subtotal": 0,
+                "total_cents": 0,
+            }
+        )
+        self.apply_coupon = AsyncMock(return_value={"items": [], "subtotal": 0})
+        self.remove_coupon = AsyncMock(return_value={"items": [], "subtotal": 0})
 
 
 class FakeOrders:
@@ -123,8 +138,8 @@ async def test_product_filters_are_forwarded_as_structured_constraints(assistant
     result = await service.answer(uuid4(), "Find in-stock headphones under $49.99")
 
     service.catalog.search.assert_awaited_once_with(
-        query_text="headphones",
-        category=None,
+        query_text=None,
+        category="headphones",
         min_price_cents=None,
         max_price_cents=4999,
         in_stock_only=True,
@@ -163,7 +178,7 @@ async def test_laptop_search_passes_structured_category_and_price(assistant):
 async def test_unsupported_category_never_calls_text_search(assistant):
     service, _gateway, _db = assistant
 
-    result = await service.answer(uuid4(), "Show me category=tablets under 60000")
+    result = await service.answer(uuid4(), "Show me category=spaceships under 60000")
 
     assert result["intent"] == "UNSUPPORTED"
     assert result["result_data"] is None
@@ -232,6 +247,43 @@ async def test_cart_read_uses_authenticated_user_id(assistant):
 
     service.cart.get_cart.assert_awaited_once_with(user_id)
     assert result["result_data"]["cart"]["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_coupon_check_is_read_only_and_never_uses_rag_or_provider(assistant):
+    service, gateway, _db = assistant
+    user_id = uuid4()
+    service.cart.check_coupon.return_value = {
+        "coupon_evaluation": {"eligible": True, "reason_code": "eligible"},
+        "applied_promotions": [],
+        "items": [],
+        "subtotal": 1299,
+        "total_cents": 1169,
+    }
+
+    result = await service.answer(user_id, "Can I use SAVE10?")
+
+    service.cart.check_coupon.assert_awaited_once_with(user_id, "SAVE10")
+    service.cart.apply_coupon.assert_not_awaited()
+    service.knowledge.retrieve.assert_not_awaited()
+    gateway.answer.assert_not_awaited()
+    assert result["result_data"]["coupon_evaluation"]["eligible"] is True
+
+
+@pytest.mark.asyncio
+async def test_explicit_coupon_apply_and_remove_use_owner_scoped_cart_service(assistant):
+    service, gateway, _db = assistant
+    user_id = uuid4()
+
+    applied = await service.answer(user_id, "Apply coupon SAVE10")
+    removed = await service.answer(user_id, "Remove my coupon")
+
+    service.cart.apply_coupon.assert_awaited_once_with(user_id, "SAVE10", commit=False)
+    service.cart.remove_coupon.assert_awaited_once_with(user_id, commit=False)
+    service.knowledge.retrieve.assert_not_awaited()
+    gateway.answer.assert_not_awaited()
+    assert applied["intent"] == "COUPON_APPLY"
+    assert removed["intent"] == "COUPON_REMOVE"
 
 
 @pytest.mark.asyncio
@@ -356,7 +408,7 @@ async def test_cheaper_followup_reference_resolves_for_cart_actions(assistant):
         "Laptop 1",
     ]
     assert "Laptop 1" in cheaper["answer"]
-    assert "$220.00" in cheaper["answer"]
+    assert "₹220.00" in cheaper["answer"]
     assert service.conversations.conversation.context["comparison_product_ids"] == [
         str(products[0].id),
         str(products[1].id),
@@ -414,7 +466,7 @@ async def test_explicit_cart_action_uses_only_a_recent_result_and_session_identi
     service.cart.add_item.return_value = {
         "items": [{"product_id": product.id, "name": product.name, "quantity": 2}],
         "subtotal": 9998,
-        "currency": "USD",
+        "currency": "INR",
     }
 
     result = await service.answer(user_id, "Add 2 headphones to my cart")
@@ -536,3 +588,72 @@ async def test_foreign_conversation_is_rejected(assistant):
 
     with pytest.raises(NotFoundError):
         await service.answer(uuid4(), "Hello", uuid4())
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("question", "maximum"), [
+    ("Show me the best laptops under ₹60,000", 6_000_000),
+    ("Show me the best laptops under ₹60,000.", 6_000_000),
+    ("coding laptop under70k", 7_000_000),
+    ("Find laptops under 60k!", 6_000_000),
+])
+async def test_portfolio_budget_does_not_leak_into_text_search(assistant, question, maximum):
+    service, _, _ = assistant
+    await service.answer(uuid4(), question)
+    service.catalog.search.assert_awaited_once_with(
+        query_text=None, category='laptops', min_price_cents=None,
+        max_price_cents=maximum, in_stock_only=False,
+    )
+
+
+@pytest.mark.asyncio
+async def test_phone_alias_fallback_preserves_all_price_and_stock_constraints(assistant):
+    service, _, _ = assistant
+    await service.answer(uuid4(), "Show in-stock phones under ₹30,000")
+    assert service.catalog.search.await_count == 2
+    assert [call.kwargs["category"] for call in service.catalog.search.await_args_list] == ["phones", "smartphones"]
+    for call in service.catalog.search.await_args_list:
+        assert call.kwargs["max_price_cents"] == 3_000_000
+        assert call.kwargs["in_stock_only"] is True
+        assert call.kwargs["query_text"] is None
+
+
+def test_assistant_public_specifications_never_expose_presentation_metadata():
+    product = SimpleNamespace(id=uuid4(), name="Laptop", description=None, sku="L", price=100,
+                              stock_quantity=1, max_purchase_quantity=5,
+                              specifications={"RAM": "16 GB RAM", "_presentation": {"delivery": "standard"}})
+    assert CommerceAssistantService._product_data(product)["specifications"] == {"RAM": "16 GB RAM"}
+
+
+@pytest.mark.asyncio
+async def test_advice_and_short_cheaper_action_keep_comparison_context(assistant):
+    service, gateway, _ = assistant
+    owner = uuid4()
+    products = [SimpleNamespace(
+        id=uuid4(), name=f'Laptop {ram}', description=None, sku=f'L-{ram}',
+        price=price, stock_quantity=2, max_purchase_quantity=5, is_active=True,
+        specifications={'Variant': f'{ram} GB RAM / 512 GB SSD'},
+    ) for ram, price in ((8, 4_900_000), (16, 5_500_000))]
+    service.conversations.conversation.context = {'comparison_product_ids': [str(p.id) for p in products]}
+    service.catalog.get.side_effect = {p.id: p for p in products}.get
+    result = await service.answer(owner, 'Which is better for React development and occasional gaming?')
+    assert result['intent'] == 'PRODUCT_ADVICE'
+    assert 'Laptop 16' in result['answer']
+    assert '16 GB RAM' in result['answer']
+    assert 'cannot rank gaming performance' in result['answer']
+    assert len(result['result_data']['buying_brief']) == 2
+    await service.answer(owner, 'Add the cheaper one')
+    service.cart.add_item.assert_awaited_once_with(owner, products[0].id, 1, commit=False)
+    gateway.answer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_checkout_requires_owner_cart_items_and_never_places_an_order(assistant):
+    service, gateway, _ = assistant
+    owner = uuid4()
+    empty = await service.answer(owner, 'Take me to checkout')
+    assert 'navigation' not in empty['result_data']
+    service.cart.get_cart.return_value = {'items': [{'product_id': uuid4(), 'quantity': 1}], 'subtotal': 100}
+    ready = await service.answer(owner, 'Take me to checkout')
+    assert ready['result_data']['navigation'] == '/checkout'
+    service.orders.get_user_orders.assert_not_awaited()
+    gateway.answer.assert_not_awaited()

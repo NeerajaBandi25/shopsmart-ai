@@ -5,6 +5,7 @@ import { CategoryCard } from './CategoryCard';
 const props = {
   numeral: '01',
   name: 'Living Room',
+  href: '/products?q=home',
   image: '/images/living-room.jpg',
   alt: 'A bright living room with a sofa and coffee table',
   badge: 'Curated Edit',
@@ -35,11 +36,14 @@ describe('CategoryCard', () => {
     });
   });
 
-  it('renders as visual-only content without navigation controls', () => {
+  it('renders as a navigable category link', () => {
     render(<CategoryCard {...props} />);
 
     expect(screen.getByRole('article')).toBeInTheDocument();
-    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Browse Living Room' })).toHaveAttribute(
+      'href',
+      props.href
+    );
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

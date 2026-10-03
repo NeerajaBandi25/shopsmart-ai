@@ -16,6 +16,7 @@ import { CategoryCard } from '@/components/CategoryCard';
 interface CategoryDef {
   numeral: string;
   name: string;
+  searchTerm: string;
   image: string;
   alt: string;
   badge: string;
@@ -27,6 +28,7 @@ const categories: CategoryDef[] = [
   {
     numeral: '01',
     name: 'Fashion',
+    searchTerm: 'fashion',
     image: '/images/Home-Page-Cat-Images/Fashion_main_cat.png',
     alt: 'Shopper browsing a clothing rack in a warm, softly lit boutique',
     badge: 'New In',
@@ -35,6 +37,7 @@ const categories: CategoryDef[] = [
   {
     numeral: '02',
     name: 'Electronics',
+    searchTerm: 'laptop',
     image: '/images/Home-Page-Cat-Images/Electronics_main_cat.png',
     alt: 'Headphones, phone, laptop and watch arranged on a marble desk',
     badge: 'Editors’ Pick',
@@ -43,6 +46,7 @@ const categories: CategoryDef[] = [
   {
     numeral: '03',
     name: 'Home & Living',
+    searchTerm: 'home',
     image: '/images/Home-Page-Cat-Images/HomeLiving_main_cat.png',
     alt: 'Living room with a cream sofa, burgundy throw and marble coffee table at sunset',
     badge: 'New In',
@@ -51,6 +55,7 @@ const categories: CategoryDef[] = [
   {
     numeral: '04',
     name: 'Beauty & Personal Care',
+    searchTerm: 'beauty',
     image: '/images/Home-Page-Cat-Images/BeautyPersonalCare_main_cat.png',
     alt: 'Skincare and candles on a marble vanity beside a woman at a lit mirror',
     badge: 'Curated',
@@ -59,6 +64,7 @@ const categories: CategoryDef[] = [
   {
     numeral: '05',
     name: 'Sports & Outdoors',
+    searchTerm: 'sports',
     image: '/images/Home-Page-Cat-Images/SportsOutdoors_main_cat.png',
     alt: 'Athlete tying a trainer on a sunset terrace beside dumbbells and a yoga mat',
     badge: 'Active',
@@ -67,6 +73,7 @@ const categories: CategoryDef[] = [
   {
     numeral: '06',
     name: 'Footwear',
+    searchTerm: 'footwear',
     image: '/images/Home-Page-Cat-Images/Footwear_main_cat.png',
     alt: 'Sneakers and heels displayed on marble plinths in a boutique',
     badge: 'New In',
@@ -75,6 +82,7 @@ const categories: CategoryDef[] = [
   {
     numeral: '07',
     name: 'Accessories',
+    searchTerm: 'accessories',
     image: '/images/Home-Page-Cat-Images/Accessories_main_cat.png',
     alt: 'Burgundy handbag with a silk scarf, sunglasses and jewellery on marble',
     badge: 'Curated',
@@ -83,6 +91,7 @@ const categories: CategoryDef[] = [
   {
     numeral: '08',
     name: 'Wellness',
+    searchTerm: 'wellness',
     image: '/images/Home-Page-Cat-Images/Wellness_main_cat.png',
     alt: 'Person meditating cross-legged in a warm spa room with candles and towels',
     badge: 'Balance',
@@ -91,6 +100,7 @@ const categories: CategoryDef[] = [
   {
     numeral: '09',
     name: 'Kitchen & Dining',
+    searchTerm: 'kitchen',
     image: '/images/Home-Page-Cat-Images/KitchenDining_main_cat.png',
     alt: 'Home cook plating a dish on a marble kitchen island at dusk',
     badge: 'Homeware',
@@ -119,15 +129,13 @@ export function CategorySection() {
               className="cat-reveal"
               style={{ animationDelay: `${i * 70}ms` }}
             >
-              <CategoryCard {...category} />
+              <CategoryCard
+                {...category}
+                href={`/products?q=${encodeURIComponent(category.searchTerm)}`}
+              />
             </div>
           ))}
         </div>
-
-        <p className="mx-auto mt-8 max-w-xl text-center text-sm text-ink-500">
-          Visual categories for browsing inspiration. Current products and stock availability are
-          shown in the catalog above.
-        </p>
       </div>
     </section>
   );

@@ -11,6 +11,7 @@ from src.core.exceptions import AppException, ConflictError
 from src.models.order import Order, OrderItem
 from src.repositories.order_repository import OrderRepository
 from src.services.product_catalog_cache import invalidate_product_catalog_cache
+from src.services.promotion_service import PromotionService, normalize_coupon_code
 
 
 class OrderService:
@@ -21,9 +22,18 @@ class OrderService:
         self.repository = OrderRepository(db)
 
     @staticmethod
-    def _request_hash(items: list[tuple[UUID, int]]) -> str:
+    def _request_hash(
+        items: list[tuple[UUID, int]],
+        coupon_code: str | None = None,
+        delivery_address: dict[str, str] | None = None,
+    ) -> str:
         canonical = sorted((str(product_id), quantity) for product_id, quantity in items)
-        encoded = json.dumps(canonical, separators=(",", ":")).encode("utf-8")
+        payload = {
+            "items": canonical,
+            "coupon_code": coupon_code,
+            "delivery_address": delivery_address,
+        }
+        encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         return hashlib.sha256(encoded).hexdigest()
 
     @staticmethod
@@ -35,7 +45,14 @@ class OrderService:
             )
         return order
 
-    async def checkout(self, user_id: UUID, key: str, items: list[tuple[UUID, int]]) -> Order:
+    async def checkout(
+        self,
+        user_id: UUID,
+        key: str,
+        items: list[tuple[UUID, int]],
+        coupon_code: str | None = None,
+        delivery_address: dict[str, str] | None = None,
+    ) -> Order:
         key = key.strip()
         if not key:
             raise AppException("Idempotency-Key is required", 400, "idempotency_key_required")
@@ -47,7 +64,8 @@ class OrderService:
         if any(quantity < 1 for _, quantity in items):
             raise AppException("Quantities must be positive", 422, "invalid_quantity")
 
-        request_hash = self._request_hash(items)
+        normalized_coupon = normalize_coupon_code(coupon_code) if coupon_code is not None else None
+        request_hash = self._request_hash(items, normalized_coupon, delivery_address)
         products_changed = False
         try:
             async with self.db.begin_nested():
@@ -84,15 +102,25 @@ class OrderService:
                                     error_code="insufficient_stock",
                                 )
 
-                        total_cents = sum(
-                            products[product_id].price * quantity for product_id, quantity in items
+                        quote = await PromotionService(self.db).quote(
+                            user_id,
+                            [(products[product_id], quantity) for product_id, quantity in items],
+                            normalized_coupon,
                         )
+                        promotion_snapshot = [
+                            {**promotion, "evaluated_at": quote["evaluated_at"]}
+                            for promotion in quote["applied_promotions"]
+                        ]
                         order = Order(
                             user_id=user_id,
                             idempotency_key=key,
                             request_hash=request_hash,
                             status="placed",
-                            total_cents=total_cents,
+                            subtotal_cents=quote["subtotal"],
+                            discount_total_cents=quote["discount_total_cents"],
+                            total_cents=quote["total_cents"],
+                            promotion_snapshot=promotion_snapshot,
+                            delivery_address=delivery_address,
                             items=[],
                         )
                         await self.repository.add_order(order)
@@ -109,6 +137,8 @@ class OrderService:
                                     product_id=product.id,
                                     product_name=product.name,
                                     product_sku=product.sku,
+                                    product_image_url=product.image_url,
+                                    product_image_alt=product.image_alt,
                                     unit_price_cents=product.price,
                                     quantity=quantity,
                                     line_total_cents=product.price * quantity,

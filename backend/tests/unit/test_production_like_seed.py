@@ -9,6 +9,7 @@ from src.models.ai import KnowledgeSource
 from src.models.cart import Cart, CartItem
 from src.models.order import Order, OrderItem
 from src.models.product import Product
+from src.models.promotion import Promotion
 from src.models.user import User
 from src.seed.production_like import (
     DATASET_VERSION,
@@ -120,6 +121,10 @@ async def test_seed_is_repeatable_and_reset_preserves_unrelated_rows(session_fac
         assert first == second
         assert first["products"] == 1000
         assert first["users"] == 7
+        assert first["promotions"] == len(manifest["promotions"])
+        assert await session.scalar(select(func.count()).select_from(Promotion)) == len(
+            manifest["promotions"]
+        )
         assert first["knowledge_sources"] == len(manifest["knowledge"])
 
         seeded_user = await session.get(User, user_id("returning-customer"))
@@ -139,6 +144,7 @@ async def test_seed_is_repeatable_and_reset_preserves_unrelated_rows(session_fac
         assert await session.scalar(select(func.count()).select_from(Cart)) == 1
         assert await session.scalar(select(func.count()).select_from(CartItem)) == 1
         assert await session.scalar(select(func.count()).select_from(Order)) == 0
+        assert await session.scalar(select(func.count()).select_from(Promotion)) == 0
         assert await session.scalar(select(func.count()).select_from(KnowledgeSource)) == 0
         assert await session.get(Product, unrelated_product.id) is not None
 
@@ -217,7 +223,10 @@ async def test_reset_refuses_unmarked_order_from_a_reserved_account(session_fact
                 idempotency_key="developer-order-not-owned-by-seed",
                 request_hash="a" * 64,
                 status="placed",
+                subtotal_cents=product.price,
+                discount_total_cents=0,
                 total_cents=product.price,
+                promotion_snapshot=[],
                 items=[
                     OrderItem(
                         id=uuid4(),
@@ -267,3 +276,36 @@ async def test_reserved_product_identity_collision_is_not_claimed(session_factor
         existing = await session.scalar(select(Product).where(Product.sku == "SYNTH-EVAL-V1-00001"))
         assert existing.name == "Existing developer product"
         assert stable_id("product", "SYNTH-EVAL-V1-00001") != existing.id
+
+
+async def test_reset_refuses_to_delete_product_referenced_by_unrelated_promotion(
+    session_factory,
+):
+    from datetime import datetime, timedelta, timezone
+
+    async with session_factory() as session:
+        await seed_dataset(session, "LocalOnly!2026")
+        seeded_product = await session.scalar(
+            select(Product).where(Product.sku == "SYNTH-EVAL-V1-00003")
+        )
+        external_promotion = Promotion(
+            id=uuid4(),
+            code="EXTERNAL-KEEP",
+            name="Developer offer",
+            promotion_type="fixed",
+            value=100,
+            starts_at=datetime.now(timezone.utc) - timedelta(days=1),
+            ends_at=datetime.now(timezone.utc) + timedelta(days=1),
+            active=True,
+            scope_type="product",
+            scope_product_id=seeded_product.id,
+        )
+        session.add(external_promotion)
+        await session.commit()
+
+        with pytest.raises(SeedOwnershipConflict):
+            await reset_seeded_data(session)
+
+        assert await session.get(Promotion, external_promotion.id) is not None
+        assert await session.get(Product, seeded_product.id) is not None
+        assert await session.get(User, user_id("returning-customer")) is not None

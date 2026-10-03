@@ -22,7 +22,22 @@ def test_product_migration_matches_model_columns_constraints_and_indexes():
             inspector = inspect(connection)
             migrated_columns = {column["name"] for column in inspector.get_columns("products")}
             model_columns = {
-                column.name for column in Product.__table__.columns if column.name != "category"
+                column.name
+                for column in Product.__table__.columns
+                if column.name
+                not in {
+                    "category",
+                    "brand",
+                    "list_price",
+                    "image_url",
+                    "image_alt",
+                    "image_source_url",
+                    "image_creator",
+                    "image_license",
+                    "image_license_url",
+                    "image_sha256",
+                    "specifications",
+                }
             }
             assert migrated_columns == model_columns
 
@@ -33,7 +48,11 @@ def test_product_migration_matches_model_columns_constraints_and_indexes():
                 constraint.name
                 for constraint in Product.__table__.constraints
                 if isinstance(constraint, CheckConstraint)
-                and constraint.name != "ck_products_category_canonical"
+                and constraint.name
+                not in {
+                    "ck_products_category_canonical",
+                    "ck_products_list_price_not_below_price",
+                }
             }
             assert migrated_checks == model_checks
 

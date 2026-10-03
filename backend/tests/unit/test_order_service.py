@@ -1,5 +1,6 @@
 """Transactional checkout service tests."""
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -8,12 +9,60 @@ from sqlalchemy import func, select
 
 from src.models.order import Order
 from src.models.product import Product
+from src.models.promotion import Promotion
 from src.models.user import User
 from src.repositories.order_repository import OrderRepository
 from src.services.order_service import OrderService
 
 
 class TestOrderService:
+    async def test_checkout_reprices_coupon_and_hashes_normalized_code(self, test_db):
+        user_id = uuid4()
+        product_id = uuid4()
+        now = datetime.now(timezone.utc)
+        product = Product(
+            id=product_id,
+            name="Laptop",
+            sku="PROMO-CHECKOUT-1",
+            price=1299,
+            stock_quantity=5,
+            max_purchase_quantity=3,
+            is_active=True,
+        )
+        promotion = Promotion(
+            code="SAVE20",
+            name="Twenty percent",
+            promotion_type="percentage",
+            value=20,
+            starts_at=now - timedelta(days=1),
+            ends_at=now + timedelta(days=1),
+            active=True,
+            scope_type="all",
+        )
+        test_db.add_all(
+            [
+                User(id=user_id, email="coupon-checkout@example.com", password_hash="unused"),
+                product,
+                promotion,
+            ]
+        )
+        await test_db.commit()
+
+        service = OrderService(test_db)
+        order = await service.checkout(user_id, "coupon-key", [(product_id, 1)], " save20 ")
+        replay = await service.checkout(user_id, "coupon-key", [(product_id, 1)], "SAVE20")
+
+        assert replay.id == order.id
+        assert order.subtotal_cents == 1299
+        assert order.discount_total_cents == 260
+        assert order.total_cents == 1039
+        assert len(order.promotion_snapshot) == 1
+        assert order.promotion_snapshot[0]["promotion_id"] == str(promotion.id)
+        assert product.stock_quantity == 4
+
+        with pytest.raises(Exception, match="different checkout payload"):
+            await service.checkout(user_id, "coupon-key", [(product_id, 1)], "OTHER")
+
     async def test_checkout_snapshots_prices_and_replays_same_payload(
         self, test_db, fresh_test_session, monkeypatch
     ):

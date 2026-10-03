@@ -4,7 +4,7 @@ import { useCommerceStore } from './commerce-store';
 const mockedFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 global.fetch = mockedFetch;
 
-const cart = { items: [], subtotal: 0, currency: 'USD' };
+const cart = { items: [], subtotal: 0, currency: 'INR' };
 const jsonResponse = (body: unknown, status = 200): Response =>
   ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response;
 

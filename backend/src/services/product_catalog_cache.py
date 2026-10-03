@@ -9,7 +9,7 @@ from src.core.config import settings
 from src.core.redis_client import get_redis_client
 from src.schemas.product import ProductPageResponse
 
-CACHE_PREFIX = "shopsmart:product-catalog:v1"
+CACHE_PREFIX = "shopsmart:product-catalog:v2"
 GENERATION_KEY = f"{CACHE_PREFIX}:generation"
 
 

@@ -72,6 +72,56 @@ def test_evidence_normalizes_database_classification_and_rejects_unknown_values(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "declared_classification",
+    [DataClassification.INTERNAL, DataClassification.PRIVATE, DataClassification.SENSITIVE],
+)
+async def test_public_evidence_cannot_downgrade_declared_request_classification(
+    declared_classification,
+):
+    public = FakeProvider()
+    local = FakeProvider()
+    gateway = ProviderGateway(
+        registry(
+            policy("public", frozenset({DataClassification.PUBLIC})),
+            policy("local", frozenset(DataClassification), 10),
+        ),
+        {"public": public, "local": local},
+    )
+
+    result = await gateway.answer(
+        "Private shopper question",
+        [Evidence("c1", "Public policy", "source", None, 0, DataClassification.PUBLIC)],
+        declared_classification,
+    )
+
+    assert result.classification is declared_classification
+    assert result.provider == "local"
+    assert public.calls == 0
+    assert local.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_private_request_with_public_evidence_refuses_when_only_public_provider_exists():
+    public = FakeProvider()
+    gateway = ProviderGateway(
+        registry(policy("public", frozenset({DataClassification.PUBLIC}))),
+        {"public": public},
+    )
+
+    result = await gateway.answer(
+        "Private shopper question",
+        [Evidence("c1", "Public policy", "source", None, 0, DataClassification.PUBLIC)],
+        DataClassification.PRIVATE,
+    )
+
+    assert result.answer.answerable is False
+    assert result.classification is DataClassification.PRIVATE
+    assert result.provider == "none"
+    assert public.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_private_string_evidence_stays_out_of_public_provider_even_if_aggregate_says_public():
     public = FakeProvider()
     gateway = ProviderGateway(

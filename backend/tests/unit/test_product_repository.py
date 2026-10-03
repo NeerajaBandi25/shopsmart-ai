@@ -8,6 +8,27 @@ from src.models.product import Product
 from src.repositories.product_repository import ProductRepository
 
 
+@pytest.mark.asyncio
+async def test_development_preset_preserves_budget_and_stock(test_db):
+    rows = [
+        Product(name="Notebook", sku="DEV-MATCH", category="laptops", price=6000000,
+                stock_quantity=2, specifications={"RAM": "16 GB RAM"}),
+        Product(name="Small memory", sku="DEV-SMALL", category="laptops", price=5000000,
+                stock_quantity=2, specifications={"RAM": "8 GB RAM"}),
+        Product(name="Beyond budget", sku="DEV-EXPENSIVE", category="laptops", price=8000000,
+                stock_quantity=2, specifications={"RAM": "32 GB RAM"}),
+        Product(name="Sold out", sku="DEV-SOLD", category="laptops", price=6500000,
+                stock_quantity=0, specifications={"RAM": "16 GB RAM"}),
+    ]
+    test_db.add_all(rows)
+    await test_db.flush()
+    matches, total = await ProductRepository(test_db).search_active_products_page(
+        query_text="coding", category="laptops", max_price_cents=7000000, in_stock_only=True,
+    )
+    assert total == 1
+    assert [product.sku for product in matches] == ["DEV-MATCH"]
+
+
 @pytest.fixture(autouse=True)
 def deduplicate_product_indexes_for_sqlite(monkeypatch):
     indexes = {index.name: index for index in Product.__table__.indexes}

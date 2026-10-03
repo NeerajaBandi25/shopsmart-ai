@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import BaseModel
@@ -19,14 +19,29 @@ class Order(BaseModel):
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="placed")
+    subtotal_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    discount_total_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    promotion_snapshot: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    delivery_address: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan", lazy="selectin"
     )
 
     __table_args__ = (
         UniqueConstraint("user_id", "idempotency_key", name="uq_orders_user_idempotency_key"),
+        CheckConstraint("subtotal_cents >= 0", name="ck_orders_subtotal_non_negative"),
+        CheckConstraint(
+            "discount_total_cents >= 0 AND discount_total_cents <= subtotal_cents",
+            name="ck_orders_discount_within_subtotal",
+        ),
         CheckConstraint("total_cents >= 0", name="ck_orders_total_non_negative"),
+        CheckConstraint(
+            "total_cents = subtotal_cents - discount_total_cents",
+            name="ck_orders_pricing_total_consistent",
+        ),
         Index("ix_orders_user_created_at", "user_id", "created_at"),
     )
 
@@ -44,6 +59,8 @@ class OrderItem(BaseModel):
     )
     product_name: Mapped[str] = mapped_column(String(255), nullable=False)
     product_sku: Mapped[str] = mapped_column(String(100), nullable=False)
+    product_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    product_image_alt: Mapped[str | None] = mapped_column(String(255), nullable=True)
     unit_price_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     line_total_cents: Mapped[int] = mapped_column(Integer, nullable=False)

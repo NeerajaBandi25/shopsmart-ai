@@ -23,11 +23,23 @@ describe('same-origin order API routes', () => {
 
   it('submits checkout through the same-origin BFF with credentials, CSRF, and idempotency key', async () => {
     const items = [{ product_id: 'product-1', quantity: 2 }];
+    const deliveryAddress = {
+      recipient_name: 'Portfolio Shopper',
+      phone: '+91 98765 43210',
+      address_line1: '12 Example Road',
+      address_line2: null,
+      city: 'Bengaluru',
+      region: 'Karnataka',
+      postal_code: '560001',
+      country_code: 'IN' as const,
+    };
     mockedFetch
       .mockResolvedValueOnce(jsonResponse({ csrf_token: 'checkout-csrf' }))
       .mockResolvedValueOnce(jsonResponse({ id: 'order-1', items }, 201));
 
-    await expect(checkoutOrder(items, 'stable-key-1')).resolves.toEqual({ id: 'order-1', items });
+    await expect(checkoutOrder(items, 'stable-key-1', undefined, deliveryAddress)).resolves.toEqual(
+      { id: 'order-1', items }
+    );
 
     expect(mockedFetch.mock.calls[0][0]).toBe('/api/auth/csrf');
     expect(mockedFetch.mock.calls[1][0]).toBe('/api/orders/checkout');
@@ -35,7 +47,7 @@ describe('same-origin order API routes', () => {
       expect.objectContaining({
         method: 'POST',
         credentials: 'include',
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, delivery_address: deliveryAddress }),
         headers: expect.objectContaining({
           'X-CSRF-Token': 'checkout-csrf',
           'Idempotency-Key': 'stable-key-1',

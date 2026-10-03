@@ -1,7 +1,6 @@
 """Checkout endpoint and PostgreSQL inventory-locking proofs."""
 
 import asyncio
-from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import AsyncGenerator
 from uuid import UUID, uuid4
@@ -23,6 +22,17 @@ from src.models.product import Product
 from src.models.session import Session
 from src.models.user import User
 from src.services.order_service import OrderService
+
+DELIVERY_ADDRESS = {
+    "recipient_name": "Portfolio Shopper",
+    "phone": "+91 98765 43210",
+    "address_line1": "12 Example Road",
+    "address_line2": None,
+    "city": "Bengaluru",
+    "region": "Karnataka",
+    "postal_code": "560001",
+    "country_code": "IN",
+}
 
 
 @pytest_asyncio.fixture
@@ -76,7 +86,14 @@ async def _create_session(test_db: AsyncSession) -> tuple[UUID, dict[str, str], 
     )
 
 
-def _product(product_id: UUID, sku: str, *, active: bool = True) -> Product:
+def _product(
+    product_id: UUID,
+    sku: str,
+    *,
+    active: bool = True,
+    image_url: str | None = None,
+    image_alt: str | None = None,
+) -> Product:
     return Product(
         id=product_id,
         name=f"Product {sku}",
@@ -85,6 +102,8 @@ def _product(product_id: UUID, sku: str, *, active: bool = True) -> Product:
         stock_quantity=8,
         max_purchase_quantity=4,
         is_active=active,
+        image_url=image_url,
+        image_alt=image_alt,
     )
 
 
@@ -93,7 +112,10 @@ class TestCheckoutEndpoints:
         self, order_client: AsyncClient, test_db: AsyncSession
     ):
         _, cookies, headers = await _create_session(test_db)
-        payload = {"items": [{"product_id": str(uuid4()), "quantity": 1}]}
+        payload = {
+            "items": [{"product_id": str(uuid4()), "quantity": 1}],
+            "delivery_address": DELIVERY_ADDRESS,
+        }
 
         unauthenticated = await order_client.post(
             "/api/v1/orders/checkout", json=payload, headers={"Idempotency-Key": "x"}
@@ -118,11 +140,19 @@ class TestCheckoutEndpoints:
     ):
         user_id, cookies, csrf_headers = await _create_session(test_db)
         product_id = uuid4()
-        product = _product(product_id, "API-ORDER-1")
+        product = _product(
+            product_id,
+            "API-ORDER-1",
+            image_url="/images/products/portfolio/test-order.png",
+            image_alt="Original order illustration",
+        )
         test_db.add(product)
         await test_db.commit()
         request_headers = {**csrf_headers, "Idempotency-Key": "api-retry"}
-        payload = {"items": [{"product_id": str(product_id), "quantity": 2}]}
+        payload = {
+            "items": [{"product_id": str(product_id), "quantity": 2}],
+            "delivery_address": DELIVERY_ADDRESS,
+        }
 
         first = await order_client.post(
             "/api/v1/orders/checkout", json=payload, cookies=cookies, headers=request_headers
@@ -131,10 +161,15 @@ class TestCheckoutEndpoints:
         first_data = first.json()
         assert first_data["total_cents"] == 2500
         assert first_data["items"][0]["unit_price_cents"] == 1250
+        assert first_data["delivery_address"] == DELIVERY_ADDRESS
+        assert first_data["items"][0]["product_image_url"] == "/images/products/portfolio/test-order.png"
+        assert first_data["items"][0]["product_image_alt"] == "Original order illustration"
         assert "price" not in payload["items"][0]
 
         product.name = "Changed catalog name"
         product.price = 4000
+        product.image_url = "/images/products/portfolio/changed.png"
+        product.image_alt = "Changed catalog illustration"
         await test_db.commit()
         replay = await order_client.post(
             "/api/v1/orders/checkout", json=payload, cookies=cookies, headers=request_headers
@@ -142,7 +177,10 @@ class TestCheckoutEndpoints:
         assert replay.status_code == 201
         assert replay.json() == first_data
 
-        changed_payload = {"items": [{"product_id": str(product_id), "quantity": 1}]}
+        changed_payload = {
+            "items": [{"product_id": str(product_id), "quantity": 1}],
+            "delivery_address": DELIVERY_ADDRESS,
+        }
         conflict = await order_client.post(
             "/api/v1/orders/checkout",
             json=changed_payload,
@@ -151,6 +189,14 @@ class TestCheckoutEndpoints:
         )
         assert conflict.status_code == 409
         assert conflict.json()["error_code"] == "idempotency_conflict"
+        changed_address = {**payload, "delivery_address": {**DELIVERY_ADDRESS, "city": "Mysuru"}}
+        address_conflict = await order_client.post(
+            "/api/v1/orders/checkout",
+            json=changed_address,
+            cookies=cookies,
+            headers=request_headers,
+        )
+        assert address_conflict.status_code == 409
         assert user_id
 
     async def test_checkout_rejects_invalid_lines_without_stock_changes(
@@ -171,7 +217,8 @@ class TestCheckoutEndpoints:
                 "items": [
                     {"product_id": str(active_id), "quantity": 1},
                     {"product_id": str(active_id), "quantity": 1},
-                ]
+                ],
+                "delivery_address": DELIVERY_ADDRESS,
             },
             cookies=cookies,
             headers=headers,
@@ -180,7 +227,10 @@ class TestCheckoutEndpoints:
 
         missing = await order_client.post(
             "/api/v1/orders/checkout",
-            json={"items": [{"product_id": str(uuid4()), "quantity": 1}]},
+            json={
+                "items": [{"product_id": str(uuid4()), "quantity": 1}],
+                "delivery_address": DELIVERY_ADDRESS,
+            },
             cookies=cookies,
             headers={**headers, "Idempotency-Key": "missing"},
         )
@@ -188,15 +238,16 @@ class TestCheckoutEndpoints:
 
         inactive = await order_client.post(
             "/api/v1/orders/checkout",
-            json={"items": [{"product_id": str(inactive_id), "quantity": 1}]},
+            json={
+                "items": [{"product_id": str(inactive_id), "quantity": 1}],
+                "delivery_address": DELIVERY_ADDRESS,
+            },
             cookies=cookies,
             headers={**headers, "Idempotency-Key": "inactive"},
         )
         assert inactive.status_code == 409
 
-        stock = await test_db.scalar(
-            select(Product.stock_quantity).where(Product.id == active_id)
-        )
+        stock = await test_db.scalar(select(Product.stock_quantity).where(Product.id == active_id))
         assert stock == 8
 
     async def test_checkout_rejects_client_supplied_prices(
@@ -210,7 +261,8 @@ class TestCheckoutEndpoints:
         response = await order_client.post(
             "/api/v1/orders/checkout",
             json={
-                "items": [{"product_id": str(product_id), "quantity": 1, "price": 1}]
+                "items": [{"product_id": str(product_id), "quantity": 1, "price": 1}],
+                "delivery_address": DELIVERY_ADDRESS,
             },
             cookies=cookies,
             headers={**csrf_headers, "Idempotency-Key": "untrusted-price"},
@@ -230,7 +282,10 @@ class TestCheckoutEndpoints:
                     idempotency_key="old",
                     request_hash="a" * 64,
                     status="placed",
+                    subtotal_cents=100,
+                    discount_total_cents=0,
                     total_cents=100,
+                    promotion_snapshot=[],
                     created_at=datetime(2026, 1, 1),
                 ),
                 Order(
@@ -238,7 +293,10 @@ class TestCheckoutEndpoints:
                     idempotency_key="new",
                     request_hash="b" * 64,
                     status="placed",
+                    subtotal_cents=200,
+                    discount_total_cents=0,
                     total_cents=200,
+                    promotion_snapshot=[],
                     created_at=datetime(2026, 1, 2),
                 ),
                 Order(
@@ -246,7 +304,10 @@ class TestCheckoutEndpoints:
                     idempotency_key="other",
                     request_hash="c" * 64,
                     status="placed",
+                    subtotal_cents=999,
+                    discount_total_cents=0,
                     total_cents=999,
+                    promotion_snapshot=[],
                 ),
             ]
         )
@@ -301,7 +362,9 @@ async def test_concurrent_checkouts_do_not_oversell(pg_checkout_factory):
     async with factory() as setup:
         setup.add_all(
             [
-                User(id=user_id, email=f"concurrency-{user_id}@example.com", password_hash="unused"),
+                User(
+                    id=user_id, email=f"concurrency-{user_id}@example.com", password_hash="unused"
+                ),
                 Product(
                     id=product_id,
                     name="Last unit",

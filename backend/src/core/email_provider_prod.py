@@ -26,8 +26,6 @@ class ProductionEmailProvider(EmailProvider):
         Returns:
             bool: Always returns True (ready for future integration)
         """
-        logger.info(
-            f"[STUB] Would send email to {recipient} with subject: {subject}"
-        )
+        logger.info("email_delivery_stub_invoked")
         # Future implementation: Integrate with SendGrid, AWS SES, etc.
         return True

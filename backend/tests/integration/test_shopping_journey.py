@@ -82,7 +82,18 @@ async def test_shopper_browses_updates_cart_checks_out_and_views_order(
         select(Product).where(Product.id == UUID(first_product["id"]))
     )
     stock_before = product_before.stock_quantity
-    payload = {"items": [{"product_id": first_product["id"], "quantity": 3}]}
+    payload = {
+        "items": [{"product_id": first_product["id"], "quantity": 3}],
+        "delivery_address": {
+            "recipient_name": "Journey Shopper",
+            "phone": "+91 98765 43210",
+            "address_line1": "12 Example Road",
+            "city": "Bengaluru",
+            "region": "Karnataka",
+            "postal_code": "560001",
+            "country_code": "IN",
+        },
+    }
     checkout_headers = {**csrf_headers, "Idempotency-Key": "journey-order-1"}
     order_response = await test_client.post(
         "/api/v1/orders/checkout",
