@@ -2,15 +2,12 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import AuthenticatedLayout from '@/app/authenticated-layout';
+import { formatInr } from '@/lib/currency';
+import CommerceResults, {
+  ProductResult,
+  PromotionResult,
+} from '@/components/assistant/CommerceResults';
 
-type Product = {
-  id: string;
-  name: string;
-  description: string | null;
-  sku: string;
-  price_cents: number;
-  stock_quantity: number;
-};
 type Citation = {
   citation_id: string;
   source_label: string;
@@ -26,8 +23,15 @@ type ChatResult = {
   intent: string;
   citations: Citation[];
   result_data: {
-    products?: Product[];
-    cart?: { items: { name: string; quantity: number; line_total: number }[]; subtotal: number };
+    products?: ProductResult[];
+    cart?: {
+      items: { name: string; quantity: number; line_total: number }[];
+      subtotal: number;
+      discount_total_cents?: number;
+      total_cents?: number;
+    };
+    promotions?: PromotionResult[];
+    coupon_evaluation?: { eligible: boolean; reason_code: string; discount_cents: number };
     orders?: { id: string; status: string; total_cents: number; created_at: string }[];
   } | null;
 };
@@ -47,14 +51,14 @@ type StoredMessage = {
 };
 
 const suggestions = [
-  'Find in-stock products under $50',
+  'Find in-stock products under ₹5,000',
   'What offers are active?',
   "What's in my cart?",
   'What is the return policy?',
 ];
 
 function money(cents: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+  return formatInr(cents);
 }
 
 async function fetchConversations(): Promise<Conversation[]> {
@@ -82,6 +86,12 @@ export default function AssistantPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addingProductId, setAddingProductId] = useState<string | null>(null);
+  const [cartAction, setCartAction] = useState<{
+    resultId: string;
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     void fetchConversations()
@@ -98,6 +108,7 @@ export default function AssistantPage() {
     setQuestion('');
     setBusy(true);
     setError(null);
+    setCartAction(null);
     setMessages((items) => [...items, { role: 'user', content: submitted }]);
     try {
       const csrfResponse = await fetch('/api/auth/csrf', { credentials: 'include' });
@@ -126,6 +137,50 @@ export default function AssistantPage() {
     }
   }
 
+  async function addToCart(productId: string, resultId: string) {
+    setAddingProductId(productId);
+    setCartAction(null);
+    try {
+      const csrfResponse = await fetch('/api/auth/csrf', { credentials: 'include' });
+      if (!csrfResponse.ok) {
+        throw new Error(
+          csrfResponse.status === 401
+            ? 'Please sign in to add items to your cart.'
+            : 'Could not authorize this cart update. Please try again.'
+        );
+      }
+      const { csrf_token: csrfToken } = await csrfResponse.json();
+      const response = await fetch('/api/cart/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        credentials: 'include',
+        body: JSON.stringify({ product_id: productId, quantity: 1 }),
+      });
+      if (!response.ok) {
+        const message =
+          response.status === 401
+            ? 'Please sign in to add items to your cart.'
+            : response.status === 404
+              ? 'This product is no longer available.'
+              : response.status === 409
+                ? 'The requested quantity is no longer available.'
+                : response.status >= 500
+                  ? 'The cart is temporarily unavailable. Please try again.'
+                  : 'Could not add this product to your cart. Please try again.';
+        throw new Error(message);
+      }
+      setCartAction({ resultId, kind: 'success', message: 'Added to your cart.' });
+    } catch (reason) {
+      setCartAction({
+        resultId,
+        kind: 'error',
+        message: reason instanceof Error ? reason.message : 'Could not update your cart.',
+      });
+    } finally {
+      setAddingProductId(null);
+    }
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault();
     void ask(question);
@@ -135,6 +190,7 @@ export default function AssistantPage() {
     setConversationId(null);
     setMessages([]);
     setError(null);
+    setCartAction(null);
   }
 
   async function openConversation(id: string) {
@@ -176,7 +232,7 @@ export default function AssistantPage() {
 
   return (
     <AuthenticatedLayout>
-      <div className="mx-auto flex min-h-[calc(100vh-9rem)] max-w-5xl flex-col">
+      <div className="mx-auto flex min-h-[calc(100vh-9rem)] max-w-5xl flex-col px-4 sm:px-6">
         <header className="flex items-center justify-between border-b border-ink-100 pb-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-caps text-accent-600">
@@ -213,23 +269,24 @@ export default function AssistantPage() {
           </nav>
         )}
 
-        <section aria-live="polite" className="flex-1 space-y-7 py-7">
+        <section aria-live="polite" className="flex-1 space-y-7 py-5 sm:py-7">
           {messages.length === 0 ? (
             <div className="py-8">
               <h2 className="font-display text-2xl font-semibold text-ink-900">
                 What can I help you find?
               </h2>
-              <p className="mt-2 text-ink-500">
-                Search products, check your cart or orders, and get answers from ShopSmart policies.
+              <p className="mt-2 max-w-2xl text-ink-600">
+                Browse catalog results, compare returned details, check your cart or orders, and get
+                answers grounded in ShopSmart policies.
               </p>
-              <div className="mt-6 flex flex-wrap gap-2">
+              <div className="mt-6 grid gap-2 sm:flex sm:flex-wrap">
                 {suggestions.map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
                     onClick={() => void ask(suggestion)}
                     disabled={busy}
-                    className="rounded-full border border-ink-200 bg-white px-4 py-2 text-sm text-ink-700 hover:border-accent-500 disabled:opacity-50"
+                    className="min-h-11 rounded border border-ink-200 bg-white px-4 py-2 text-left text-sm text-ink-700 hover:border-accent-500 disabled:opacity-50 sm:text-center"
                   >
                     {suggestion}
                   </button>
@@ -255,36 +312,15 @@ export default function AssistantPage() {
                     {message.content}
                   </p>
                 </div>
-                {message.result?.result_data?.products && (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {message.result.result_data.products.map((product) => (
-                      <div
-                        key={product.id}
-                        className="rounded-md border border-ink-200 bg-white p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="font-semibold text-ink-900">{product.name}</h3>
-                          <span className="shrink-0 font-semibold text-ink-900">
-                            {money(product.price_cents)}
-                          </span>
-                        </div>
-                        {product.description && (
-                          <p className="mt-2 text-sm text-ink-600">{product.description}</p>
-                        )}
-                        <p className="mt-3 text-xs text-ink-500">
-                          SKU {product.sku} · {product.stock_quantity} in stock
-                        </p>
-                        <button
-                          type="button"
-                          disabled={busy || product.stock_quantity < 1}
-                          onClick={() => void ask(`Add to cart ${product.name}`)}
-                          className="mt-4 rounded bg-accent-600 px-3 py-2 text-sm font-semibold text-white hover:bg-accent-700 disabled:opacity-50"
-                        >
-                          Add to cart
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                {message.result?.result_data && (
+                  <CommerceResults
+                    resultId={message.result.message_id}
+                    products={message.result.result_data.products}
+                    promotions={message.result.result_data.promotions}
+                    addingProductId={addingProductId}
+                    cartAction={cartAction}
+                    onAddToCart={(productId, resultId) => void addToCart(productId, resultId)}
+                  />
                 )}
                 {message.result?.result_data?.cart && (
                   <div className="max-w-3xl border-l-2 border-accent-500 pl-4 text-sm text-ink-700">
@@ -300,9 +336,27 @@ export default function AssistantPage() {
                         <p className="mt-2 font-semibold">
                           Subtotal {money(message.result.result_data.cart.subtotal)}
                         </p>
+                        {(message.result.result_data.cart.discount_total_cents ?? 0) > 0 && (
+                          <p className="mt-1 text-leaf-700">
+                            Discount -
+                            {money(message.result.result_data.cart.discount_total_cents ?? 0)}
+                          </p>
+                        )}
+                        {message.result.result_data.cart.total_cents !== undefined && (
+                          <p className="mt-1 font-semibold">
+                            Total {money(message.result.result_data.cart.total_cents)}
+                          </p>
+                        )}
                       </>
                     )}
                   </div>
+                )}
+                {message.result?.result_data?.coupon_evaluation && (
+                  <p className="max-w-3xl text-sm font-medium text-ink-700" role="status">
+                    {message.result.result_data.coupon_evaluation.eligible
+                      ? `Eligible coupon: ${money(message.result.result_data.coupon_evaluation.discount_cents)} off before offer selection.`
+                      : 'No eligible coupon was found for the current cart.'}
+                  </p>
                 )}
                 {message.result?.result_data?.orders && (
                   <div className="space-y-2 text-sm text-ink-700">
@@ -323,12 +377,17 @@ export default function AssistantPage() {
                     ))}
                   </ul>
                 )}
+                {message.result && !message.result.answerable && (
+                  <p role="status" className="max-w-3xl text-sm text-ink-600">
+                    I couldn’t verify an answer from the available ShopSmart information.
+                  </p>
+                )}
               </article>
             ))
           )}
           {busy && (
-            <p role="status" className="text-sm text-ink-500">
-              Checking ShopSmart...
+            <p role="status" className="text-sm text-ink-600">
+              Checking the catalog, cart, and ShopSmart information…
             </p>
           )}
           {error && (
@@ -338,19 +397,22 @@ export default function AssistantPage() {
           )}
         </section>
 
-        <form onSubmit={submit} className="sticky bottom-0 border-t border-ink-100 bg-gray-50 py-4">
-          <div className="flex gap-3">
+        <form
+          onSubmit={submit}
+          className="sticky bottom-0 border-t border-ink-100 bg-gray-50 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        >
+          <div className="flex gap-2 sm:gap-3">
             <input
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               aria-label="Message the shopping assistant"
               placeholder="Ask about products, your cart, orders, or ShopSmart policies"
-              className="min-w-0 flex-1 rounded-md border border-ink-200 bg-white px-4 py-3 text-ink-900 outline-none focus:border-accent-600"
+              className="min-w-0 min-h-11 flex-1 rounded border border-ink-200 bg-white px-3 py-2 text-ink-900 outline-none focus:border-accent-600 sm:px-4"
             />
             <button
               type="submit"
               disabled={busy || !question.trim()}
-              className="rounded-md bg-ink-900 px-5 py-3 font-semibold text-white hover:bg-ink-700 disabled:opacity-50"
+              className="min-h-11 shrink-0 rounded bg-ink-900 px-4 py-2 font-semibold text-white hover:bg-ink-700 disabled:opacity-50 sm:px-5"
             >
               Send
             </button>

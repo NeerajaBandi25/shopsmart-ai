@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import BaseModel
@@ -17,6 +17,7 @@ class Cart(BaseModel):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
+    coupon_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     items: Mapped[list["CartItem"]] = relationship(
         back_populates="cart",
         cascade="all, delete-orphan",

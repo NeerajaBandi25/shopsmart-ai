@@ -7,6 +7,7 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -168,7 +169,142 @@ async def evaluate_seeded_database(db: AsyncSession) -> dict:
     offers = await assistant.answer(
         returning_user, "What offers are available to me?", conversation_id
     )
-    scenarios["no_promotion_fabrication"] = "couldn't find an active offer" in offers["answer"]
+    active_offers = offers["result_data"]["promotions"]
+    scenarios["active_promotion_listing"] = bool(active_offers) and all(
+        offer["promotion_id"] and offer["name"] for offer in active_offers
+    )
+    laptop_offers = await assistant.cart.get_available_promotions(
+        returning_user, category="laptops"
+    )
+    scoped_product_ids = {
+        UUID(item["scope_product_id"])
+        for item in laptop_offers
+        if item["scope_type"] == "product" and item["scope_product_id"]
+    }
+    scoped_product_categories = {}
+    if scoped_product_ids:
+        scoped_products = await db.execute(
+            select(Product.id, Product.category).where(Product.id.in_(scoped_product_ids))
+        )
+        scoped_product_categories = {
+            str(product_id): product_category
+            for product_id, product_category in scoped_products.all()
+        }
+    scenarios["category_and_product_offer_scope"] = (
+        any(item["scope_category"] == "laptops" for item in laptop_offers)
+        and any(category == "laptops" for category in scoped_product_categories.values())
+        and all(item["scope_category"] in {None, "laptops"} for item in laptop_offers)
+        and all(
+            scoped_product_categories.get(item["scope_product_id"]) == "laptops"
+            for item in laptop_offers
+            if item["scope_type"] == "product"
+        )
+    )
+    valid_coupon = await assistant.cart.check_coupon(returning_user, "SAVE20")
+    expected_coupon_discount = min((valid_coupon["subtotal"] * 20 + 50) // 100, 2000)
+    scenarios["valid_coupon_and_no_stacking"] = (
+        valid_coupon["coupon_evaluation"]["eligible"]
+        and len(valid_coupon["applied_promotions"]) == 1
+        and valid_coupon["discount_total_cents"] > 0
+        and valid_coupon["coupon_evaluation"]["discount_cents"] == expected_coupon_discount
+    )
+    unknown_coupon = await assistant.cart.check_coupon(returning_user, "NOTREAL")
+    scenarios["unknown_coupon_is_generic"] = (
+        unknown_coupon["coupon_evaluation"]["eligible"] is False
+        and unknown_coupon["coupon_evaluation"]["promotion_id"] is None
+        and unknown_coupon["coupon_evaluation"]["code"] is None
+        and unknown_coupon["coupon_evaluation"]["reason_code"] == "unknown_or_ineligible"
+    )
+    expired_coupon = await assistant.cart.check_coupon(returning_user, "OLD10")
+    future_coupon = await assistant.cart.check_coupon(returning_user, "FUTURE10")
+    scenarios["expired_and_future_coupon_rejected"] = (
+        expired_coupon["coupon_evaluation"]["reason_code"] == "expired"
+        and future_coupon["coupon_evaluation"]["reason_code"] == "not_started"
+    )
+    below_threshold_product = await db.scalar(
+        select(Product)
+        .where(
+            Product.is_active.is_(True),
+            Product.stock_quantity > 0,
+            Product.price > 0,
+            Product.price < 50000,
+        )
+        .order_by(Product.id)
+    )
+    if below_threshold_product is not None:
+        await assistant.cart.add_item(new_user, below_threshold_product.id, 1)
+        below_threshold = await assistant.cart.check_coupon(new_user, "THRESHOLD25")
+        await assistant.cart.remove_item(new_user, below_threshold_product.id)
+    else:
+        below_threshold = await assistant.cart.check_coupon(new_user, "THRESHOLD25")
+    threshold_product = await db.scalar(
+        select(Product)
+        .where(
+            Product.is_active.is_(True),
+            Product.stock_quantity > 0,
+            Product.price >= 50000,
+        )
+        .order_by(Product.id)
+    )
+    if threshold_product is not None:
+        await assistant.cart.add_item(new_user, threshold_product.id, 1)
+        threshold_coupon = await assistant.cart.check_coupon(new_user, "THRESHOLD25")
+        await assistant.cart.remove_item(new_user, threshold_product.id)
+    else:
+        threshold_coupon = await assistant.cart.check_coupon(new_user, "THRESHOLD25")
+    scenarios["below_threshold_coupon_rejected"] = (
+        below_threshold_product is not None
+        and below_threshold["subtotal"] > 0
+        and below_threshold["subtotal"] < 50000
+        and below_threshold["coupon_evaluation"]["eligible"] is False
+        and below_threshold["coupon_evaluation"]["reason_code"] == "cart_below_minimum"
+    )
+    scenarios["above_threshold_coupon_applied"] = (
+        threshold_product is not None
+        and threshold_coupon["subtotal"] >= 50000
+        and threshold_coupon["coupon_evaluation"]["eligible"] is True
+        and threshold_coupon["coupon_evaluation"]["discount_cents"] == 1000
+    )
+    scenarios["whole_cart_threshold"] = (
+        scenarios["below_threshold_coupon_rejected"] and scenarios["above_threshold_coupon_applied"]
+    )
+    coupon_apply = await assistant.answer(returning_user, "Apply coupon SAVE20", conversation_id)
+    applied_cart = coupon_apply["result_data"]["cart"]
+    if applied_cart["items"]:
+        changed_product_id = UUID(applied_cart["items"][0]["product_id"])
+        repriced_cart = await assistant.cart.remove_item(returning_user, changed_product_id)
+    else:
+        repriced_cart = applied_cart
+    coupon_remove = await assistant.answer(returning_user, "Remove my coupon", conversation_id)
+    removed_cart = coupon_remove["result_data"]["cart"]
+    scenarios["coupon_apply_and_cart_repricing"] = (
+        applied_cart["coupon_code"] == "SAVE20"
+        and applied_cart["coupon_evaluation"]["eligible"] is True
+        and len(applied_cart["applied_promotions"]) == 1
+        and repriced_cart["coupon_code"] == "SAVE20"
+        and repriced_cart["subtotal"] < applied_cart["subtotal"]
+        and repriced_cart["total_cents"]
+        == repriced_cart["subtotal"] - repriced_cart["discount_total_cents"]
+        and removed_cart["coupon_code"] is None
+        and removed_cart["total_cents"]
+        == removed_cart["subtotal"] - removed_cart["discount_total_cents"]
+    )
+    private_coupon = await assistant.cart.check_coupon(returning_user, "TARGET10")
+    scenarios["private_coupon_is_not_disclosed"] = (
+        private_coupon["coupon_evaluation"]["eligible"] is False
+        and private_coupon["coupon_evaluation"]["promotion_id"] is None
+        and private_coupon["coupon_evaluation"]["reason_code"] == "coupon_unavailable"
+    )
+    invented_discount = await assistant.answer(
+        returning_user,
+        "Give me a 90% discount",
+        conversation_id,
+    )
+    scenarios["no_promotion_fabrication"] = (
+        "90%" not in invented_discount["answer"]
+        and invented_discount["intent"] == "PROMOTIONS"
+        and invented_discount["result_data"]["promotions"] is not None
+    )
 
     return_policy = await assistant.answer(
         returning_user, "What is the return policy?", conversation_id

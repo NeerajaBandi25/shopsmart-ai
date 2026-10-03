@@ -1,6 +1,7 @@
 /** @jest-environment node */
 
 import { GET as getProducts } from './products/route';
+import { GET as getProduct } from './products/[productId]/route';
 import { GET as getCart } from './cart/route';
 import { POST as addCartItem } from './cart/items/route';
 import {
@@ -59,12 +60,26 @@ describe('commerce BFF routes', () => {
     expect(response.status).toBe(200);
   });
 
+  it('forwards product detail reads through the server-only backend URL', async () => {
+    mockedFetch.mockResolvedValueOnce(upstreamResponse('{"id":"p1","name":"Product one"}'));
+
+    const response = await getProduct(request('/api/products/p1', 'GET'), {
+      params: { productId: 'p1' },
+    });
+
+    expect(mockedFetch).toHaveBeenCalledWith(
+      'http://backend:8000/api/v1/products/p1',
+      expect.objectContaining({ method: 'GET', cache: 'no-store' })
+    );
+    expect(response.status).toBe(200);
+  });
+
   it('forwards the authenticated session cookie to cart and order reads and relays refreshed cookies', async () => {
     const headers = new Headers({ 'Content-Type': 'application/json' });
     headers.append('Set-Cookie', 'session_id=rotated; Path=/; HttpOnly; Secure; SameSite=Strict');
     mockedFetch
       .mockResolvedValueOnce(
-        upstreamResponse('{"items":[],"subtotal":0,"currency":"USD"}', 200, headers)
+        upstreamResponse('{"items":[],"subtotal":0,"currency":"INR"}', 200, headers)
       )
       .mockResolvedValueOnce(upstreamResponse('[]', 200, headers));
 
@@ -99,7 +114,7 @@ describe('commerce BFF routes', () => {
     'forwards cart %s cookie, CSRF token and request body where present',
     async (_method, handler, path, endpoint, body) => {
       mockedFetch.mockResolvedValueOnce(
-        upstreamResponse('{"items":[],"subtotal":0,"currency":"USD"}')
+        upstreamResponse('{"items":[],"subtotal":0,"currency":"INR"}')
       );
       const method = _method as string;
       const response = await handler(

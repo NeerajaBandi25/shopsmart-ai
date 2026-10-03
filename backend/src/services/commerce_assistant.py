@@ -212,7 +212,39 @@ class CommerceAssistantService:
                         f"Here are {len(compared)} products from your recent results to compare."
                     )
         elif route.intent is AssistantIntent.PROMOTIONS:
-            answer = "I couldn't find an active offer that applies to this request."
+            if route.coupon_code:
+                quote = await self.cart.check_coupon(user_id, route.coupon_code)
+                data = {
+                    "coupon_evaluation": quote["coupon_evaluation"],
+                    "cart": self._cart_data(quote),
+                }
+                evaluation = quote["coupon_evaluation"]
+                answer = (
+                    "That coupon is eligible for your current cart."
+                    if evaluation and evaluation["eligible"]
+                    else "I couldn't verify an eligible coupon for your current cart."
+                )
+            else:
+                promotions = await self.cart.get_available_promotions(
+                    user_id, category=route.category
+                )
+                data = {"promotions": promotions}
+                answer = (
+                    f"I found {len(promotions)} active offer(s)."
+                    if promotions
+                    else "I couldn't find an active offer that applies to this request."
+                )
+        elif route.intent is AssistantIntent.COUPON_APPLY:
+            if route.coupon_code is None:
+                answer = "Include a coupon code and ask me to apply it."
+            else:
+                cart = await self.cart.apply_coupon(user_id, route.coupon_code, commit=False)
+                data = {"cart": self._cart_data(cart)}
+                answer = "The coupon was checked against your cart and the updated total is shown."
+        elif route.intent is AssistantIntent.COUPON_REMOVE:
+            cart = await self.cart.remove_coupon(user_id, commit=False)
+            data = {"cart": self._cart_data(cart)}
+            answer = "The coupon was removed and your cart was repriced."
         elif route.intent is AssistantIntent.CART_QUERY:
             cart = await self.cart.get_cart(user_id)
             data = {"cart": self._cart_data(cart)}

@@ -42,9 +42,24 @@ class FakeProducts:
 
 class FakeCart:
     def __init__(self, _db):
-        self.get_cart = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "USD"})
-        self.add_item = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "USD"})
-        self.remove_item = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "USD"})
+        self.get_cart = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "INR"})
+        self.add_item = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "INR"})
+        self.remove_item = AsyncMock(return_value={"items": [], "subtotal": 0, "currency": "INR"})
+        self.get_available_promotions = AsyncMock(return_value=[])
+        self.check_coupon = AsyncMock(
+            return_value={
+                "coupon_evaluation": {
+                    "eligible": False,
+                    "reason_code": "unknown_or_ineligible",
+                    "discount_cents": 0,
+                },
+                "applied_promotions": [],
+                "subtotal": 0,
+                "total_cents": 0,
+            }
+        )
+        self.apply_coupon = AsyncMock(return_value={"items": [], "subtotal": 0})
+        self.remove_coupon = AsyncMock(return_value={"items": [], "subtotal": 0})
 
 
 class FakeOrders:
@@ -235,6 +250,43 @@ async def test_cart_read_uses_authenticated_user_id(assistant):
 
 
 @pytest.mark.asyncio
+async def test_coupon_check_is_read_only_and_never_uses_rag_or_provider(assistant):
+    service, gateway, _db = assistant
+    user_id = uuid4()
+    service.cart.check_coupon.return_value = {
+        "coupon_evaluation": {"eligible": True, "reason_code": "eligible"},
+        "applied_promotions": [],
+        "items": [],
+        "subtotal": 1299,
+        "total_cents": 1169,
+    }
+
+    result = await service.answer(user_id, "Can I use SAVE10?")
+
+    service.cart.check_coupon.assert_awaited_once_with(user_id, "SAVE10")
+    service.cart.apply_coupon.assert_not_awaited()
+    service.knowledge.retrieve.assert_not_awaited()
+    gateway.answer.assert_not_awaited()
+    assert result["result_data"]["coupon_evaluation"]["eligible"] is True
+
+
+@pytest.mark.asyncio
+async def test_explicit_coupon_apply_and_remove_use_owner_scoped_cart_service(assistant):
+    service, gateway, _db = assistant
+    user_id = uuid4()
+
+    applied = await service.answer(user_id, "Apply coupon SAVE10")
+    removed = await service.answer(user_id, "Remove my coupon")
+
+    service.cart.apply_coupon.assert_awaited_once_with(user_id, "SAVE10", commit=False)
+    service.cart.remove_coupon.assert_awaited_once_with(user_id, commit=False)
+    service.knowledge.retrieve.assert_not_awaited()
+    gateway.answer.assert_not_awaited()
+    assert applied["intent"] == "COUPON_APPLY"
+    assert removed["intent"] == "COUPON_REMOVE"
+
+
+@pytest.mark.asyncio
 async def test_last_order_query_returns_only_the_newest_owner_order(assistant):
     service, _gateway, _db = assistant
     latest = SimpleNamespace(
@@ -414,7 +466,7 @@ async def test_explicit_cart_action_uses_only_a_recent_result_and_session_identi
     service.cart.add_item.return_value = {
         "items": [{"product_id": product.id, "name": product.name, "quantity": 2}],
         "subtotal": 9998,
-        "currency": "USD",
+        "currency": "INR",
     }
 
     result = await service.answer(user_id, "Add 2 headphones to my cart")

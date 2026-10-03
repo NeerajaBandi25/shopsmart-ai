@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import React from 'react';
 
 /**
@@ -19,6 +20,7 @@ import React from 'react';
 export interface CategoryCardProps {
   numeral: string;
   name: string;
+  href: string;
   image: string;
   alt: string;
   badge: string;
@@ -29,12 +31,18 @@ export interface CategoryCardProps {
 export function CategoryCard({
   numeral,
   name,
+  href,
   image,
   alt,
   badge,
   objectPosition = '50% 50%',
 }: CategoryCardProps) {
   return (
+    <Link
+      href={href}
+      aria-label={`Browse ${name}`}
+      className="block rounded-tile focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
+    >
     <article className="cat-card group relative aspect-[4/3] w-full overflow-hidden rounded-tile border border-transparent bg-ink-900 shadow-tile transition-[transform,border-color,box-shadow] duration-500 ease-luxe hover:-translate-y-1 hover:border-accent-300/50 hover:shadow-tile-hover">
       {/* Photograph — dominant visual, lazy (below the hero), Next-optimized */}
       <Image
@@ -104,5 +112,6 @@ export function CategoryCard({
         </svg>
       </span>
     </article>
+    </Link>
   );
 }

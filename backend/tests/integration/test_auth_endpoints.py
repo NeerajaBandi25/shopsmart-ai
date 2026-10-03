@@ -205,6 +205,9 @@ class TestSingleSessionConcurrency:
         from src.repositories.session_repository import SessionRepository
         from src.repositories.user_repository import UserRepository
 
+        if settings.database_url.startswith("sqlite"):
+            pytest.skip("SQLite does not support the row locking this test verifies")
+
         email = test_user_data_in_db["email"]
         password = test_user_data_in_db["password"]
 

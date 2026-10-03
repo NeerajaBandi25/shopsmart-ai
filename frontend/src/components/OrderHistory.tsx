@@ -2,12 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getOrders, type Order } from '@/lib/order-api';
-
-function formatCents(cents: number): string {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(
-    cents / 100
-  );
-}
+import { OrderSnapshot, formatOrderDate } from '@/components/commerce/OrderSnapshot';
 
 export function OrderHistory() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -69,33 +64,8 @@ export function OrderHistory() {
   return (
     <ol className="divide-y divide-ink-100">
       {orders.map((order) => (
-        <li key={order.id} className="space-y-4 py-6 first:pt-0">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="font-semibold text-ink-900">Order #{order.id}</h2>
-              <p className="mt-1 text-sm text-ink-500">
-                {new Date(order.created_at).toLocaleString()} · {order.status}
-              </p>
-            </div>
-            <p className="font-semibold tabular-nums text-ink-900">
-              {formatCents(order.total_cents)}
-            </p>
-          </div>
-          <ul className="space-y-2 border-l-2 border-accent-200 pl-4">
-            {order.items.map((item) => (
-              <li
-                key={`${order.id}-${item.product_sku}`}
-                className="flex flex-wrap justify-between gap-2 text-sm"
-              >
-                <span className="text-ink-700">
-                  {item.product_name} <span className="text-ink-500">× {item.quantity}</span>
-                </span>
-                <span className="tabular-nums text-ink-700">
-                  {formatCents(item.line_total_cents)}
-                </span>
-              </li>
-            ))}
-          </ul>
+        <li key={order.id} className="py-6 first:pt-0">
+          <OrderSnapshot order={order} title={`Order from ${formatOrderDate(order.created_at)}`} />
         </li>
       ))}
     </ol>

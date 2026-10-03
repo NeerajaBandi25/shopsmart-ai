@@ -41,7 +41,16 @@ export function CheckoutFlow() {
     const failed = results.some((result) => result.status === 'rejected');
     if (!failed) {
       clearPrivateCommerce();
-      setCart({ items: [], subtotal: 0, currency: cart.currency });
+      setCart({
+        ...cart,
+        items: [],
+        subtotal: 0,
+        coupon_code: null,
+        coupon_evaluation: null,
+        applied_promotions: [],
+        discount_total_cents: 0,
+        total_cents: 0,
+      });
     } else {
       try {
         syncCartCount(await getCart());
@@ -81,14 +90,24 @@ export function CheckoutFlow() {
           product_id: item.product_id,
           quantity: item.quantity,
           product_name: item.name,
+          product_sku: item.sku,
+          product_image_url: item.image_url,
+          product_image_alt: item.image_alt,
+          unit_price_cents: item.unit_price,
+          line_total_cents: item.line_total,
         }))}
+        couponCode={cart.coupon_code}
+        quote={{
+          subtotal_cents: cart.subtotal,
+          discount_total_cents: cart.discount_total_cents,
+          total_cents: cart.total_cents,
+          promotions: cart.applied_promotions.map(({ name, discount_cents }) => ({
+            name,
+            discount_cents,
+          })),
+        }}
         onSuccess={clearPurchasedItems}
       />
-      {cart.items.length > 0 && (
-        <p className="mt-5 text-right text-sm font-semibold text-ink-900">
-          Subtotal ${(cart.subtotal / 100).toFixed(2)}
-        </p>
-      )}
       {cart.items.length === 0 && (
         <Link
           href="/"

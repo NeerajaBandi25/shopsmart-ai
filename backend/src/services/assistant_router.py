@@ -12,6 +12,8 @@ class AssistantIntent(StrEnum):
     PRODUCT_SEARCH = "PRODUCT_SEARCH"
     PRODUCT_COMPARE = "PRODUCT_COMPARE"
     PROMOTIONS = "PROMOTIONS"
+    COUPON_APPLY = "COUPON_APPLY"
+    COUPON_REMOVE = "COUPON_REMOVE"
     CART_QUERY = "CART_QUERY"
     CART_ACTION = "CART_ACTION"
     ORDER_QUERY = "ORDER_QUERY"
@@ -29,14 +31,15 @@ class AssistantRoute:
     category: str | None = None
     min_price_cents: int | None = None
     unsupported_category: bool = False
+    coupon_code: str | None = None
 
 
 _MAX_PRICE = re.compile(
-    r"\b(?:under|below|less than|up to|at most|maximum(?: price)?(?: of)?)\s*\$?\s*(\d+(?:\.\d{1,2})?)(?![\d,.])\b",
+    r"\b(?:under|below|less than|up to|at most|maximum(?: price)?(?: of)?)\s*(?P<currency>[$₹])?\s*(?P<amount>\d+(?:,\d{2,3})*(?:\.\d{1,2})?)(?![\d,.])\b",
     re.IGNORECASE,
 )
 _MIN_PRICE = re.compile(
-    r"\b(?:over|above|more than|greater than|at least|minimum(?: price)?(?: of)?)\s*\$?\s*(\d+(?:\.\d{1,2})?)(?![\d,.])\b",
+    r"\b(?:over|above|more than|greater than|at least|minimum(?: price)?(?: of)?)\s*(?P<currency>[$₹])?\s*(?P<amount>\d+(?:,\d{2,3})*(?:\.\d{1,2})?)(?![\d,.])\b",
     re.IGNORECASE,
 )
 _IN_STOCK = re.compile(r"\bin[- ]stock\b", re.IGNORECASE)
@@ -71,6 +74,11 @@ CATEGORY_ALIASES = {
     "groceries": "groceries",
 }
 _UNSUPPORTED_CATEGORY_ALIASES = {"electronic", "electronics", "tablet", "tablets"}
+_COUPON_LABEL = re.compile(
+    r"\b(?:coupon(?:\s+code)?|code)\s*(?:(?:is|:|=)\s*)?([A-Z0-9][A-Z0-9_-]{0,31})\b",
+    re.IGNORECASE,
+)
+_COUPON_ACTION = re.compile(r"\b(?:use|apply|redeem)\s+([A-Z0-9][A-Z0-9_-]{0,31})\b", re.IGNORECASE)
 
 
 def _category_filter(text: str) -> tuple[str | None, bool]:
@@ -95,6 +103,18 @@ def _category_filter(text: str) -> tuple[str | None, bool]:
     return (next(iter(matches)) if matches else None), False
 
 
+def _coupon_code(text: str) -> str | None:
+    match = _COUPON_LABEL.search(text) or _COUPON_ACTION.search(text)
+    return match.group(1).upper() if match else None
+
+
+def _price_cents(match: re.Match[str]) -> int | None:
+    amount = match.group("amount")
+    if "," in amount and match.group("currency") != "₹":
+        return None
+    return int(Decimal(amount.replace(",", "")) * 100)
+
+
 def route_assistant_message(message: str) -> AssistantRoute:
     text = " ".join(message.lower().split())
     if not text:
@@ -106,6 +126,13 @@ def route_assistant_message(message: str) -> AssistantRoute:
         term in text for term in ("what can you do", "how can you help")
     ):
         return AssistantRoute(AssistantIntent.HELP)
+    if re.search(r"\b(?:remove|clear|delete|forget)\b.{0,30}\bcoupon\b", text):
+        return AssistantRoute(AssistantIntent.COUPON_REMOVE)
+    coupon_code = _coupon_code(text)
+    if coupon_code and re.search(r"\b(?:apply|redeem)\b", text):
+        return AssistantRoute(AssistantIntent.COUPON_APPLY, coupon_code=coupon_code)
+    if coupon_code:
+        return AssistantRoute(AssistantIntent.PROMOTIONS, coupon_code=coupon_code)
     if any(
         term in text
         for term in (
@@ -129,7 +156,17 @@ def route_assistant_message(message: str) -> AssistantRoute:
     if any(
         term in text for term in ("promotion", "promotions", "discount", "coupon", "deal", "offer")
     ):
-        return AssistantRoute(AssistantIntent.PROMOTIONS)
+        category, unsupported_category = _category_filter(text)
+        if unsupported_category:
+            return AssistantRoute(
+                AssistantIntent.UNSUPPORTED,
+                unsupported_category=True,
+            )
+        return AssistantRoute(
+            AssistantIntent.PROMOTIONS,
+            category=category,
+            coupon_code=coupon_code,
+        )
     if any(
         term in text
         for term in (
@@ -207,13 +244,13 @@ def route_assistant_message(message: str) -> AssistantRoute:
         min_price_cents = None
         invalid_price_filter = bool(_PRICE_CUE.search(text)) and not (max_match or min_match)
         if max_match:
-            max_price_cents = int(Decimal(max_match.group(1)) * 100)
-            if max_price_cents > 2_147_483_647:
+            max_price_cents = _price_cents(max_match)
+            if max_price_cents is None or max_price_cents > 2_147_483_647:
                 invalid_price_filter = True
                 max_price_cents = None
         if min_match:
-            min_price_cents = int(Decimal(min_match.group(1)) * 100)
-            if min_price_cents > 2_147_483_647:
+            min_price_cents = _price_cents(min_match)
+            if min_price_cents is None or min_price_cents > 2_147_483_647:
                 invalid_price_filter = True
                 min_price_cents = None
         if (

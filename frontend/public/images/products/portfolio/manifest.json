@@ -1,0 +1,605 @@
+{
+  "provenance": "Original procedurally generated artwork for the ShopSmart portfolio; no external assets, logos or trademarks. Generator: frontend/scripts/portfolio-art/generate.py",
+  "images": [
+    {
+      "file": "laptops/01.png",
+      "subject": "laptop1",
+      "width": 400,
+      "height": 400,
+      "bytes": 50207,
+      "sha256": "3575654e5076abe630e471d1e0f1e8f52d99e7d6ecc09db4ecef56d13243d704"
+    },
+    {
+      "file": "laptops/02.png",
+      "subject": "laptop2",
+      "width": 400,
+      "height": 400,
+      "bytes": 50340,
+      "sha256": "c8d7d08019cec8a75efa60388e5604a36d9e8f2eac140e5cf1f327c93e0e88e6"
+    },
+    {
+      "file": "laptops/03.png",
+      "subject": "laptop3",
+      "width": 400,
+      "height": 400,
+      "bytes": 49700,
+      "sha256": "94344aef7802ba5e82b1d02b90289c31d8d1636da4142e2e44e093932a6e2447"
+    },
+    {
+      "file": "laptops/04.png",
+      "subject": "laptop4",
+      "width": 400,
+      "height": 400,
+      "bytes": 61800,
+      "sha256": "e6433f5b6cf7544ed4fa6e47f39c3a3aba8943a463782107d26be8e501428fcb"
+    },
+    {
+      "file": "laptops/05.png",
+      "subject": "laptop5",
+      "width": 400,
+      "height": 400,
+      "bytes": 58968,
+      "sha256": "31b5e5d7e62cfbbdb0276ce7fe4db7a7c2d03830039a52322ea6a5cdb3bb84ce"
+    },
+    {
+      "file": "smartphones/01.png",
+      "subject": "phone1",
+      "width": 400,
+      "height": 400,
+      "bytes": 57572,
+      "sha256": "ed60ce9b6e1f1adf5918706c93c9df603372fa408e645972f83a3933f1ea10ad"
+    },
+    {
+      "file": "smartphones/02.png",
+      "subject": "phone2",
+      "width": 400,
+      "height": 400,
+      "bytes": 48474,
+      "sha256": "d7aa6d1de856f265b6ef19ed6e6e80e844f031c0f226e3c5e170d78cebec50a6"
+    },
+    {
+      "file": "smartphones/03.png",
+      "subject": "phone3",
+      "width": 400,
+      "height": 400,
+      "bytes": 71163,
+      "sha256": "21241bcd250b1a7a8d2443c5002ef04bdc7e6d017223c9b6465940aad390f7d5"
+    },
+    {
+      "file": "smartphones/04.png",
+      "subject": "phone4",
+      "width": 400,
+      "height": 400,
+      "bytes": 60170,
+      "sha256": "8291e991a69f34a2b7880b4a9ed0f1bbb843ff800fd6343dd3747b4b8af2bd52"
+    },
+    {
+      "file": "smartphones/05.png",
+      "subject": "phone5",
+      "width": 400,
+      "height": 400,
+      "bytes": 51396,
+      "sha256": "14e0c6136ac87b0b1bdfd39fd8a0beb87cea73e274b8474cf64b51e844022f33"
+    },
+    {
+      "file": "headphones/01.png",
+      "subject": "headphone1",
+      "width": 400,
+      "height": 400,
+      "bytes": 40415,
+      "sha256": "ea5321af9e1413e56dd8499473d420d1013a9a66ec88a5d8ec30f291f030e628"
+    },
+    {
+      "file": "headphones/02.png",
+      "subject": "headphone2",
+      "width": 400,
+      "height": 400,
+      "bytes": 32498,
+      "sha256": "e4c93be2bed47ab6145ccf7976d999d445c416b7ede9fb9a00debf60f83b51c5"
+    },
+    {
+      "file": "headphones/03.png",
+      "subject": "headphone3",
+      "width": 400,
+      "height": 400,
+      "bytes": 40911,
+      "sha256": "7a00a0b6d60eb727fba0ce8506f8e8928e69e4b97577a1c05d9967f16ca3a6ef"
+    },
+    {
+      "file": "headphones/04.png",
+      "subject": "headphone4",
+      "width": 400,
+      "height": 400,
+      "bytes": 41373,
+      "sha256": "7d92aaef39d67dd959727a7af54c4f2feab4ced75b245e110cbaa3f93ab35b75"
+    },
+    {
+      "file": "headphones/05.png",
+      "subject": "headphone5",
+      "width": 400,
+      "height": 400,
+      "bytes": 52191,
+      "sha256": "aca0b8a5b2a9f1472b5452f683b3809a06811b62c0cc00359ab73017b1e9fb4d"
+    },
+    {
+      "file": "smartwatches/01.png",
+      "subject": "watch1",
+      "width": 400,
+      "height": 400,
+      "bytes": 42141,
+      "sha256": "a3209758cce1501ab9fbfd371fda3635b38c138d29e506e470884cbfdcb62c4c"
+    },
+    {
+      "file": "smartwatches/02.png",
+      "subject": "watch2",
+      "width": 400,
+      "height": 400,
+      "bytes": 39841,
+      "sha256": "9157ae097e57fb89280f4208a70c67b06820a60e1a628fd8620729355007f31d"
+    },
+    {
+      "file": "smartwatches/03.png",
+      "subject": "watch3",
+      "width": 400,
+      "height": 400,
+      "bytes": 36343,
+      "sha256": "95cf1a9504001eb3dbcdcdc770cf293b275b311c8c164732654bb6d5d5aa2aa2"
+    },
+    {
+      "file": "smartwatches/04.png",
+      "subject": "watch4",
+      "width": 400,
+      "height": 400,
+      "bytes": 32843,
+      "sha256": "a0fa8695e6d0ce52d3acf77e2fab0f6e2ac55c5a2e34fb777a2736179664f136"
+    },
+    {
+      "file": "smartwatches/05.png",
+      "subject": "watch5",
+      "width": 400,
+      "height": 400,
+      "bytes": 39388,
+      "sha256": "cd6a90a3c075a68db36f1a51739c72fe5c6846cb3f0d42be86d3259e6f117684"
+    },
+    {
+      "file": "tablets/01.png",
+      "subject": "tablet1",
+      "width": 400,
+      "height": 400,
+      "bytes": 60786,
+      "sha256": "d2e475e1557a29ca653e4a2e2a03b0e601febac97dc455b05ce94ab0a9228900"
+    },
+    {
+      "file": "tablets/02.png",
+      "subject": "tablet2",
+      "width": 400,
+      "height": 400,
+      "bytes": 37681,
+      "sha256": "880339e46c5941d783618994ca53a8ea2c0aea8a7df64e22f9a1a07dd8e3a2d2"
+    },
+    {
+      "file": "tablets/03.png",
+      "subject": "tablet3",
+      "width": 400,
+      "height": 400,
+      "bytes": 48923,
+      "sha256": "4b084dc21ec8ffbc756ed919ca9b1ed7b5d074f85e02e78c9864df3813e47cb8"
+    },
+    {
+      "file": "tablets/04.png",
+      "subject": "tablet4",
+      "width": 400,
+      "height": 400,
+      "bytes": 60993,
+      "sha256": "fb57e07d9379e21f8c0aec4fd9cf74cddff94ee8378ede69405e76454f0a6262"
+    },
+    {
+      "file": "tablets/05.png",
+      "subject": "tablet5",
+      "width": 400,
+      "height": 400,
+      "bytes": 24898,
+      "sha256": "fb978a5896dfb16e7398f66bfc66c238c7ebed897386f1f3955feed23fd87492"
+    },
+    {
+      "file": "cameras/01.png",
+      "subject": "camera1",
+      "width": 400,
+      "height": 400,
+      "bytes": 44356,
+      "sha256": "56d9f7760b7bb54feeb06763c2dc3e22e570cecb9eeb6ba83a18c9e1a6810410"
+    },
+    {
+      "file": "cameras/02.png",
+      "subject": "camera2",
+      "width": 400,
+      "height": 400,
+      "bytes": 39054,
+      "sha256": "9a10649a6938dc2caad8111bf41d8069a66b433455ef718351446ac52c01a267"
+    },
+    {
+      "file": "cameras/03.png",
+      "subject": "camera3",
+      "width": 400,
+      "height": 400,
+      "bytes": 38546,
+      "sha256": "e936827e15fcf5e93c0b716fd05133036be3ee14a5a25533e1c9fef5a0839bd2"
+    },
+    {
+      "file": "cameras/04.png",
+      "subject": "camera4",
+      "width": 400,
+      "height": 400,
+      "bytes": 38959,
+      "sha256": "7b18327a32342642af864563bff574b485ae5fb471eba05ea448aaf4984a2fd5"
+    },
+    {
+      "file": "cameras/05.png",
+      "subject": "camera5",
+      "width": 400,
+      "height": 400,
+      "bytes": 41743,
+      "sha256": "108422aaee97dfd2483594c3710b7ebe9ad0ba834112c4acf27a1880da705519"
+    },
+    {
+      "file": "televisions/01.png",
+      "subject": "tv1",
+      "width": 400,
+      "height": 400,
+      "bytes": 38276,
+      "sha256": "a260e2a68dd8d22f520380b9b6748e2e71ca68c863b33ad19b81e3ea2c619400"
+    },
+    {
+      "file": "televisions/02.png",
+      "subject": "tv2",
+      "width": 400,
+      "height": 400,
+      "bytes": 37818,
+      "sha256": "50b03ae479079525d53c3c190fd72d7be063f3ce8324e527e2157749cc48cdde"
+    },
+    {
+      "file": "televisions/03.png",
+      "subject": "tv3",
+      "width": 400,
+      "height": 400,
+      "bytes": 48906,
+      "sha256": "34928cd8527c2d220c569e55092c6635aa818641c91227c31b451b9050514381"
+    },
+    {
+      "file": "televisions/04.png",
+      "subject": "tv4",
+      "width": 400,
+      "height": 400,
+      "bytes": 47478,
+      "sha256": "03bee98e66bc64848006f0c37cf3093bbe866f525d21e60fa9dfaf901a497528"
+    },
+    {
+      "file": "televisions/05.png",
+      "subject": "tv5",
+      "width": 400,
+      "height": 400,
+      "bytes": 31381,
+      "sha256": "663f676d40c4c62b83bbc9807b86a5df4c7b5a7063fddafebc07664ad5144b8d"
+    },
+    {
+      "file": "gaming/01.png",
+      "subject": "gamepad",
+      "width": 400,
+      "height": 400,
+      "bytes": 38394,
+      "sha256": "058e7345c155f3fc1c0b329d1c1a106dfb8749e07562ea2484ded8964a3311f4"
+    },
+    {
+      "file": "gaming/02.png",
+      "subject": "handheld",
+      "width": 400,
+      "height": 400,
+      "bytes": 33535,
+      "sha256": "9298e304628c720177d0dcd6ab1a57dc73a99b5c9c30c476f58723bf2396afea"
+    },
+    {
+      "file": "gaming/03.png",
+      "subject": "vr",
+      "width": 400,
+      "height": 400,
+      "bytes": 35529,
+      "sha256": "414197be4588830709e70f6f729bf6a39a6c9e5c6ecd735f81f476b138ff5571"
+    },
+    {
+      "file": "gaming/04.png",
+      "subject": "arcade",
+      "width": 400,
+      "height": 400,
+      "bytes": 40003,
+      "sha256": "9887fcaeae392da92955b9e855ad24bc6cf5d98ed912b4b4c37afaf93fc33051"
+    },
+    {
+      "file": "gaming/05.png",
+      "subject": "gamekeys",
+      "width": 400,
+      "height": 400,
+      "bytes": 50812,
+      "sha256": "172472dd4e815e5f6ff046513e43855c402f0a8dbbc3bb6b4b13953284e791a4"
+    },
+    {
+      "file": "home_appliances/01.png",
+      "subject": "washer",
+      "width": 400,
+      "height": 400,
+      "bytes": 42350,
+      "sha256": "2e32c47546fe94528ea5b51cfd24847085db6cb603e4f2043cd2fed67f51ecb0"
+    },
+    {
+      "file": "home_appliances/02.png",
+      "subject": "fridge",
+      "width": 400,
+      "height": 400,
+      "bytes": 28583,
+      "sha256": "f5d945f526d93f0b72d0d385ceb2bafbf0ab52b7d2926d246c8df3bf58d8a0b1"
+    },
+    {
+      "file": "home_appliances/03.png",
+      "subject": "robovac",
+      "width": 400,
+      "height": 400,
+      "bytes": 49170,
+      "sha256": "f6875b131cad502adb26423081466f395b9455355065f05d1a17a324f2508c32"
+    },
+    {
+      "file": "home_appliances/04.png",
+      "subject": "purifier",
+      "width": 400,
+      "height": 400,
+      "bytes": 34831,
+      "sha256": "1a0008d0a04bb4a1a39f003f94dbd54f2a2098f86e9291f5002dbf3c0802f11b"
+    },
+    {
+      "file": "home_appliances/05.png",
+      "subject": "fan",
+      "width": 400,
+      "height": 400,
+      "bytes": 52100,
+      "sha256": "4cb21e4d0b0375b6261aae56c63c77768de0be1cc9134757e27b37e3a12d1379"
+    },
+    {
+      "file": "kitchen_appliances/01.png",
+      "subject": "toaster",
+      "width": 400,
+      "height": 400,
+      "bytes": 30867,
+      "sha256": "e50369c0842cae7b14490a4d98e04f9f576e6032939ed14223a28ebaa5ef5e64"
+    },
+    {
+      "file": "kitchen_appliances/02.png",
+      "subject": "blender",
+      "width": 400,
+      "height": 400,
+      "bytes": 37060,
+      "sha256": "c604d73274b508edd194fec13bda3c1d15828c446411bc63335989bb7dbcd58a"
+    },
+    {
+      "file": "kitchen_appliances/03.png",
+      "subject": "kettle",
+      "width": 400,
+      "height": 400,
+      "bytes": 34628,
+      "sha256": "ce840bf07647dc1f7478fcf602fc966165e74109b2f5574cae719ee2c19c1fa3"
+    },
+    {
+      "file": "kitchen_appliances/04.png",
+      "subject": "coffee",
+      "width": 400,
+      "height": 400,
+      "bytes": 33196,
+      "sha256": "00d5a529ae113bd2b218ed84396c91e496908c1be15a32f0b19278e1aa6e0a3f"
+    },
+    {
+      "file": "kitchen_appliances/05.png",
+      "subject": "mixer",
+      "width": 400,
+      "height": 400,
+      "bytes": 35185,
+      "sha256": "e241f83c295cac878cd5317b6559ebab8668fd34478d48d3e72cb5cb3f5e61f0"
+    },
+    {
+      "file": "fashion/01.png",
+      "subject": "tee",
+      "width": 400,
+      "height": 400,
+      "bytes": 41990,
+      "sha256": "569d7b417b257fd4eb04c8c98e8e62d0e13345a4c456f4c05dc87d88db2fd14b"
+    },
+    {
+      "file": "fashion/02.png",
+      "subject": "dress",
+      "width": 400,
+      "height": 400,
+      "bytes": 47554,
+      "sha256": "79bf352892507cf5765da2d9125d404ce5395e92602d36312f532a8284da1bb6"
+    },
+    {
+      "file": "fashion/03.png",
+      "subject": "jacket",
+      "width": 400,
+      "height": 400,
+      "bytes": 47929,
+      "sha256": "d4713e86fb2db4d5ebe55ce9e6fcb8275471cb8bb6e2d8d3fcc59daaaa280378"
+    },
+    {
+      "file": "fashion/04.png",
+      "subject": "jeans",
+      "width": 400,
+      "height": 400,
+      "bytes": 49906,
+      "sha256": "7a159afa8c7329f79ea2c651a2405722b334d1927a28c30f1681f083b68b5475"
+    },
+    {
+      "file": "fashion/05.png",
+      "subject": "hoodie",
+      "width": 400,
+      "height": 400,
+      "bytes": 38456,
+      "sha256": "62298ae618ac92ff3df98ed633769566c2e23f65c10176fadf143794b623df15"
+    },
+    {
+      "file": "footwear/01.png",
+      "subject": "sneaker",
+      "width": 400,
+      "height": 400,
+      "bytes": 33142,
+      "sha256": "d7b0560f204e89141c34f21131d97e8753b0f0dbc53fccd922470f49f07dcc15"
+    },
+    {
+      "file": "footwear/02.png",
+      "subject": "boot",
+      "width": 400,
+      "height": 400,
+      "bytes": 34578,
+      "sha256": "e047954be4c09b4b0d78d327761e7beb8a89b8c8f0be927091d5bf378c5e7d62"
+    },
+    {
+      "file": "footwear/03.png",
+      "subject": "heel",
+      "width": 400,
+      "height": 400,
+      "bytes": 37514,
+      "sha256": "bcfbc9683631a16a1a37b8fbdc5166f7dd64588d053e6f3792a4eada6652782b"
+    },
+    {
+      "file": "footwear/04.png",
+      "subject": "sandal",
+      "width": 400,
+      "height": 400,
+      "bytes": 33471,
+      "sha256": "5bf84ec50edd1480844d3927c8c862ce49a47e5158c4d8be8414e89d73a5ea13"
+    },
+    {
+      "file": "footwear/05.png",
+      "subject": "runner",
+      "width": 400,
+      "height": 400,
+      "bytes": 33593,
+      "sha256": "38fe98cc67d49b9953d718642c6d357fc89fb4e18cc1a10e8824e45125f2e97b"
+    },
+    {
+      "file": "beauty/01.png",
+      "subject": "lipstick",
+      "width": 400,
+      "height": 400,
+      "bytes": 32563,
+      "sha256": "84d5897f0ecb359082f90b33b600e8a1e3433f84b9f5f3342236d44f259ef772"
+    },
+    {
+      "file": "beauty/02.png",
+      "subject": "perfume",
+      "width": 400,
+      "height": 400,
+      "bytes": 33556,
+      "sha256": "685f1bfb174389f32bf7d95b1ee75baa3331b57249d9bb3805d89a95cc6cb602"
+    },
+    {
+      "file": "beauty/03.png",
+      "subject": "cream",
+      "width": 400,
+      "height": 400,
+      "bytes": 32070,
+      "sha256": "3ece999625e8e7cd41588488f10cb0b72d2e1375a9c83dd617a629a706975b4e"
+    },
+    {
+      "file": "beauty/04.png",
+      "subject": "compact",
+      "width": 400,
+      "height": 400,
+      "bytes": 39116,
+      "sha256": "2714fd086214574709ed3016b035be2cb55b50ef40190cde01da643f6e04ea32"
+    },
+    {
+      "file": "beauty/05.png",
+      "subject": "nailpolish",
+      "width": 400,
+      "height": 400,
+      "bytes": 32793,
+      "sha256": "e7e704c08f191c1b5b962639d6a55075318af884f48d3d11e9603fc73b514ec6"
+    },
+    {
+      "file": "accessories/01.png",
+      "subject": "sunglasses",
+      "width": 400,
+      "height": 400,
+      "bytes": 34072,
+      "sha256": "b56467f35150ff3d60bba8f4b90abe5854af8bc0b47c52d57b2e3dfa154ab540"
+    },
+    {
+      "file": "accessories/02.png",
+      "subject": "backpack",
+      "width": 400,
+      "height": 400,
+      "bytes": 32260,
+      "sha256": "4d919799006a2f162e0f8675695661b3ba98fe76bf89898cc86d6a8db1e36c47"
+    },
+    {
+      "file": "accessories/03.png",
+      "subject": "wallet",
+      "width": 400,
+      "height": 400,
+      "bytes": 30742,
+      "sha256": "99c0920a5951923c1520869eff6f314bef8b00769a6395a08124185480350610"
+    },
+    {
+      "file": "accessories/04.png",
+      "subject": "belt",
+      "width": 400,
+      "height": 400,
+      "bytes": 30659,
+      "sha256": "1adf91fd240cdfa92903f5c855dac8d27d3e510ab2166f677827d56145d34665"
+    },
+    {
+      "file": "accessories/05.png",
+      "subject": "cap",
+      "width": 400,
+      "height": 400,
+      "bytes": 36236,
+      "sha256": "37546e366d7c40a874d75f45c5387a4f6ebaafcc7057ca82f97590be4ef5359f"
+    },
+    {
+      "file": "home_living/01.png",
+      "subject": "lamp",
+      "width": 400,
+      "height": 400,
+      "bytes": 40925,
+      "sha256": "ffa0e1d914ed49c0563bdd5a9f849ed72cd9fc00be52ea9947f46e97b0f0de28"
+    },
+    {
+      "file": "home_living/02.png",
+      "subject": "sofa",
+      "width": 400,
+      "height": 400,
+      "bytes": 31393,
+      "sha256": "be09085c7e7145075dadeaa1e81bfb1176b21ae95938c0e52d578abb813eb0fb"
+    },
+    {
+      "file": "home_living/03.png",
+      "subject": "plant",
+      "width": 400,
+      "height": 400,
+      "bytes": 38224,
+      "sha256": "fdb160fa98377dabeb7dba750b99e1cc4f2302ccf2ee4ea1beb633ef20e35d96"
+    },
+    {
+      "file": "home_living/04.png",
+      "subject": "clock",
+      "width": 400,
+      "height": 400,
+      "bytes": 40825,
+      "sha256": "21a689bb02f95c8fb85ec6196a6d34e573f979523aa7798486e10e8b6cf321f4"
+    },
+    {
+      "file": "home_living/05.png",
+      "subject": "shelf",
+      "width": 400,
+      "height": 400,
+      "bytes": 29235,
+      "sha256": "9c910e42005d7fc6ac8889a7607f99fd638db135e3dea1e458a82d4d477c0a55"
+    }
+  ]
+}

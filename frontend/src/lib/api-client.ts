@@ -54,8 +54,19 @@ export interface Product {
   id: string;
   name: string;
   description: string | null;
+  category: string | null;
+  brand: string | null;
   sku: string;
   price: number;
+  list_price: number | null;
+  image_url: string | null;
+  image_alt: string | null;
+  image_source_url?: string | null;
+  image_creator?: string | null;
+  image_license?: string | null;
+  image_license_url?: string | null;
+  image_sha256?: string | null;
+  specifications: Record<string, string | number | boolean> | null;
   stock_quantity: number;
   max_purchase_quantity: number;
 }
@@ -64,12 +75,38 @@ export interface ProductPage {
   items: Product[];
   skip: number;
   limit: number;
+  total?: number;
 }
 
-export async function getProducts(skip = 0, limit = 24): Promise<ProductPage> {
+export interface ProductQuery {
+  q?: string;
+  category?: string;
+  brand?: string;
+  subcategory?: string;
+  min_price_minor?: number;
+  max_price_minor?: number;
+  in_stock_only?: boolean;
+  sort?: 'newest' | 'price_asc' | 'price_desc' | 'name_asc';
+}
+
+export async function getProducts(
+  skip = 0,
+  limit = 24,
+  filters: ProductQuery = {}
+): Promise<ProductPage> {
   const query = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== '' && value !== false) query.set(key, String(value));
+  });
   const response = await fetch(`/api/products?${query}`, { credentials: 'include' });
   return handleApiResponse<ProductPage>(response);
+}
+
+export async function getProduct(productId: string): Promise<Product> {
+  const response = await fetch(`/api/products/${encodeURIComponent(productId)}`, {
+    credentials: 'include',
+  });
+  return handleApiResponse<Product>(response);
 }
 
 /**

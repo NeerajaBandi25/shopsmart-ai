@@ -7,11 +7,14 @@ def test_routes_all_supported_intents():
     examples = {
         "Hello": AssistantIntent.GREETING,
         "How can you help?": AssistantIntent.HELP,
-        "Find products under $50": AssistantIntent.PRODUCT_SEARCH,
+        "Find products under ₹5,000": AssistantIntent.PRODUCT_SEARCH,
         "Compare these two": AssistantIntent.PRODUCT_COMPARE,
         "Which one is cheaper?": AssistantIntent.PRODUCT_COMPARE,
         "Which of these laptops is cheaper?": AssistantIntent.PRODUCT_COMPARE,
         "Any active offers?": AssistantIntent.PROMOTIONS,
+        "Can I use SAVE10?": AssistantIntent.PROMOTIONS,
+        "Apply coupon SAVE10": AssistantIntent.COUPON_APPLY,
+        "Remove my coupon": AssistantIntent.COUPON_REMOVE,
         "What's in my cart?": AssistantIntent.CART_QUERY,
         "Add to cart": AssistantIntent.CART_ACTION,
         "Track my order": AssistantIntent.ORDER_QUERY,
@@ -23,6 +26,14 @@ def test_routes_all_supported_intents():
 
     for message, expected in examples.items():
         assert route_assistant_message(message).intent is expected
+
+
+def test_coupon_routes_extract_only_bounded_coupon_codes():
+    check = route_assistant_message("Can I use SAVE10?")
+    apply = route_assistant_message("Apply coupon save10")
+
+    assert check.coupon_code == "SAVE10"
+    assert apply.coupon_code == "SAVE10"
 
 
 def test_catalog_filters_use_current_supported_fields():
@@ -80,6 +91,15 @@ def test_minimum_and_maximum_price_constraints_are_structural():
     assert route.category == "laptops"
     assert route.min_price_cents == 100_000
     assert route.max_price_cents == 6_000_000
+
+
+def test_rupee_grouped_amounts_are_parsed_as_inr():
+    route = route_assistant_message("Find in-stock products under ₹5,000")
+
+    assert route.intent is AssistantIntent.PRODUCT_SEARCH
+    assert route.max_price_cents == 500_000
+    assert route.in_stock_only is True
+    assert route.invalid_price_filter is False
 
 
 def test_ambiguous_mutation_is_not_inferred():

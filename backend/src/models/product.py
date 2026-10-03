@@ -1,6 +1,8 @@
 """Product entity model."""
 
-from sqlalchemy import CheckConstraint, Index, Integer, String
+from typing import Any
+
+from sqlalchemy import JSON, CheckConstraint, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import BaseModel
@@ -16,6 +18,22 @@ PRODUCT_CATEGORIES = frozenset(
         "home",
         "beauty",
         "groceries",
+        "furniture",
+        "sports",
+        "toys",
+        "books",
+        "automotive",
+        "pet_supplies",
+        "smartphones",
+        "headphones",
+        "smartwatches",
+        "tablets",
+        "cameras",
+        "televisions",
+        "gaming",
+        "home_appliances",
+        "kitchen_appliances",
+        "home_living",
     }
 )
 
@@ -35,6 +53,7 @@ class Product(BaseModel):
         nullable=True,
     )
     category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    brand: Mapped[str | None] = mapped_column(String(120), nullable=True)
     sku: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
@@ -45,6 +64,15 @@ class Product(BaseModel):
         Integer,
         nullable=False,
     )
+    list_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_alt: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    image_source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    image_creator: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    image_license: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    image_license_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    image_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    specifications: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     stock_quantity: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -69,11 +97,15 @@ class Product(BaseModel):
 
     __table_args__ = (
         CheckConstraint("price >= 0", name="ck_products_price_non_negative"),
+        CheckConstraint(
+            "list_price IS NULL OR list_price >= price",
+            name="ck_products_list_price_not_below_price",
+        ),
         CheckConstraint("stock_quantity >= 0", name="ck_products_stock_non_negative"),
         CheckConstraint("max_purchase_quantity >= 1", name="ck_products_max_purchase_positive"),
         Index("ix_products_is_active", "is_active"),
         CheckConstraint(
-            "category IS NULL OR category IN ('laptops', 'phones', 'accessories', 'footwear', 'fashion', 'appliances', 'home', 'beauty', 'groceries')",
+            "category IS NULL OR category IN ('laptops', 'phones', 'accessories', 'footwear', 'fashion', 'appliances', 'home', 'beauty', 'groceries', 'furniture', 'sports', 'toys', 'books', 'automotive', 'pet_supplies', 'smartphones', 'headphones', 'smartwatches', 'tablets', 'cameras', 'televisions', 'gaming', 'home_appliances', 'kitchen_appliances', 'home_living')",
             name="ck_products_category_canonical",
         ),
         Index("ix_products_category", "category"),

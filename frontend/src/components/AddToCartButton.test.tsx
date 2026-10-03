@@ -19,7 +19,7 @@ describe('AddToCartButton', () => {
     (addCartItem as jest.Mock).mockResolvedValue({
       items: [{ quantity: 2 }],
       subtotal: 100,
-      currency: 'USD',
+      currency: 'INR',
     });
     render(<AddToCartButton productId="lamp-1" stockQuantity={8} maxPurchaseQuantity={3} />);
 

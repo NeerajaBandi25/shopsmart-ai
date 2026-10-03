@@ -1,36 +1,29 @@
-# Latest Feature 008 Verification
+# Latest Verification — Portfolio Completion Check (2026-10-03)
 
-The authentication registration report below is a historical snapshot from September 15, 2026. Its environment-unavailable conclusion does not describe the current feature branch or current local environment.
+## Automated Checks
 
-## Focused Backend Checks
+- Backend: 282 passed, 6 skipped, 1 Pydantic deprecation warning. The suite used a disposable SQLite database URL; SQLite skips the PostgreSQL row-lock proof and PostgreSQL-only persistence tests.
+- Frontend: `tsc --noEmit` passed; Jest passed 24 suites/138 tests; `next lint` passed; `next build` completed successfully.
+- The frontend dev server on port 3001 was restarted after the production build replaced shared `.next` artifacts. It now serves the styled application; the backend remains on the dedicated port 8001.
 
-- Assistant router: 15 passed, including unsupported natural-language category requests and cheaper-comparison phrasing.
-- Assistant service: selected-product cart add/remove regression passed; structured product-search log test passed.
-- Seed reset ownership: reserved cart-ID collision test passed without deleting unrelated data.
-- Document ingestion capability: 3 passed; production environment is denied even when the feature flag is enabled.
-- Provider prompt safety: 2 passed for injection filtering and escaped prompt delimiters.
-- Full backend suite: 249/249 passed, exit code 0, in 114.70 seconds; one warning was reported.
+## Database And Browser Checks
 
-## Frontend And Static Checks
+- Read-only queries were directed only to `shopsmart_portfolio` at `127.0.0.1`: 1,200 products; Alembic revision `017_order_delivery_images`.
+- All 1,200 products have local artwork. The assets are repository-generated originals with provenance and SHA-256 entries in `frontend/public/images/products/portfolio/manifest.json`. `image_license_url` is empty because these assets are internal, not externally licensed.
+- The live catalog rendered the 1,200-result count and 24 product cards. Four lazy-loaded catalog images had completed with nonzero natural dimensions at the time of inspection; no broken image was observed among those four. A direct HTTP HEAD request for a representative asset returned 200.
+- Direct navigation to a live product detail page showed the product image, brand, INR price/list price, stock, highlights, specifications, and add-to-cart controls.
+- Previously recorded synthetic browser journeys verified checkout delivery capture, immutable order image snapshots/history, INR assistant filtering, and add-to-cart. No payment or real delivery provider is integrated.
+- Responsive screenshot evidence remains **unverified**. The embedded browser reports the requested Playwright viewport separately from the actual document viewport, so captures from it are not acceptable evidence. The old screenshot files must be replaced only after a matching CSS viewport is available.
 
-- Frontend Jest: 22 suites and 113 tests passed.
-- TypeScript compiler check, frontend lint, changed-file Prettier, changed backend Black check, backend compileall, and Next.js production build passed for the validated state.
-- Ruff and `alembic check` reported pre-existing findings documented during branch validation; no unrelated baseline findings were changed.
-- Alembic has one head, `012_product_structured_category`, and the local application database is at that revision. `alembic check` reports inherited drift for `login_attempts.ip_address` / `sessions.ip_address` (`VARCHAR(45)` versus `INET`) and the existing users email index uniqueness mismatch.
+## Readiness Gate
 
-## Local Data And Browser Flows
+**Portfolio ready: NO.** The 14-journey acceptance set, reliable responsive screenshots, keyboard/accessibility checks, security-log review, performance evidence, and independent post-implementation critique are still pending. No production database, deployment, reset, or reseed was used in this verification.
 
-- The production-like evaluator passed all 24 scenarios against the already seeded database without reseeding or resetting: 1,008 products, 12 users, 9 carts, 12 orders, and 7 knowledge sources. Eight products have unknown category. Category/price precision was 100%; ownership, policy citation/no-evidence, prompt/provider override, no-promotion, and cart mutation scenarios passed.
-- Five-sample median latency: catalog 1.19 ms, assistant 4.75 ms, cart 1.12 ms, order 1.52 ms, and policy retrieval 0.92 ms.
-- Browser checks through the Next.js BFF covered authenticated product search, laptop and phone structured filters, cheaper comparison, selected-product cart add/read/remove, an empty-order response, policy citations, and a second synthetic user. The phone query returned 20 phone-only results below its $30,000 cap. The policy answer cited synthetic local-only sources.
-- The second user saw zero conversations; requesting the first user's captured conversation returned the expected 404 `conversation_not_found`, and the second user's cart remained empty. No unexpected 500 or 503 response was observed.
-- Reset ownership regression tests verify refusal before mutation when a deterministic cart ID belongs to an unrelated user. No seed/reset command was run during browser validation.
+---
 
-## Review Findings
+## Historical Feature 008 Verification
 
-The independent review findings fixed in this branch were: non-local access to customer document ingestion, reset deletion through a colliding cart ID, natural-language unsupported category fallback, selected-product precedence over explicit product references, and unescaped provider prompt delimiters / a missed injection paraphrase. The documented reset behavior for conversations and documents owned by reserved synthetic accounts was retained.
-
-**Gate status**: T021 is complete. The full backend run returned an authoritative summary and exit code; the focused checks and other recorded validation gates passed.
+The Feature 008 and authentication-registration reports below are historical snapshots. Their counts, schema revision, and environment notes do not describe the current feature branch or local application database.
 
 ---
 
