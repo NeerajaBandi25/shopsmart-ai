@@ -6,7 +6,10 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from src.services.ai_governance import DataClassification
+from src.services.ai_governance import (
+    DataClassification,
+    normalize_classification,
+)
 
 
 @dataclass(frozen=True)
@@ -16,7 +19,10 @@ class Evidence:
     source_label: str
     page_number: int | None
     chunk_index: int
-    classification: DataClassification = DataClassification.PRIVATE
+    classification: DataClassification | str = DataClassification.PRIVATE
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "classification", normalize_classification(self.classification))
 
 
 @dataclass(frozen=True)
@@ -47,6 +53,7 @@ class GroundedAnswerProvider:
 
     injection_patterns = (
         r"ignore\s+(?:all\s+)?(?:previous| prior| earlier)\s+instructions?",
+        r"disregard\s+(?:all\s+)?(?:previous|prior|earlier)\s+(?:directives|instructions?)",
         r"(?:system|developer)\s*(?:message|prompt|instruction)",
         r"(?:reveal|show| disclose)\s+(?:the\s+)?(?:secret|api\s*key|password|token)",
         r"(?:change|switch|use)\s+(?:the\s+)?(?:provider|model)",
@@ -60,13 +67,22 @@ class GroundedAnswerProvider:
         "are",
         "does",
         "explain",
+        "for",
         "is",
         "of",
+        "policy",
         "the",
         "that",
         "to",
         "what",
         "which",
+        "a",
+        "after",
+        "can",
+        "i",
+        "my",
+        "on",
+        "this",
     }
 
     @classmethod
@@ -109,11 +125,12 @@ class GroundedAnswerProvider:
                 "I couldn't use the retrieved content safely to answer that.", False, 0
             )
         question_terms = set(re.findall(r"[a-z0-9]+", question.lower())) - self.stopwords
-        relevant = [
-            item
-            for item in safe
-            if question_terms & set(re.findall(r"[a-z0-9]+", item.text.lower()))
-        ]
+        minimum_matching_terms = 2 if len(question_terms) > 2 else 1
+        relevant = []
+        for item in safe:
+            matching_terms = question_terms & set(re.findall(r"[a-z0-9]+", item.text.lower()))
+            if len(matching_terms) >= minimum_matching_terms:
+                relevant.append(item)
         if not relevant:
             return ProviderAnswer(
                 "I couldn't find enough evidence in your documents to answer that.", False, 0

@@ -1,4 +1,4 @@
-"""Schema verification for the products Alembic revision."""
+"""Schema verification for the base products Alembic revision."""
 
 from importlib import import_module
 
@@ -21,26 +21,29 @@ def test_product_migration_matches_model_columns_constraints_and_indexes():
 
             inspector = inspect(connection)
             migrated_columns = {column["name"] for column in inspector.get_columns("products")}
-            model_columns = {column.name for column in Product.__table__.columns}
+            model_columns = {
+                column.name for column in Product.__table__.columns if column.name != "category"
+            }
             assert migrated_columns == model_columns
 
             migrated_checks = {
-                constraint["name"]
-                for constraint in inspector.get_check_constraints("products")
+                constraint["name"] for constraint in inspector.get_check_constraints("products")
             }
             model_checks = {
                 constraint.name
                 for constraint in Product.__table__.constraints
                 if isinstance(constraint, CheckConstraint)
+                and constraint.name != "ck_products_category_canonical"
             }
             assert migrated_checks == model_checks
 
             migrated_indexes = {
-                index["name"]: index["unique"]
-                for index in inspector.get_indexes("products")
+                index["name"]: index["unique"] for index in inspector.get_indexes("products")
             }
             model_indexes = {
-                index.name: index.unique for index in Product.__table__.indexes
+                index.name: index.unique
+                for index in Product.__table__.indexes
+                if index.name != "ix_products_category"
             }
             assert migrated_indexes == model_indexes
 

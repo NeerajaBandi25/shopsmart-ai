@@ -25,6 +25,7 @@ class DocumentResponse(BaseModel):
 class Citation(BaseModel):
     citation_id: str
     document_id: UUID
+    knowledge_version_id: UUID | None = None
     source_label: str
     page_number: int | None = None
     chunk_index: int
@@ -37,15 +38,13 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     conversation_id: UUID
+    message_id: UUID
     answer: str
     answerable: bool
+    reason: str | None = None
     citations: list[Citation]
-    retrieval_count: int
-    token_count: int
-    estimated_cost_usd: float
-    provider: str = "deterministic"
-    model: str = "local-deterministic-v1"
-    fallback_used: bool = False
+    intent: str = "UNSUPPORTED"
+    result_data: dict | None = None
 
 
 class ConversationResponse(BaseModel):
@@ -59,4 +58,5 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     citations: list[Citation] = Field(default_factory=list)
+    result_data: dict | None = None
     created_at: datetime

@@ -309,23 +309,25 @@ async def test_unhandled_exception_log_has_safe_request_context_without_exceptio
     )
 
     with patch("src.main.logger.error") as error_log:
-        response = await general_exception_handler(request, RuntimeError(secret_message))
+        try:
+            raise RuntimeError(secret_message)
+        except RuntimeError as error:
+            response = await general_exception_handler(request, error)
 
     assert response.status_code == 500
     assert response.body == (
         b'{"detail":"Internal server error","status_code":500,' b'"error_code":"INTERNAL_ERROR"}'
     )
-    error_log.assert_called_once_with(
-        "unhandled_exception",
-        extra={
-            "event": "unhandled_exception",
-            "exception_type": "RuntimeError",
-            "request_id": "safe-error-context-1",
-            "method": "OTHER",
-            "route": "/api/v1/orders/checkout",
-            "status_code": 500,
-        },
-    )
+    error_log.assert_called_once()
+    assert error_log.call_args.args == ("unhandled_exception",)
+    assert error_log.call_args.kwargs["extra"] == {
+        "event": "unhandled_exception",
+        "exception_type": "RuntimeError",
+        "request_id": "safe-error-context-1",
+        "method": "OTHER",
+        "route": "/api/v1/orders/checkout",
+        "status_code": 500,
+    }
     record = logging.LogRecord(
         name="src.main",
         level=logging.ERROR,
@@ -333,7 +335,7 @@ async def test_unhandled_exception_log_has_safe_request_context_without_exceptio
         lineno=0,
         msg="unhandled_exception",
         args=(),
-        exc_info=None,
+        exc_info=error_log.call_args.kwargs["exc_info"],
     )
     record.__dict__.update(error_log.call_args.kwargs["extra"])
     structured = json.loads(JsonLogFormatter().format(record))
@@ -345,4 +347,5 @@ async def test_unhandled_exception_log_has_safe_request_context_without_exceptio
         "route": "/api/v1/orders/checkout",
         "status_code": 500,
     }
+    assert "raise RuntimeError" in structured["stack_trace"]
     assert secret_message not in JsonLogFormatter().format(record)

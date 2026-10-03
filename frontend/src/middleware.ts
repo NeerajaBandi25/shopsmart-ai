@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getSetCookieHeaders } from './src/app/api/auth/_proxy';
+import { getSetCookieHeaders } from './app/api/auth/_proxy';
 
 // Define paths that require authentication
 const protectedPaths = [
   '/dashboard',
   '/orders',
   '/account',
+  '/assistant',
   // Add other protected paths as needed
 ];
 
@@ -118,7 +119,7 @@ export const config = {
      * Match all request paths except:
      * - _next/static (static files)
      * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
+     * - favicon.ico
      * - public folder
      */
     '/((?!_next/static|_next/image|favicon.ico|public).*)',

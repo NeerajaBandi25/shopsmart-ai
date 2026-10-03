@@ -6,6 +6,7 @@ import re
 import sys
 import threading
 import time
+import traceback
 from collections import Counter, defaultdict
 from contextvars import ContextVar
 from datetime import datetime, timezone
@@ -48,10 +49,21 @@ _LOG_CONTEXT_FIELDS = frozenset(
     {
         "event",
         "success",
+        "service",
+        "tool",
         "method",
         "route",
+        "intent",
+        "operation",
+        "category",
+        "min_price_cents",
+        "max_price_cents",
+        "in_stock_only",
+        "result_count",
         "status_code",
         "duration_ms",
+        "error_type",
+        "error_code",
         "user_id",
         "client_ip",
         "user_agent",
@@ -82,6 +94,8 @@ class JsonLogFormatter(logging.Formatter):
             "request_id": getattr(record, "request_id", None) or request_id_context.get(),
             "context": context,
         }
+        if record.exc_info and record.exc_info[2]:
+            payload["stack_trace"] = "".join(traceback.format_tb(record.exc_info[2]))
         return json.dumps(payload, separators=(",", ":"), default=str)
 
 

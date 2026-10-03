@@ -30,6 +30,19 @@ uvicorn src.main:app --reload
 
 The versioned API prefix is `/api/v1`. Authentication routes include registration, login, logout, current-user (`/auth/me`), CSRF (`/auth/csrf`), self-profile (`/users/profile`), and password change (`/users/password`). Logout and password change require the session-bound token returned by `/auth/csrf` in `X-CSRF-Token`.
 
+## Commerce Assistant Knowledge
+
+`POST /api/v1/ai/chat` is an authenticated commerce assistant. Product, cart, and order facts come from the existing services; provider/model governance details are not returned to customers. No promotion service or structured product brand/variant fields currently exist; canonical product categories are supported. The assistant does not invent offers or claim unsupported filters. RAG is reserved for curated ShopSmart policies and guides. Customer-owned document APIs are hidden from OpenAPI and disabled unless `AI_USER_DOCUMENTS_ENABLED=true` is set for an isolated internal/test environment.
+
+Apply the Alembic migrations before starting the updated backend. To publish an approved policy source, create a server-side JSON file with `source_key`, `title`, `category`, and `content`, then explicitly enable the guarded command:
+
+```powershell
+$env:SHOPSMART_ALLOW_KNOWLEDGE_PUBLISH = "true"
+python scripts/publish_knowledge.py .\approved-policy.json --apply
+```
+
+Only publish policy text approved by ShopSmart. The command is not an end-user upload route; it versions and indexes content in the separate backend-owned corpus. Without published source material, policy questions safely return that the information was not found.
+
 ## Tests and Quality
 
 ```powershell

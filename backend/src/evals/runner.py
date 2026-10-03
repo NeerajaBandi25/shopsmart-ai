@@ -18,6 +18,7 @@ import src.models.order  # noqa: F401
 import src.models.product  # noqa: F401
 import src.models.session  # noqa: F401
 import src.models.user  # noqa: F401
+from src.evals.assistant_eval import evaluate_assistant_dataset
 from src.models.base import Base
 from src.services.ai_ingestion import DocumentIngestionService
 from src.services.ai_provider import GroundedAnswerProvider
@@ -145,8 +146,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run deterministic ShopSmart AI evaluations")
     parser.add_argument("--dataset", type=Path, default=Path("evals/datasets/golden_v1.json"))
     parser.add_argument("--baseline", type=Path, default=Path("evals/baselines/v1.json"))
+    parser.add_argument(
+        "--assistant-dataset", type=Path, default=Path("evals/datasets/commerce_v1.json")
+    )
     args = parser.parse_args()
-    result = run_contract_evaluation(load_dataset(args.dataset), load_dataset(args.baseline))
+    result = run_contract_evaluation(load_dataset(args.dataset))
+    result.update(evaluate_assistant_dataset(load_dataset(args.assistant_dataset)))
+    accepted = load_dataset(args.baseline)["accepted_baseline"]
+    result["baseline_passed"] = float(
+        all(
+            result.get(key, 0.0) >= value - accepted.get("max_regression", 0.0)
+            for key, value in accepted.items()
+            if key != "max_regression"
+        )
+    )
     print(json.dumps(result, indent=2, sort_keys=True))
     if not result["baseline_passed"]:
         raise SystemExit(1)

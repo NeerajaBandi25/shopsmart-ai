@@ -1,0 +1,66 @@
+{
+  "version": "commerce-v1",
+  "cases": [
+    { "id": "intent-greeting", "question": "Hello", "intent": "GREETING" },
+    { "id": "intent-help", "question": "Help", "intent": "HELP" },
+    {
+      "id": "intent-product-search",
+      "question": "Find headphones",
+      "intent": "PRODUCT_SEARCH"
+    },
+    {
+      "id": "intent-product-compare",
+      "question": "Compare headphones versus earbuds",
+      "intent": "PRODUCT_COMPARE"
+    },
+    {
+      "id": "intent-promotions",
+      "question": "Any active offers?",
+      "intent": "PROMOTIONS"
+    },
+    {
+      "id": "intent-cart-query",
+      "question": "What's in my cart?",
+      "intent": "CART_QUERY"
+    },
+    {
+      "id": "intent-cart-action",
+      "question": "Add to cart headphones",
+      "intent": "CART_ACTION"
+    },
+    {
+      "id": "intent-order-query",
+      "question": "Track my order",
+      "intent": "ORDER_QUERY"
+    },
+    {
+      "id": "intent-policy-query",
+      "question": "What is the return policy?",
+      "intent": "POLICY_QUERY"
+    },
+    {
+      "id": "intent-support-query",
+      "question": "Contact customer service",
+      "intent": "SUPPORT_QUERY"
+    },
+    {
+      "id": "intent-unsupported",
+      "question": "Tell me a joke",
+      "intent": "UNSUPPORTED"
+    },
+    {
+      "id": "filter-price-stock",
+      "question": "Find in-stock headphones under $49.99",
+      "intent": "PRODUCT_SEARCH",
+      "max_price_cents": 4999,
+      "in_stock_only": true
+    },
+    {
+      "id": "filter-price-only",
+      "question": "Show products up to $120",
+      "intent": "PRODUCT_SEARCH",
+      "max_price_cents": 12000,
+      "in_stock_only": false
+    }
+  ]
+}

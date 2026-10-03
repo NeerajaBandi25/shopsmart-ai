@@ -1,9 +1,23 @@
 """Product entity model."""
 
-from sqlalchemy import String, Integer, Numeric, CheckConstraint, Index
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import CheckConstraint, Index, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import BaseModel
+
+PRODUCT_CATEGORIES = frozenset(
+    {
+        "laptops",
+        "phones",
+        "accessories",
+        "footwear",
+        "fashion",
+        "appliances",
+        "home",
+        "beauty",
+        "groceries",
+    }
+)
 
 
 class Product(BaseModel):
@@ -20,6 +34,7 @@ class Product(BaseModel):
         String(1000),
         nullable=True,
     )
+    category: Mapped[str | None] = mapped_column(String(32), nullable=True)
     sku: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
@@ -57,6 +72,11 @@ class Product(BaseModel):
         CheckConstraint("stock_quantity >= 0", name="ck_products_stock_non_negative"),
         CheckConstraint("max_purchase_quantity >= 1", name="ck_products_max_purchase_positive"),
         Index("ix_products_is_active", "is_active"),
+        CheckConstraint(
+            "category IS NULL OR category IN ('laptops', 'phones', 'accessories', 'footwear', 'fashion', 'appliances', 'home', 'beauty', 'groceries')",
+            name="ck_products_category_canonical",
+        ),
+        Index("ix_products_category", "category"),
     )
 
     def __repr__(self) -> str:

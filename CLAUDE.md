@@ -5,8 +5,9 @@
 ShopSmart AI is one coherent production-style portfolio project and one repository.
 
 The product combines:
+
 - E-commerce: authentication, products, cart, checkout, orders, order history.
-- AI assistant: document/PDF upload, ingestion, chunking, embeddings, vector retrieval, grounded answers, source citations, chat/session history.
+- AI assistant: authenticated commerce help, deterministic intent routing, authoritative catalog/cart/order tools, and grounded answers from backend-owned ShopSmart policies/guides.
 - Production engineering: PostgreSQL, Redis, FastAPI, Next.js, Docker, CI/CD, AWS deployment, observability, testing and security.
 
 Do not split this into two unrelated portfolio repositories. The roadmap's ShopSmart and DocuAsk work should be integrated into the same product/codebase unless the user explicitly changes that decision.
@@ -19,22 +20,25 @@ Build an interview-defensible, production-oriented system while learning the con
 The uploaded 75-Day Full-Stack AI Engineer Roadmap is the learning plan for this repository.
 
 Its daily rhythm is:
+
 - 00:00–00:45 — theory/concepts
 - 00:45–01:30 — hands-on implementation
 - end of day — Git commit + interview question/note
 - every 7th day is a rest/review day
 
 The roadmap progresses through:
+
 1. SQL/PostgreSQL — ShopSmart database
 2. Python — service layer
 3. FastAPI + Docker — REST API
 4. Next.js + full-stack integration + CI/CD + AWS
-5. AI/RAG — integrated document assistant
+5. AI/RAG — integrated ShopSmart commerce assistant with backend-owned policy knowledge
 6. Interview preparation — DSA, system design and behavioral stories
 
 The roadmap explicitly covers database integrity and performance, async Python, repository/service separation, API design, JWT auth, testing, Docker Compose, Redis, Next.js BFF/auth/state/performance, observability, GitHub Actions, AWS SQS/ECS/RDS/Vercel/CloudWatch, RAG, vector search, streaming chat, conversation history, and system design.
 
 Relevant source details:
+
 - SQL phase builds users, products, orders and order_items, then indexes, advanced queries, transactions, locking, window functions, PostgreSQL JSONB/triggers/materialized views, Alembic migrations, and a final ShopSmart schema/integration check.
 - Python phase emphasizes type hints, Pydantic validation, async/await, asyncpg pooling, parameterized queries, pytest/coverage, repository/service separation, custom exceptions and structured JSON logging.
 - FastAPI phase adds dependencies, middleware, async DB access, JWT authentication, API versioning, cursor pagination, idempotency, global error handling, tests and Docker.
@@ -51,38 +55,39 @@ The supplied PDF is titled 75-Day, but the readable source content ends partway 
 Preferred high-level architecture:
 
 Browser
-  -> Next.js frontend/BFF
-  -> FastAPI backend
-  -> PostgreSQL
-  -> Redis
+-> Next.js frontend/BFF
+-> FastAPI backend
+-> PostgreSQL
+-> Redis
 
 AI path:
-Next.js chat/document UI
-  -> Next.js BFF
-  -> FastAPI AI service
-  -> document storage
-  -> ingestion/chunking
-  -> embeddings
-  -> vector store
-  -> retrieval
-  -> LLM
-  -> grounded answer + source citations
-  -> streaming response to UI
+Next.js commerce assistant UI
+-> Next.js BFF
+-> FastAPI AI service
+-> deterministic intent router
+-> authenticated tool selection
+-> existing catalog/cart/order services for dynamic facts
+-> backend-owned policy knowledge retrieval for stable facts only
+-> provider gateway when explanation/generation is useful
+-> grounded response + relevant policy citations
+-> response to UI
+
+Customer document upload is not part of the normal ShopSmart assistant experience. Retained user-owned ingestion is internal/admin/test-only. ShopSmart policy ingestion is server/admin-owned and versioned.
 
 Production path:
 GitHub
-  -> CI
-  -> tests/type checks/build
-  -> container image
-  -> deployment
-  -> health checks
-  -> logs/metrics/error monitoring
+-> CI
+-> tests/type checks/build
+-> container image
+-> deployment
+-> health checks
+-> logs/metrics/error monitoring
 
 Event path when introduced:
 order placed
-  -> event/message
-  -> SQS
-  -> consumer/email or downstream work
+-> event/message
+-> SQS
+-> consumer/email or downstream work
 
 Keep component boundaries explicit. Do not collapse DB access, business logic, HTTP concerns and AI orchestration into one large module.
 
@@ -98,6 +103,7 @@ tests/
 scripts/
 
 Backend should preserve the roadmap's separation of:
+
 - API/routes
 - services/business logic
 - repositories/data access
@@ -105,6 +111,7 @@ Backend should preserve the roadmap's separation of:
 - core/configuration/database/auth/logging/exceptions
 
 Frontend should separate:
+
 - app/pages/routes
 - UI components
 - client/server data access
@@ -137,6 +144,7 @@ When the user asks for a teaching day, explain the reason behind the implementat
 Act as an engineering partner, not a blind code generator.
 
 Before modifying code:
+
 - inspect existing files and architecture;
 - search for existing implementations;
 - reuse stable project conventions;
@@ -144,6 +152,7 @@ Before modifying code:
 - state assumptions that affect architecture.
 
 Never:
+
 - invent APIs, files or project behavior without checking;
 - silently rewrite unrelated code;
 - add dependencies without a reason;
@@ -158,6 +167,7 @@ For substantial changes, show the intended change first when practical, then imp
 Testing is part of implementation, not a final cleanup task.
 
 Backend:
+
 - unit tests for business logic
 - repository tests where useful
 - API integration tests for important endpoints
@@ -166,11 +176,13 @@ Backend:
 - concurrency/transaction tests for checkout-critical behavior
 
 Frontend:
+
 - component behavior tests where valuable
 - API/BFF contract tests
 - critical user-flow tests
 
 AI/RAG:
+
 - retrieval tests
 - citation/source attribution checks
 - groundedness/fallback behavior checks
@@ -182,6 +194,7 @@ Quality target:
 Start from the roadmap's 80%+ / 90%+ coverage goals where applicable, but prioritize meaningful coverage over gaming the number.
 
 Always test:
+
 - success path
 - validation failure
 - missing resource
@@ -193,6 +206,7 @@ Always test:
 ## 8. Security rules
 
 Never commit:
+
 - API keys
 - database passwords
 - JWT signing secrets
@@ -206,6 +220,7 @@ Use environment variables or a proper secrets mechanism.
 The roadmap contains teaching examples with hard-coded secrets/passwords. Those examples are learning aids, not production rules. Convert them to configuration/secrets before committing production code.
 
 For web authentication:
+
 - prefer secure, httpOnly cookies for browser-visible sessions/tokens;
 - protect against CSRF where cookie-based auth requires it;
 - do not expose privileged server-side secrets to the browser;
@@ -214,6 +229,7 @@ For web authentication:
 Use parameterized database queries and never interpolate user input into SQL.
 
 Validate uploads:
+
 - allowed file types
 - maximum size
 - safe filenames/object keys
@@ -225,6 +241,7 @@ Validate uploads:
 PostgreSQL is the system of record.
 
 Use:
+
 - foreign keys and constraints
 - appropriate indexes
 - transactions for multi-step business operations
@@ -243,6 +260,7 @@ Idempotency is mandatory for retriable checkout/payment-style operations.
 ## 10. FastAPI rules
 
 Use:
+
 - typed request/response models
 - dependency injection for cross-cutting concerns
 - async DB access where appropriate
@@ -260,12 +278,13 @@ Do not return internal stack traces or raw exceptions to users.
 Use the Next.js BFF direction from the roadmap where applicable:
 
 Browser
-  -> Next.js server route/BFF
-  -> FastAPI
+-> Next.js server route/BFF
+-> FastAPI
 
 Prefer server-side handling of privileged auth tokens and backend URLs.
 
 Use React performance techniques only where measured/justified:
+
 - memoization
 - stable callbacks
 - virtualization for large lists
@@ -280,11 +299,13 @@ Avoid putting server state into global client state without a reason.
 Redis is for performance/supporting workloads, not the primary source of truth.
 
 Use it for:
+
 - cacheable product queries
 - rate limiting
 - other deliberately short-lived coordination/data
 
 Every cache needs:
+
 - key design
 - TTL/invalidation strategy
 - miss behavior
@@ -294,32 +315,23 @@ The application must remain correct when the cache is empty or temporarily unava
 
 ## 13. AI/RAG rules
 
-AI features must be grounded in retrieved project data/documents.
+ShopSmart AI is an authenticated commerce assistant, not a generic customer-document assistant. It supports deterministic routing for greeting/help, product search/compare, promotions, cart, orders, policy/support, and unsupported requests.
 
-The assistant should:
-- retrieve relevant chunks;
-- pass only justified context to the model;
-- return source/citation metadata;
-- clearly say when the answer is not supported by the retrieved document;
-- avoid fabricating facts.
+Dynamic/transactional data (price, inventory, offers/eligibility, cart, checkout, and orders) MUST come from authoritative ShopSmart services/APIs. RAG and model output MUST NOT be used as the authority for those facts. If a promotion capability is absent, say no applicable active offer is available; do not infer discounts. Exact numeric product filters MUST be enforced structurally using supported catalog fields.
 
-RAG pipeline:
-ingest -> load -> clean -> chunk -> embed -> store -> retrieve -> rerank when justified -> generate -> cite
+RAG is for stable backend-maintained ShopSmart content such as returns, refunds, shipping, warranty, payments, loyalty, guides, and FAQs. Its pipeline is `content source -> normalize -> chunk -> embed -> index -> version -> evaluate -> retrieve -> ground -> cite`. Customer uploads are not part of the primary assistant UX; any retained customer-owned ingestion is internal/admin/test-only. Do not fake a system user or weaken owner isolation to represent backend-owned knowledge.
 
-Chunking must be tested rather than blindly accepting a fixed number.
+The orchestration path is:
+`user -> intent router -> authentication/policy -> bounded tool or policy-RAG selection -> existing services -> provider gateway when useful -> grounding/citations -> response`.
 
-For expensive/live model calls:
-- abstract the model provider;
-- keep temperature/settings deterministic where practical;
-- centralize model configuration;
-- cache safe/repeatable work;
-- support a local/mock provider for tests.
+Tool calls MUST be typed, bounded, authorized, and delegated to existing services. The model MUST NOT execute SQL, access databases, choose arbitrary provider/models, invent entity IDs, or bypass cart/order ownership. Conversation references resolve only against that user's bounded prior results. Mutations require explicit user intent and normal CSRF/API authorization.
 
-Do not make the repository's entire test suite depend on paid external APIs.
+Preserve owner isolation, policy-first provider routing, classification enforcement for external providers, citation provenance, secure sessions, CSRF, and server-authoritative data. The provider gateway remains abstracted; deterministic local/mock implementations keep evals offline. Never make tests depend on paid external APIs.
 
 ## 14. Observability
 
 Production code should provide:
+
 - structured logs
 - request IDs/correlation IDs where useful
 - health/readiness endpoints
@@ -341,6 +353,7 @@ Never simply suppress the error.
 ## 15. Docker and deployment
 
 Containers should:
+
 - use small trusted base images where practical;
 - avoid running the application as root;
 - keep dependency installation cache-friendly;
@@ -357,6 +370,7 @@ Do not assume a specific cloud free-tier price or quota is permanent. Verify cur
 ## 16. CI/CD rules
 
 Every meaningful change should be able to pass:
+
 - backend tests
 - frontend tests/build
 - formatting/lint/type checks appropriate to the stack
@@ -371,6 +385,7 @@ Deployment should only happen from a known-good commit.
 Claude Code is an accelerator, not the source of truth.
 
 Before accepting generated code:
+
 - understand what it does;
 - verify it matches the architecture;
 - verify security implications;
@@ -386,6 +401,7 @@ Prefer small commits and reversible changes.
 The roadmap is intentionally progressive. Do not build the whole final architecture on Day 1.
 
 Examples:
+
 - Early SQL days focus on database fundamentals before the FastAPI layer exists.
 - Python days establish service/repository concepts before HTTP is added.
 - FastAPI days introduce the API layer and operational foundations.
@@ -401,6 +417,7 @@ The project may be continuously runnable, but features should be introduced in t
 The roadmap is a learning roadmap, not a complete production specification.
 
 When a sample is simplified or unsafe for production:
+
 - preserve the educational goal;
 - implement the concept safely in the actual repository;
 - call out the difference briefly;
@@ -413,6 +430,7 @@ Examples from the roadmap that require production hardening include hard-coded s
 A Day N increment is not done merely because code was generated.
 
 Done means:
+
 - concept understood;
 - implementation integrated with existing architecture;
 - tests added/updated;

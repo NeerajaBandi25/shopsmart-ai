@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     # API
     api_prefix: str = "/api/v1"
     app_name: str = "ShopSmart AI"
+    app_env: str = os.getenv("APP_ENV", "production")
     debug: bool = os.getenv("DEBUG", "False").lower() == "true"
 
     # Logging
@@ -45,6 +46,7 @@ class Settings(BaseSettings):
 
     # Governed AI provider gateway. External providers remain disabled without their keys.
     ai_provider: str = "deterministic"
+    ai_user_documents_enabled: bool = False
     openrouter_api_key: Optional[str] = None
     openrouter_model: str = "openai/gpt-4o-mini"
     groq_api_key: Optional[str] = None

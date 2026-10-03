@@ -1,6 +1,6 @@
 # Product Catalog MVP
 
-**Status**: In progress
+**Status**: Complete (original bounded catalog slice)
 **Scope**: First usable shopping journey slice: browse persisted products from the ShopSmart storefront.
 
 ## User-visible behavior

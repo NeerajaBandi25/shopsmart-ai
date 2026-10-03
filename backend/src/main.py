@@ -128,6 +128,7 @@ async def general_exception_handler(request: Request, exc: Exception):
             "route": getattr(request.scope.get("route"), "path", "unmatched"),
             "status_code": 500,
         },
+        exc_info=(type(exc), exc, exc.__traceback__),
     )
     response_headers = {}
     request_id = getattr(request.state, "request_id", None)

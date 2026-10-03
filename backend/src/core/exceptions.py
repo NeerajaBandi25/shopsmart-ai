@@ -31,7 +31,9 @@ class AppException(Exception):
 class ValidationError(AppException):
     """Validation error (400)."""
 
-    def __init__(self, message: str, error_code: str = "VALIDATION_ERROR", detail: Optional[dict] = None):
+    def __init__(
+        self, message: str, error_code: str = "VALIDATION_ERROR", detail: Optional[dict] = None
+    ):
         super().__init__(
             message=message,
             status_code=400,
@@ -43,7 +45,9 @@ class ValidationError(AppException):
 class AuthenticationError(AppException):
     """Authentication error (401)."""
 
-    def __init__(self, message: str = "Invalid email or password", error_code: str = "invalid_credentials"):
+    def __init__(
+        self, message: str = "Invalid email or password", error_code: str = "invalid_credentials"
+    ):
         super().__init__(
             message=message,
             status_code=401,
@@ -60,6 +64,13 @@ class AuthorizationError(AppException):
             status_code=403,
             error_code=error_code,
         )
+
+
+class NotFoundError(AppException):
+    """Requested resource does not exist or is not visible to the caller."""
+
+    def __init__(self, message: str = "Resource not found", error_code: str = "NOT_FOUND"):
+        super().__init__(message=message, status_code=404, error_code=error_code)
 
 
 class RateLimitError(AppException):
