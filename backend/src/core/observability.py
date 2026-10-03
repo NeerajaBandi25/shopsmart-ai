@@ -49,6 +49,8 @@ _LOG_CONTEXT_FIELDS = frozenset(
     {
         "event",
         "success",
+        "service",
+        "tool",
         "method",
         "route",
         "intent",
@@ -56,6 +58,7 @@ _LOG_CONTEXT_FIELDS = frozenset(
         "category",
         "min_price_cents",
         "max_price_cents",
+        "in_stock_only",
         "result_count",
         "status_code",
         "duration_ms",

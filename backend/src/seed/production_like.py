@@ -429,6 +429,24 @@ async def reset_seeded_data(session: AsyncSession) -> dict[str, int]:
     order_keys = [marker[1] for marker in order_markers.values()]
 
     await _validate_reserved_identities(session, manifest)
+    cart_owners = {stable_id("cart", spec["key"]): user_id(spec["key"]) for spec in users}
+    existing_carts = (
+        (
+            await session.execute(
+                select(Cart).where(
+                    or_(
+                        Cart.id.in_(cart_ids),
+                        Cart.user_id.in_(owned_user_ids),
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if any(cart_owners.get(cart.id) != cart.user_id for cart in existing_carts):
+        raise SeedOwnershipConflictError("A reserved cart identity belongs to unexpected data.")
+
     external_cart_reference = await session.scalar(
         select(CartItem.id)
         .join(Cart, Cart.id == CartItem.cart_id)

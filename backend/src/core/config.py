@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     # API
     api_prefix: str = "/api/v1"
     app_name: str = "ShopSmart AI"
+    app_env: str = os.getenv("APP_ENV", "production")
     debug: bool = os.getenv("DEBUG", "False").lower() == "true"
 
     # Logging

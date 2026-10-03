@@ -58,8 +58,6 @@ CATEGORY_ALIASES = {
     "accessories": "accessories",
     "charger": "accessories",
     "chargers": "accessories",
-    "electronic": "accessories",
-    "electronics": "accessories",
     "shoe": "footwear",
     "shoes": "footwear",
     "footwear": "footwear",
@@ -72,6 +70,7 @@ CATEGORY_ALIASES = {
     "grocery": "groceries",
     "groceries": "groceries",
 }
+_UNSUPPORTED_CATEGORY_ALIASES = {"electronic", "electronics", "tablet", "tablets"}
 
 
 def _category_filter(text: str) -> tuple[str | None, bool]:
@@ -79,6 +78,12 @@ def _category_filter(text: str) -> tuple[str | None, bool]:
     if explicit:
         value = explicit.group(1).lower()
         return CATEGORY_ALIASES.get(value), value not in CATEGORY_ALIASES
+
+    if any(
+        re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", text)
+        for alias in _UNSUPPORTED_CATEGORY_ALIASES
+    ):
+        return None, True
 
     matches = {
         category
@@ -168,7 +173,7 @@ def route_assistant_message(message: str) -> AssistantRoute:
     ):
         return AssistantRoute(AssistantIntent.CART_QUERY)
     if any(term in text for term in ("compare", " versus ", " vs ")) or re.search(
-        r"\bwhich\s+(?:one|product|option)\b.{0,30}\b(?:cheaper|cheapest|less expensive)\b",
+        r"\bwhich\b.{0,50}\b(?:cheaper|cheapest|less expensive|lower[- ]priced)\b",
         text,
     ):
         return AssistantRoute(

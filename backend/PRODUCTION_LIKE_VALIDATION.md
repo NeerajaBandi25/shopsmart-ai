@@ -11,10 +11,11 @@ PowerShell setup for a disposable local-only login password:
 ```powershell
 $env:SHOPSMART_ENV = 'local'
 $env:SHOPSMART_ALLOW_DEMO_SEEDING = 'true'
-$env:SHOPSMART_LOCAL_SEED_PASSWORD = 'LocalOnly!2026'
+$seedPassword = Read-Host 'Enter a unique local-only seed password' -AsSecureString
+$env:SHOPSMART_LOCAL_SEED_PASSWORD = [Net.NetworkCredential]::new('', $seedPassword).Password
 ```
 
-`LocalOnly!2026` is a published test credential, not a secret. Use it only for the synthetic local accounts; never reuse it outside this disposable environment. The application stores only password hashes.
+Keep the password available in this local PowerShell session for browser validation. Existing seed-owned accounts retain their current password hash on repeat seed runs. Do not commit the password or reuse it outside this disposable environment; the application stores only password hashes.
 
 Seed:
 

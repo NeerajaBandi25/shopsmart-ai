@@ -26,7 +26,9 @@ router = APIRouter(prefix="/ai", tags=["AI assistant"])
 
 
 def require_internal_document_capability() -> None:
-    if not settings.ai_user_documents_enabled:
+    allowed_environments = {"local", "dev", "development", "test"}
+    app_env = settings.app_env.strip().lower()
+    if not settings.ai_user_documents_enabled or app_env not in allowed_environments:
         raise AuthorizationError(
             "Customer document ingestion is disabled", "document_ingestion_disabled"
         )

@@ -36,7 +36,7 @@
 - [x] T020 Add deterministic tool/security evals using controlled fixtures and mocked providers; no paid API dependency.
 - [x] T021 Run focused backend AI/commerce/security tests, full pytest, frontend Jest, TypeScript, lint, Prettier, build, migration, and browser E2E checks; record unavailable gates honestly.
 - [x] T022 Perform independent review against AI-COM-001 through AI-COM-010; fix valid findings and rerun affected checks.
-- [x] T023 Review changed-file scope and local browser flow. Do not commit, push, merge, or enable auto-merge.
+- [ ] T023 Review changed-file scope and local browser flow; prepare the requested PR without merging or enabling auto-merge.
 
 ## Production-like Local Validation Dataset
 

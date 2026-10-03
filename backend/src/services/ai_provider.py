@@ -53,6 +53,7 @@ class GroundedAnswerProvider:
 
     injection_patterns = (
         r"ignore\s+(?:all\s+)?(?:previous| prior| earlier)\s+instructions?",
+        r"disregard\s+(?:all\s+)?(?:previous|prior|earlier)\s+(?:directives|instructions?)",
         r"(?:system|developer)\s*(?:message|prompt|instruction)",
         r"(?:reveal|show| disclose)\s+(?:the\s+)?(?:secret|api\s*key|password|token)",
         r"(?:change|switch|use)\s+(?:the\s+)?(?:provider|model)",

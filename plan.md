@@ -1,12 +1,14 @@
-# Engineering Plan: ShopSmart AI Authentication Foundation
+# Historical Engineering Assessment: ShopSmart AI Authentication Foundation
 
 **Plan Version**: 1.0  
 **Created**: 2026-09-24  
-**Status**: `in_review` — awaiting board acceptance  
+**Status**: Historical snapshot; superseded by the current product specifications
 **Owner**: CEO (d44e70ab-fc7d-416a-8673-4ab161ac8149)  
 **Issue**: TES-1 ShopSmart Engineering Assessment
 
 ---
+
+> This 2026-09-24 assessment records the authentication-foundation repository state at that time. Its branch, working-tree, CI, Docker, security-gap, and implementation-status findings are historical and must not be treated as current. The current product is an authenticated ShopSmart commerce assistant: dynamic commerce facts come from authoritative application services, while backend-owned RAG answers stable ShopSmart policy questions. Customer document upload is not the primary experience. Current direction and requirements are maintained in [CLAUDE.md](CLAUDE.md) and [Feature 008](specs/008-ai-rag/spec.md), with implementation detail in [its plan](specs/008-ai-rag/plan.md) and [task list](specs/008-ai-rag/tasks.md).
 
 ## 1. Repository/Git state
 
@@ -33,6 +35,7 @@
 **Tech stack**: Next.js 14 (app-router), React 18, TypeScript, Tailwind CSS 4
 
 **Directory structure** (`frontend/`):
+
 - `src/app/` — Pages: `page.tsx` (Home), `layout.tsx`, `auth/layout.tsx`, `auth/register/page.tsx`, `auth/login/page.tsx`, `authenticated-layout.tsx`, `dashboard/page.tsx`, `account/page.tsx`
 - `src/components/` — UI components: `registration-form.tsx`, `login-form.tsx`, `nav.tsx`, `HeroCampaign.tsx`, `PromoBanner.tsx`, `CategorySection.tsx`, `DiscoverySection.tsx`, `ui/` primitives (Input, Button, Alert, Card)
 - `src/lib/api-client.ts` — Fetch wrappers with `credentials: 'include'` for cookie-based auth (register, login, logout, getProfile, getCsrfToken, changePassword)
@@ -41,6 +44,7 @@
 - `package.json` — Scripts: `dev`, `build`, `start`, `lint`, `test`, `format`, `format:check`
 
 **Key findings**:
+
 - Home page (`page.tsx:29-91`) checks for session cookie presence via `cookies().has('session_id')` and passes `probeAuth` to `<Nav>` — avoids client-side auth probe that would always return 401 for signed-out visitors
 - Registration form (`registration-form.tsx`) enforces client-side password strength validation (length ≥8, uppercase, lowercase, digit, special char) and displays password requirement indicators
 - Login form (`login-form.tsx`) uses `api-client.login()` with `credentials: 'include'` to send session cookie
@@ -57,6 +61,7 @@
 **Tech stack**: FastAPI (Python 3.11), SQLAlchemy 2 + asyncpg (async PostgreSQL), Alembic migrations
 
 **Directory structure** (`backend/src/`):
+
 - `main.py:1-108` — FastAPI app initialization with lifespan, CORS middleware, session refresh middleware, exception handlers, health/readiness endpoints
 - `api/v1/auth_routes.py:66-275` — Router with prefix `/auth`: register, login, logout, csrf, me endpoints
 - `api/v1/user_routes.py:1-79` — Router with prefix `/users`: get_profile, change_password endpoints
@@ -76,6 +81,7 @@
 - `middleware/session_refresh.py:1-64` — BaseHTTPMiddleware that refreshes session cookie Max-Age on authenticated requests
 
 **Auth flow** (per `auth_routes.py`):
+
 1. `POST /api/v1/auth/register` → validates email format + password strength → hashes with bcrypt 12 rounds → creates User + SessionAttempt → returns `RegisterResponse(user_id, email, created_at)` + 201
 2. `POST /api/v1/auth/login` → validates credentials → rate-limit check (5/15min) → single-session enforcement (invalidates previous session) → creates Session record → sets `Set-Cookie: session_id=<uuid>; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000; Path=/` → returns `LoginResponse(user_id, email)` + 200
 3. `GET /api/v1/auth/me` → depends on `get_current_user` → validates session via `validate_session()` → updates `last_activity` → returns `MeResponse(user_id, email, created_at)` + 200
@@ -100,10 +106,12 @@
 - **login_attempts**: id (UUID PK), email (VARCHAR 255, NOT NULL), ip_address (INET, NOT NULL), attempted_at (TIMESTAMP, DEFAULT NOW()), success (BOOLEAN, NOT NULL), failure_reason (VARCHAR 100) — CHECK: (success=TRUE AND failure_reason IS NULL) OR (success=FALSE AND failure_reason IS NOT NULL), Index on (ip_address, attempted_at)
 
 **Alembic migrations** (2 found):
+
 - `migrations/versions/001_create_users_sessions_tables.py` — Creates users, sessions, login_attempts tables
 - `migrations/versions/002_add_session_csrf_token.py` — Adds csrf_token column to sessions
 
 **Indexes** (critical query paths):
+
 - `idx_users_email` — UNIQUE on users.email
 - `idx_users_created_at` — on users.created_at
 - `idx_sessions_user_id_active` — on (sessions.user_id, sessions.is_active) — essential for single-session enforcement
@@ -111,6 +119,7 @@
 - `idx_login_attempts_ip_timestamp` — on (login_attempts.ip_address, login_attempts.attempted_at) — essential for rate-limit queries
 
 **Session validation logic** (per `data-model.md:248-256` and `session_validator.py`):
+
 1. Extract session_id from cookie
 2. Look up Session by id
 3. Check is_active = TRUE → 401 if not
@@ -158,20 +167,20 @@
 
 **Auth API endpoints** (`auth_routes.py:66-275`):
 
-| Endpoint | Method | Description | Status |
-|---|---|---|---|
-| `POST /api/v1/auth/register` | register | Create user | 201 |
-| `POST /api/v1/auth/login` | login | Authenticate + create session | 200 |
-| `POST /api/v1/auth/logout` | logout | Invalidate session | 204 |
-| `GET /api/v1/auth/csrf` | csrf | Get CSRF token | 200 |
-| `GET /api/v1/auth/me` | me | Get current user | 200 |
+| Endpoint                     | Method   | Description                   | Status |
+| ---------------------------- | -------- | ----------------------------- | ------ |
+| `POST /api/v1/auth/register` | register | Create user                   | 201    |
+| `POST /api/v1/auth/login`    | login    | Authenticate + create session | 200    |
+| `POST /api/v1/auth/logout`   | logout   | Invalidate session            | 204    |
+| `GET /api/v1/auth/csrf`      | csrf     | Get CSRF token                | 200    |
+| `GET /api/v1/auth/me`        | me       | Get current user              | 200    |
 
 **User API endpoints** (`user_routes.py:1-79`):
 
-| Endpoint | Method | Description | Status |
-|---|---|---|---|
-| `GET /api/v1/users/profile` | profile | Get authenticated user profile | 200 |
-| `PUT /api/v1/users/password` | password | Change password (requires CSRF) | 204 |
+| Endpoint                     | Method   | Description                     | Status |
+| ---------------------------- | -------- | ------------------------------- | ------ |
+| `GET /api/v1/users/profile`  | profile  | Get authenticated user profile  | 200    |
+| `PUT /api/v1/users/password` | password | Change password (requires CSRF) | 204    |
 
 **Request/Response models** (Pydantic `BaseModel`):
 
@@ -199,18 +208,22 @@
 **Test structure** (3 layers, 25+ tests total):
 
 ### Unit tests (`backend/tests/unit/test_auth_service.py:1-509`):
+
 - 12 tests covering: registration validation (valid/invalid emails), password strength (weak/strong), duplicate email prevention, password hashing (bcrypt verification), login validation (correct/wrong password, nonexistent email), single-session enforcement (second login invalidates first, only one active session), rate limiting logic (5 allowed, 6th rate-limited, time-window reset via `freezegun` mocking)
 - Fixtures: `auth_service`, `user_repo`, `test_db`, `test_user_data_in_db`
 - Uses `monkeypatch` to patch `datetime` in `src.models.login_attempt` and `src.repositories.login_attempt_repository` for rate-limit time manipulation
 
 ### Integration tests (`backend/tests/integration/test_auth_endpoints.py:1-541`):
+
 - 15+ tests covering: registration endpoint (success, invalid email, weak password, duplicate email, missing fields, error envelopes), login after registration, contract compliance (response schema + error envelope), single-session concurrency (2 simultaneous logins → exactly 1 active session), session persistence (login sets cookies), rate limiting integration (5×401 then 429), cookie refresh on authenticated request (T050A stub: `pass`), logout (204 + cookie clear + session invalidated), logout error case (401 without session), post-logout access denied (401 on `/auth/me`)
 - Uses `test_client` (httpx AsyncClient with `test_db` fixture and overridden `get_db` dependency) and `test_user_data_in_db` fixture
 
 ### Contract tests (`backend/tests/contract/test_auth_api.py:1-128`):
+
 - 4 tests verifying: login success response schema (`{user_id, email}`, no `session_id`/`created_at`), login invalid credentials error envelope (`{detail, status_code, error_code}`), login rate-limited error envelope (429 + `rate_limited`), login missing fields return 422
 
 **Test health**:
+
 - All tests are TDD-written with clear acceptance criteria matching spec.md acceptance scenarios
 - Mocked dependencies: `freezegun` for rate-limit time manipulation
 - Integration tests use `test_client` + `test_db` fixtures (from `conftest.py`)
@@ -228,17 +241,20 @@
 **CI/CD pipeline**: **Not implemented**. No `.github/workflows/` directory, no GitLab CI, no CircleCI config found in repository.
 
 **Local development workflow**:
+
 - Backend: `cd backend && pytest tests/` — runs unit, integration, and contract tests
 - Frontend: `cd frontend && npm test` — runs Jest tests; `npm run lint` — ESLint; `npm run format` / `npm run format:check` — Prettier
 - MyPy type checking configured in `pyproject.toml:83-87` but no typecheck script in frontend `package.json`
 
 **Docker/Deployment**:
+
 - **No Dockerfile or `docker-compose.yml`** found in repository
 - Roadmap (`CLAUDE.md:341-355`, `CLAUDE.md:357-367`) mentions Docker Compose for local multi-service development and production deployment to AWS ECS/Vercel, but not implemented
 - Backend dependencies (from `pyproject.toml:15-26`): `fastapi==0.104.1`, `uvicorn[standard]==0.24.0`, `sqlalchemy==2.0.23`, `alembic==1.12.1`, `asyncpg==0.29.0`, `bcrypt==4.1.1`, `pydantic==2.5.0`, `pydantic-settings==2.1.0`, `python-dotenv==1.0.0`, `httpx==0.25.2`
 - Frontend dependencies (from `package.json:17-41`): `next^14.0.0`, `react^18.2.0`, `react-dom^18.2.0`, `typescript^5.3.0`
 
 **Environment configuration**:
+
 - `.env.example` files exist for both backend and frontend (but no committed `.env` files)
 - Key env vars: `DATABASE_URL`, `SECRET_KEY`, `DEBUG`, `DATABASE_ECHO`, `EMAIL_PROVIDER`, `EMAIL_FROM`, `REDIS_URL`, `CORS_ORIGINS`, `LOG_LEVEL`
 - Per `CLAUDE.md:204-205`: "Never commit: API keys, database passwords, JWT signing secrets... Use environment variables or a proper secrets mechanism."
@@ -250,12 +266,14 @@
 ## 9. Documentation/configuration
 
 **Root-level documentation**:
+
 - `CLAUDE.md:1-432` — Comprehensive project instructions (19 sections): mission, roadmap, architecture, conventions, daily-development protocol, testing guidelines, security rules, database rules, FastAPI rules, Next.js rules, Redis rules, AI/RAG rules, observability, Docker/deployment, CI/CD rules, AI tool usage, roadmap alignment, simplified examples, definition of done, current priority
 - `IMPLEMENTATION_SUMMARY.md:1-188` — User Story 1 (Registration) complete: 25 tests, 11 files changed, acceptance scenarios, constitution compliance, git status, next-step commands
 - `PROJECT_STATUS.md:1-112` — High-level status: Phase 1C completed, verification results, constraints
 - `TEST_VERIFICATION_REPORT.md:1-330` — Test verification status, environment issues preventing automated test execution
 
 **Specs directory** (`specs/001-user-auth-foundation/`):
+
 - `spec.md:1-174` — Core feature specification with 5 user stories, edge cases, requirements
 - `plan.md:1-115` — Implementation plan (now `in_review` awaiting board acceptance)
 - `tasks.md:T001-T115+` — Task tracking with 116 tasks + T019A
@@ -270,6 +288,7 @@
 - `COOKIE_REFRESH_CONSISTENCY_REPORT.md:1-196` — Cookie refresh & session timeout consistency analysis (problem/solution, changes applied, cross-artifact alignment, test additions)
 
 **Configuration files**:
+
 - `backend/pyproject.toml` — Project deps, black/ruff/mypy settings, pytest options
 - `frontend/package.json` + `package-lock.json` — Node deps, scripts
 - `frontend/tsconfig.json` — TypeScript paths `@/* → src/*`
@@ -289,57 +308,62 @@
 
 ### Confirmed current blocker (actively blocks progress):
 
-1. **No CI/CD pipeline** — No automated testing on PRs, no code quality enforcement, no deployment automation. Merges happen via local `pytest` and `npm test` only. *(Evidence: section 8, no `.github/workflows/`)*
-2. **In-memory rate limiter doesn't scale** — `rate_limiter.py` uses `defaultdict` in process memory. Multiple backend instances have independent counters. `redis_url` config exists but is unused (`Optional[str] = None`). *(Evidence: section 5, rate_limiter.py:10-22)*
-3. **No Docker containerization** — Cannot be deployed as containerized service. Roadmap mentions ECS/Vercel but no Docker files exist. Local development requires manual database and service setup. *(Evidence: section 8, no Dockerfile or docker-compose.yml)*
-4. **Weak default SECRET_KEY** — `SECRET_KEY` defaults to `"dev-secret-key-change-in-production"` in `config.py:19`. Would need explicit env var override for production. *(Evidence: section 5, config.py:19)*
-5. **CORS restricted to localhost** — `cors_origins` only allows `http://localhost:3000` and `http://localhost:8000`. Would need updating for production domains. *(Evidence: section 5, config.py:42-45)*
-6. **Cookie refresh middleware integration unproven** — `session_refresh.py` exists and is registered in `main.py:50`, but T050A test is a stub. Need end-to-end verification that cookie Max-Age is refreshed on every authenticated response. *(Evidence: section 5, session_refresh.py:1-64, test_auth_endpoints.py:433-440)*
+1. **No CI/CD pipeline** — No automated testing on PRs, no code quality enforcement, no deployment automation. Merges happen via local `pytest` and `npm test` only. _(Evidence: section 8, no `.github/workflows/`)_
+2. **In-memory rate limiter doesn't scale** — `rate_limiter.py` uses `defaultdict` in process memory. Multiple backend instances have independent counters. `redis_url` config exists but is unused (`Optional[str] = None`). _(Evidence: section 5, rate_limiter.py:10-22)_
+3. **No Docker containerization** — Cannot be deployed as containerized service. Roadmap mentions ECS/Vercel but no Docker files exist. Local development requires manual database and service setup. _(Evidence: section 8, no Dockerfile or docker-compose.yml)_
+4. **Weak default SECRET_KEY** — `SECRET_KEY` defaults to `"dev-secret-key-change-in-production"` in `config.py:19`. Would need explicit env var override for production. _(Evidence: section 5, config.py:19)_
+5. **CORS restricted to localhost** — `cors_origins` only allows `http://localhost:3000` and `http://localhost:8000`. Would need updating for production domains. _(Evidence: section 5, config.py:42-45)_
+6. **Cookie refresh middleware integration unproven** — `session_refresh.py` exists and is registered in `main.py:50`, but T050A test is a stub. Need end-to-end verification that cookie Max-Age is refreshed on every authenticated response. _(Evidence: section 5, session_refresh.py:1-64, test_auth_endpoints.py:433-440)_
 
 ### Production-readiness gap (needed for production but not immediately blocking):
 
-7. **No database migration verification** — Alembic configured with 2 migrations but no migrations generated/run against real database. `migrations/` directory inspected but no `pg`-backed migration test. *(Evidence: section 4, migrations/versions/001/002 exist but untested against PostgreSQL)*
-8. **CSRF token manager is in-memory global** — `CSRFTokenManager` tokens lost on restart. Not all state-changing endpoints validate CSRF (only `/users/password` does; `/auth/register`, `/auth/login`, `/auth/logout` rely on `SameSite=Strict`). *(Evidence: section 5, csrf.py:83, user_routes.py:45-79)*
-9. **No HTTPS enforcement at server level** — Code sets `Secure` flag on cookies but no guaranteed HTTPS termination. *(Evidence: section 5, config.py references Secure flag but no server config)*
-10. **Session refresh middleware logic unverified** — Middleware `setdefault("Set-Cookie", ...)` only sets if not already set (line 57). Could miss refresh if response already has Set-Cookie. No test verifies the refreshing behavior. *(Evidence: section 5, session_refresh.py:57)*
+7. **No database migration verification** — Alembic configured with 2 migrations but no migrations generated/run against real database. `migrations/` directory inspected but no `pg`-backed migration test. _(Evidence: section 4, migrations/versions/001/002 exist but untested against PostgreSQL)_
+8. **CSRF token manager is in-memory global** — `CSRFTokenManager` tokens lost on restart. Not all state-changing endpoints validate CSRF (only `/users/password` does; `/auth/register`, `/auth/login`, `/auth/logout` rely on `SameSite=Strict`). _(Evidence: section 5, csrf.py:83, user_routes.py:45-79)_
+9. **No HTTPS enforcement at server level** — Code sets `Secure` flag on cookies but no guaranteed HTTPS termination. _(Evidence: section 5, config.py references Secure flag but no server config)_
+10. **Session refresh middleware logic unverified** — Middleware `setdefault("Set-Cookie", ...)` only sets if not already set (line 57). Could miss refresh if response already has Set-Cookie. No test verifies the refreshing behavior. _(Evidence: section 5, session_refresh.py:57)_
 
 ### Recommended improvement (nice-to-have, long-term value):
 
-11. **No absolute expiration cap ambiguity** — Spec.md assumptions L173 and SC-012 clarify "30 days of rolling inactivity; no absolute expiration cap", but the original cookie spec used fixed `Max-Age=2592000` (30 days from login). The cookie refresh middleware was added to resolve this, but integration is unverified. *(Evidence: section 5, config.py:24, session_validator.py:58-63)*
-12. **CSRF validation on all state-changing endpoints as defense-in-depth** — `/auth/register`, `/auth/login`, `/auth/logout` currently rely on `SameSite=Strict` only. Adding `X-CSRF-Token` validation would be defense-in-depth since no actual CSRF vulnerability has been demonstrated in the repository (SameSite=Strict provides partial protection). *(Evidence: section 5, auth_routes.py:69-150, user_routes.py:45-79)*
-13. **Rate limit headers on 429 responses** — Add `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` to 429 responses for better client awareness. *(Evidence: section 5, rate_limiter.py:10-46)*
-14. **Production CORS configuration** — Update `cors_origins` for production domains once deployed. *(Evidence: section 5, config.py:42-45)*
-15. **Observability foundations** — Structured logs, request IDs, basic metrics. *(Evidence: CLAUDE.md:367-375, no current implementation)*
+11. **No absolute expiration cap ambiguity** — Spec.md assumptions L173 and SC-012 clarify "30 days of rolling inactivity; no absolute expiration cap", but the original cookie spec used fixed `Max-Age=2592000` (30 days from login). The cookie refresh middleware was added to resolve this, but integration is unverified. _(Evidence: section 5, config.py:24, session_validator.py:58-63)_
+12. **CSRF validation on all state-changing endpoints as defense-in-depth** — `/auth/register`, `/auth/login`, `/auth/logout` currently rely on `SameSite=Strict` only. Adding `X-CSRF-Token` validation would be defense-in-depth since no actual CSRF vulnerability has been demonstrated in the repository (SameSite=Strict provides partial protection). _(Evidence: section 5, auth_routes.py:69-150, user_routes.py:45-79)_
+13. **Rate limit headers on 429 responses** — Add `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` to 429 responses for better client awareness. _(Evidence: section 5, rate_limiter.py:10-46)_
+14. **Production CORS configuration** — Update `cors_origins` for production domains once deployed. _(Evidence: section 5, config.py:42-45)_
+15. **Observability foundations** — Structured logs, request IDs, basic metrics. _(Evidence: CLAUDE.md:367-375, no current implementation)_
 
 ---
 
 ## 11. Top 5 engineering priorities (evidence-based with dependencies)
 
-### Priority 1: Set up PostgreSQL database + Alembic migrations ✅ *Partially exists*
+### Priority 1: Set up PostgreSQL database + Alembic migrations ✅ _Partially exists_
+
 - **Evidence**: Models (`backend/src/models/user.py`, `backend/src/models/session.py`) and migrations (`migrations/versions/001_create_users_sessions_tables.py`, `002_add_session_csrf_token.py`) already exist
 - **Action**: Create PostgreSQL instance, run `alembic upgrade head` to create users, sessions, login_attempts tables. This is the single source of truth for the data model.
 - **Dependency**: Blocked by — nothing else can proceed without a live database. All subsequent priorities depend on this being verified first.
 - **Reclassification**: Production-readiness gap → Confirmed current blocker (per user request #3, distinguish missing execution from existing models/migrations)
 
 ### Priority 2: Replace weak default SECRET_KEY + configure Redis for rate limiter ✅
+
 - **Evidence**: `config.py:19` has `secret_key: str = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")`
 - **Action**: Remove default from `config.py:19`; make `SECRET_KEY` a required env var. Add Redis backend to `rate_limiter.py` or add async fallback that tries Redis first, falls back to in-memory.
 - **Dependency**: Depends on Priority 1 (database setup needed to verify Redis connection string format). But can be prepared in parallel with database credentials.
 - **Reclassification**: Production-readiness gap (was blocker, now downgraded since it's a configuration fix, not a missing component)
 
 ### Priority 3: Implement cookie refresh middleware end-to-end verification ✅
+
 - **Evidence**: `session_refresh.py:1-64` exists, T050A test (`test_auth_endpoints.py:433-440`) is a `pass` stub
 - **Action**: Fix T050A stub test; verify `session_refresh.py` actually refreshes `Set-Cookie: Max-Age=2592000` on every authenticated request; confirm rolling inactivity window aligns with cookie lifetime (30 days).
 - **Dependency**: Depends on Priority 1 (database needed for session refresh middleware's `AsyncSessionLocal`). Also depends on Priority 2 (Redis config may affect session storage).
 - **Reclassification**: Confirmed current blocker (per user request #4, cookie refresh is a verified integration gap; CSRF reclassification as defense-in-depth applies separately)
 
 ### Priority 4: Add CI pipeline (GitHub Actions) ✅
+
 - **Evidence**: No `.github/workflows/` directory exists; local workflow is `cd backend && pytest` and `cd frontend && npm test`
 - **Action**: Create `.github/workflows/test.yml` running `cd backend && pytest`, `cd frontend && npm test`, `npm run lint`, `npm run format:check` on every PR. Fail fast on breakage.
 - **Dependency**: Depends on Priority 1 (database needed for pytest to connect) and Priority 3 (cookie refresh test must pass locally before CI).
 - **Reclassification**: Confirmed current blocker (no CI pipeline is a hard block for code quality gates on PRs)
 
 ### Priority 5: Create Dockerfile + docker-compose.yml ✅
+
 - **Evidence**: No Dockerfile or `docker-compose.yml` exists; roadmap mentions ECS/Vercel but not implemented
 - **Action**: Create Dockerfile for backend (FastAPI + uvicorn + alembic + Redis optional), Dockerfile for frontend (Next.js), and `docker-compose.yml` with services for backend, frontend, and Redis. Health checks. Environment-driven config.
 - **Dependency**: Depends on Priority 1 (database URL needed for Docker config), Priority 2 (Redis connection string), Priority 4 (CI pipeline can run inside Docker).
@@ -357,37 +381,37 @@
 
 **Objective**: Establish the data foundation and security baseline.
 
-1. **Set up PostgreSQL + Alembic** (Priority 1) — Create DB, run `001_create_users_sessions_tables.py`. Verify tables exist and models can create/read records. *Depends on: nothing (infrastructure setup).*
+1. **Set up PostgreSQL + Alembic** (Priority 1) — Create DB, run `001_create_users_sessions_tables.py`. Verify tables exist and models can create/read records. _Depends on: nothing (infrastructure setup)._
 
-2. **Fix SECRET_KEY + add Redis fallback** (Priority 2) — Remove default from `config.py:19`; add Redis-backed RateLimiter fallback. Update `rate_limiter.py` to try Redis first, fall back to in-memory. *Depends on: Priority 1 (database credentials verified).*
+2. **Fix SECRET_KEY + add Redis fallback** (Priority 2) — Remove default from `config.py:19`; add Redis-backed RateLimiter fallback. Update `rate_limiter.py` to try Redis first, fall back to in-memory. _Depends on: Priority 1 (database credentials verified)._
 
-3. **Add CI pipeline** (Priority 4) — Create `.github/workflows/test.yml` running backend `pytest`, frontend `npm test`, `npm run lint`, `npm run format:check`. Fail fast on breakage. *Depends on: Priority 1 (database for pytest), Priority 2 (SECRET_KEY env var format confirmed).*
+3. **Add CI pipeline** (Priority 4) — Create `.github/workflows/test.yml` running backend `pytest`, frontend `npm test`, `npm run lint`, `npm run format:check`. Fail fast on breakage. _Depends on: Priority 1 (database for pytest), Priority 2 (SECRET_KEY env var format confirmed)._
 
-4. **Security gates for merges** — Block merges if: weak passwords accepted, rate limit not enforced, secure cookie flags missing, cross-user access not returning 403. *Depends on: Priorities 1-3 (database, SECRET_KEY, CI pipeline all operational).*
+4. **Security gates for merges** — Block merges if: weak passwords accepted, rate limit not enforced, secure cookie flags missing, cross-user access not returning 403. _Depends on: Priorities 1-3 (database, SECRET_KEY, CI pipeline all operational)._
 
 ### Phase 2 — Authentication Harden (Weeks 3-5)
 
 **Objective**: Harden auth flow and verify security integrations.
 
-5. **Cookie refresh integration** (Priority 3) — Fix `session_refresh.py`; verify T050A passes; confirm cookie Max-Age refresh on every authenticated request aligns with rolling 30-day inactivity window. *Depends on: Priorities 1-2 (database, SECRET_KEY configured).*
+5. **Cookie refresh integration** (Priority 3) — Fix `session_refresh.py`; verify T050A passes; confirm cookie Max-Age refresh on every authenticated request aligns with rolling 30-day inactivity window. _Depends on: Priorities 1-2 (database, SECRET_KEY configured)._
 
-6. **CSRF validation as defense-in-depth** — Add CSRF token validation to `/auth/register`, `/auth/login`, `/auth/logout` endpoints. Note: Current `SameSite=Strict` provides partial CSRF protection; adding explicit CSRF token validation is defense-in-depth per reclassification in Section 10 item 12. *Depends on: Priority 1 (database for session csrf_token storage).*
+6. **CSRF validation as defense-in-depth** — Add CSRF token validation to `/auth/register`, `/auth/login`, `/auth/logout` endpoints. Note: Current `SameSite=Strict` provides partial CSRF protection; adding explicit CSRF token validation is defense-in-depth per reclassification in Section 10 item 12. _Depends on: Priority 1 (database for session csrf_token storage)._
 
-7. **Session timeout tests** — Implement T097-T099 (30-day inactivity expiration) and T050A + T099A (cookie refresh beyond 30 days with continuous activity). *Depends on: Priority 3 (cookie refresh verified).*
+7. **Session timeout tests** — Implement T097-T099 (30-day inactivity expiration) and T050A + T099A (cookie refresh beyond 30 days with continuous activity). _Depends on: Priority 3 (cookie refresh verified)._
 
-8. **Rate limit headers** — Add `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` to 429 responses. *Depends on: Priority 1 (database + rate limiter operational).*
+8. **Rate limit headers** — Add `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` to 429 responses. _Depends on: Priority 1 (database + rate limiter operational)._
 
 ### Phase 3 — Deployment & Observability (Weeks 6-8)
 
 **Objective**: Containerize, automate, and prepare for production.
 
-9. **Dockerfile + docker-compose.yml** (Priority 5) — Backend (FastAPI + uvicorn + alembic + Redis optional), Frontend (Next.js), Redis service. Health checks. Environment-driven config. *Depends on: Priorities 1-4 (database, SECRET_KEY, CI, cookie refresh all verified).*
+9. **Dockerfile + docker-compose.yml** (Priority 5) — Backend (FastAPI + uvicorn + alembic + Redis optional), Frontend (Next.js), Redis service. Health checks. Environment-driven config. _Depends on: Priorities 1-4 (database, SECRET_KEY, CI, cookie refresh all verified)._
 
-10. **Configure production CORS** — Update `cors_origins` for production domains. *Depends on: Priority 1 (database configured, deployment context established).*
+10. **Configure production CORS** — Update `cors_origins` for production domains. _Depends on: Priority 1 (database configured, deployment context established)._
 
-11. **Health check + readiness probe** — Add `/health` (simple) and `/readiness` (DB connectivity) endpoints with proper completion. *Depends on: Priority 1 (database).*
+11. **Health check + readiness probe** — Add `/health` (simple) and `/readiness` (DB connectivity) endpoints with proper completion. _Depends on: Priority 1 (database)._
 
-12. **Observability foundations** — Structured logs, request IDs, basic metrics. *Depends on: Priority 4 (CI pipeline running in production-like environment).*
+12. **Observability foundations** — Structured logs, request IDs, basic metrics. _Depends on: Priority 4 (CI pipeline running in production-like environment)._
 
 ### Key engineering principles (per `CLAUDE.md`):
 
@@ -408,20 +432,20 @@
 
 ## Summary of all 12 assessment areas
 
-| # | Area | Key Finding |
-|---|---|---|
-| 1 | Repository/Git state | `main` branch, 99 modified files (including 13 `.claude`, 10 `.harness`, 14 `.specify` agent files + 40 backend + 50 frontend + 7 root/project files), 2 untracked (`.freebuff/`, `plan.md`); no `.env` committed; no Docker/CI |
-| 2 | Frontend architecture | Next.js 14 + React 18 + TS + Tailwind 4; BFF patterns; API client with cookie auth |
-| 3 | Backend architecture | FastAPI + SQLAlchemy 2 + asyncpg + Alembic; layered: routes → services → repos → models |
-| 4 | Database architecture | PostgreSQL; users/sessions/login_attempts tables; Alembic migrations 001/002; critical indexes |
-| 5 | Auth & security | bcrypt 12-round hashing, secure cookies, rate limiting, CSRF on password change only, generic errors — but in-memory rate limiter, no Redis, weak default SECRET_KEY, CORS localhost-only, unverified cookie refresh, CSRF not on auth endpoints |
-| 6 | API architecture | `/api/v1/auth/` + `/api/v1/users/` endpoints; Pydantic models; error envelope `{detail, status_code, error_code}`; Set-Cookie headers |
-| 7 | Tests & test health | 25+ tests across 3 layers (unit: 12, integration: 15+, contract: 4); T050A stub; 100% FR coverage (21→116) |
-| 8 | CI/CD, Docker, deployment | None implemented; local: `pytest` + `npm test`; roadmap mentions ECS/Vercel/Docker but not built |
-| 9 | Documentation/configuration | `CLAUDE.md` (432 lines), specs/`001-user-auth-foundation/` (10+ docs), `.env.example` templates, config files |
-| 10 | Technical risks/gaps | 15 reclassified: 6 confirmed current blockers (no CI/CD, in-memory rate limiter, no Docker, weak SECRET_KEY, CORS localhost, unverified cookie refresh), 4 production-readiness gaps (no migration verification, in-memory CSRF manager, no HTTPS, middleware unverified), 5 recommended improvements (no absolute cap ambiguity, CSRF as defense-in-depth, rate limit headers, production CORS, observability) |
-| 11 | Top 5 priorities | 1) PostgreSQL + Alembic (execution gap), 2) SECRET_KEY + Redis, 3) Cookie refresh verification, 4) CI pipeline, 5) Dockerfile + compose |
-| 12 | Engineering strategy | TDD incremental delivery with security-by-default gates; 3-phase plan over 8 weeks; CTO/CMO/UXDesigner delegation |
+| #   | Area                        | Key Finding                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Repository/Git state        | `main` branch, 99 modified files (including 13 `.claude`, 10 `.harness`, 14 `.specify` agent files + 40 backend + 50 frontend + 7 root/project files), 2 untracked (`.freebuff/`, `plan.md`); no `.env` committed; no Docker/CI                                                                                                                                                                                 |
+| 2   | Frontend architecture       | Next.js 14 + React 18 + TS + Tailwind 4; BFF patterns; API client with cookie auth                                                                                                                                                                                                                                                                                                                              |
+| 3   | Backend architecture        | FastAPI + SQLAlchemy 2 + asyncpg + Alembic; layered: routes → services → repos → models                                                                                                                                                                                                                                                                                                                         |
+| 4   | Database architecture       | PostgreSQL; users/sessions/login_attempts tables; Alembic migrations 001/002; critical indexes                                                                                                                                                                                                                                                                                                                  |
+| 5   | Auth & security             | bcrypt 12-round hashing, secure cookies, rate limiting, CSRF on password change only, generic errors — but in-memory rate limiter, no Redis, weak default SECRET_KEY, CORS localhost-only, unverified cookie refresh, CSRF not on auth endpoints                                                                                                                                                                |
+| 6   | API architecture            | `/api/v1/auth/` + `/api/v1/users/` endpoints; Pydantic models; error envelope `{detail, status_code, error_code}`; Set-Cookie headers                                                                                                                                                                                                                                                                           |
+| 7   | Tests & test health         | 25+ tests across 3 layers (unit: 12, integration: 15+, contract: 4); T050A stub; 100% FR coverage (21→116)                                                                                                                                                                                                                                                                                                      |
+| 8   | CI/CD, Docker, deployment   | None implemented; local: `pytest` + `npm test`; roadmap mentions ECS/Vercel/Docker but not built                                                                                                                                                                                                                                                                                                                |
+| 9   | Documentation/configuration | `CLAUDE.md` (432 lines), specs/`001-user-auth-foundation/` (10+ docs), `.env.example` templates, config files                                                                                                                                                                                                                                                                                                   |
+| 10  | Technical risks/gaps        | 15 reclassified: 6 confirmed current blockers (no CI/CD, in-memory rate limiter, no Docker, weak SECRET_KEY, CORS localhost, unverified cookie refresh), 4 production-readiness gaps (no migration verification, in-memory CSRF manager, no HTTPS, middleware unverified), 5 recommended improvements (no absolute cap ambiguity, CSRF as defense-in-depth, rate limit headers, production CORS, observability) |
+| 11  | Top 5 priorities            | 1) PostgreSQL + Alembic (execution gap), 2) SECRET_KEY + Redis, 3) Cookie refresh verification, 4) CI pipeline, 5) Dockerfile + compose                                                                                                                                                                                                                                                                         |
+| 12  | Engineering strategy        | TDD incremental delivery with security-by-default gates; 3-phase plan over 8 weeks; CTO/CMO/UXDesigner delegation                                                                                                                                                                                                                                                                                               |
 
 **Overall assessment**: The repository has a solid TDD foundation with 25+ tests covering the registration/login/logout flow, bcrypt password hashing, email validation, password strength enforcement, rate limiting, and single-session enforcement. However, critical gaps exist in scalability (in-memory rate limiter, no Redis), deployment (no Docker, no CI/CD), and security (weak default SECRET_KEY, CORS localhost-only, unverified cookie refresh middleware, CSRF not on all endpoints). The `plan.md` document is `in_review` awaiting board acceptance before implementation subtasks are delegated to CTO, CMO, and UXDesigner.
 

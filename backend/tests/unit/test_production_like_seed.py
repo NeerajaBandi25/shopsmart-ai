@@ -169,6 +169,42 @@ async def test_reset_refuses_if_an_unseeded_shopper_references_seeded_product(se
         assert await session.get(User, external_user.id) is not None
 
 
+async def test_reset_refuses_reserved_cart_id_owned_by_unrelated_user(session_factory):
+    async with session_factory() as session:
+        await seed_dataset(session, "LocalOnly!2026")
+        external_user = User(
+            id=uuid4(), email="cart-collision@example.invalid", password_hash="not-a-login-hash"
+        )
+        external_product = Product(
+            id=uuid4(),
+            name="Unrelated product",
+            description=None,
+            sku="UNRELATED-CART-PRODUCT",
+            price=1234,
+            stock_quantity=2,
+            max_purchase_quantity=2,
+            is_active=True,
+        )
+        session.add_all([external_user, external_product])
+        await session.flush()
+        reserved_cart_id = stable_id("cart", "new-customer")
+        cart = await session.get(Cart, reserved_cart_id)
+        cart.user_id = external_user.id
+        item = CartItem(
+            id=uuid4(), cart_id=reserved_cart_id, product_id=external_product.id, quantity=1
+        )
+        session.add(item)
+        await session.commit()
+
+        with pytest.raises(SeedOwnershipConflict):
+            await reset_seeded_data(session)
+
+        assert (await session.get(Cart, reserved_cart_id)).user_id == external_user.id
+        assert await session.get(CartItem, item.id) is not None
+        assert await session.get(Product, external_product.id) is not None
+        assert await session.get(User, external_user.id) is not None
+
+
 async def test_reset_refuses_unmarked_order_from_a_reserved_account(session_factory):
     async with session_factory() as session:
         await seed_dataset(session, "LocalOnly!2026")

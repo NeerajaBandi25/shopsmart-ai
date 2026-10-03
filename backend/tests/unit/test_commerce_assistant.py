@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 
 from src.core.exceptions import AppException, NotFoundError
+from src.core.observability import JsonLogFormatter
 from src.services import commerce_assistant as assistant_module
 from src.services.ai_provider import Evidence, ProviderAnswer
 from src.services.commerce_assistant import CommerceAssistantService
@@ -192,9 +193,17 @@ async def test_product_search_logs_bounded_structured_context(assistant, caplog)
     assert record.intent == "PRODUCT_SEARCH"
     assert record.category == "laptops"
     assert record.max_price_cents == 6_000_000
+    assert record.service == "commerce_assistant"
+    assert record.tool == "product_search"
+    assert record.in_stock_only is False
     assert record.result_count == 1
     assert record.duration_ms >= 0
     assert not hasattr(record, "question")
+    structured = JsonLogFormatter().format(record)
+    assert '"service":"commerce_assistant"' in structured
+    assert '"tool":"product_search"' in structured
+    assert '"in_stock_only":false' in structured
+    assert "Show me laptops under 60000" not in structured
 
 
 @pytest.mark.asyncio
@@ -315,7 +324,7 @@ async def test_compare_does_not_add_unrequested_product_when_only_one_is_named(a
 
 
 @pytest.mark.asyncio
-async def test_cheaper_followup_and_that_one_resolve_within_comparison_results(assistant):
+async def test_cheaper_followup_reference_resolves_for_cart_actions(assistant):
     service, _gateway, _db = assistant
     user_id = uuid4()
     products = [
@@ -338,7 +347,9 @@ async def test_cheaper_followup_and_that_one_resolve_within_comparison_results(a
 
     compared = await service.answer(user_id, "Compare the first two")
     cheaper = await service.answer(user_id, "Which one is cheaper?")
+    await service.answer(user_id, "Add the first one to my cart if it is available")
     await service.answer(user_id, "Add that one to cart")
+    await service.answer(user_id, "Remove it from my cart")
 
     assert [item["name"] for item in compared["result_data"]["products"]] == [
         "Laptop 0",
@@ -350,7 +361,11 @@ async def test_cheaper_followup_and_that_one_resolve_within_comparison_results(a
         str(products[0].id),
         str(products[1].id),
     ]
-    service.cart.add_item.assert_awaited_once_with(user_id, products[1].id, 1, commit=False)
+    assert service.cart.add_item.await_args_list == [
+        ((user_id, products[0].id, 1), {"commit": False}),
+        ((user_id, products[1].id, 1), {"commit": False}),
+    ]
+    service.cart.remove_item.assert_awaited_once_with(user_id, products[1].id, commit=False)
 
 
 @pytest.mark.asyncio

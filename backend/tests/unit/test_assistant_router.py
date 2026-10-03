@@ -10,6 +10,7 @@ def test_routes_all_supported_intents():
         "Find products under $50": AssistantIntent.PRODUCT_SEARCH,
         "Compare these two": AssistantIntent.PRODUCT_COMPARE,
         "Which one is cheaper?": AssistantIntent.PRODUCT_COMPARE,
+        "Which of these laptops is cheaper?": AssistantIntent.PRODUCT_COMPARE,
         "Any active offers?": AssistantIntent.PROMOTIONS,
         "What's in my cart?": AssistantIntent.CART_QUERY,
         "Add to cart": AssistantIntent.CART_ACTION,
@@ -63,6 +64,8 @@ def test_generic_price_search_remains_category_unrestricted():
 def test_unknown_or_conflicting_explicit_categories_are_unsupported():
     for question in (
         "show me category=tablets under 60000",
+        "show me tablets under 60000",
+        "find electronics under 30000",
         "show me laptops and phones under 60000",
     ):
         route = route_assistant_message(question)

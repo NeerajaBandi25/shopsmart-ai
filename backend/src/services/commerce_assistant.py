@@ -65,11 +65,14 @@ def _log_product_search(
 ) -> None:
     context = {
         "event": "assistant_operation",
+        "service": "commerce_assistant",
+        "tool": "product_search",
         "operation": "product_search",
         "intent": route.intent.value,
         "category": route.category or ("unsupported" if route.unsupported_category else None),
         "min_price_cents": route.min_price_cents,
         "max_price_cents": route.max_price_cents,
+        "in_stock_only": route.in_stock_only,
         "result_count": result_count,
         "status_code": status_code,
         "duration_ms": round(duration_ms, 3),
@@ -421,18 +424,18 @@ class CommerceAssistantService:
             if sum(item.price == cheapest.price for item in products) > 1:
                 return None
             return cheapest
-        if re.search(r"\bthat\s+one\b|\bthat\s+product\b", normalized):
-            selected_id = context.get("selected_product_id")
-            if selected_id:
-                for product in products:
-                    if str(product.id) == selected_id:
-                        return product
         for index, product in enumerate(products):
             if product.name.lower() in normalized:
                 return product
             ordinal = ("first", "second", "third", "fourth", "fifth")
             if index < len(ordinal) and ordinal[index] in normalized:
                 return product
+        if re.search(r"\bthat\s+(?:one|product)\b|\bit\b", normalized):
+            selected_id = context.get("selected_product_id")
+            if selected_id:
+                for product in products:
+                    if str(product.id) == selected_id:
+                        return product
         if len(products) == 1 and any(word in normalized for word in ("this", "that", "it")):
             return products[0]
         return None
