@@ -3,7 +3,7 @@
 **Branch**: `feature/ai-provider-governance-hardening`
 
 **Spec**: [spec.md](./spec.md)
-**Status**: Approved direction; implementation in progress
+**Status**: Implemented and validated for v1; PR #44 merged
 
 ## Product Architecture
 

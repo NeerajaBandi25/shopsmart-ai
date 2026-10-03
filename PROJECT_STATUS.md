@@ -95,19 +95,26 @@ The launcher/provider does not define project state.
 
 As of 2026-10-03, `origin/main` contains the authentication, catalog, shopping,
 commerce BFF, Redis cache, frontend state, observability, CI/CD foundation,
-AI/RAG, provider gateway, and AI governance/security work through PR #43.
+AI/RAG, provider gateway, AI governance/security, and commerce-assistant work.
 
-The commerce-assistant and structured-category increment is in
-`feature/ai-provider-governance-hardening` and is not yet part of `main`. Its
-current product contract is in `specs/008-ai-rag/spec.md`; the root
+PR #44, `feat: add production commerce assistant and structured search`, is
+merged into `main` at `24c82e984f6d6658fc0676eb1223948a03d9eb46`. The merged
+increment includes structured category search and migration 012, production-like
+seed/evaluator data, cart/order assistant behavior, backend-owned policy RAG,
+and bounded assistant/search logging. Post-merge CI run [37112240926](https://github.com/NeerajaBandi25/shopsmart-ai/actions/runs/37112240926)
+passed all four required checks: backend tests, backend security gates, frontend
+tests/lint/Prettier, and Docker Compose smoke test.
+
+The current product contract is in `specs/008-ai-rag/spec.md`; the root
 `plan.md` is a historical authentication assessment, not the current plan.
 
 ## Next Engineering Work
 
-Review and validate the unmerged commerce-assistant increment against the
-current `origin/main` before creating its pull request. Preserve the existing
-authentication, BFF, provider-governance, and harness boundaries. Do not treat
-the assistant branch as merged until its pull request is reviewed and merged.
+Specify the next product increment before implementation. Promotions/discounts,
+richer category hierarchy, and brand/variant modeling remain product gaps;
+live external-provider quality/cost validation also remains outstanding.
+Preserve the existing authentication, BFF, provider-governance, and harness
+boundaries.
 
 ## Important Constraints
 

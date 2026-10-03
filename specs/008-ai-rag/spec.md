@@ -1,7 +1,7 @@
 # Feature Specification: ShopSmart Commerce Assistant and Backend Knowledge RAG
 
 **Feature Branch**: `feature/ai-provider-governance-hardening`
-**Status**: Product direction approved; implementation in progress
+**Status**: Implemented and validated for v1; PR #44 merged
 **Roadmap scope**: Preserve embeddings, chunking, retrieval, grounded answers, citations, conversation history, provider abstraction, and evaluations. These capabilities serve ShopSmart commerce; Jev, a cloud vector store, paid providers, and unspecified Days 73-75 are not required.
 
 ## Product Role and User Value
