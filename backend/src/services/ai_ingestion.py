@@ -79,10 +79,18 @@ class DocumentIngestionService:
         title: str,
         source_name: str,
         content: str,
-        classification: str = "PRIVATE",
     ) -> Document:
-        if classification not in {"PUBLIC", "INTERNAL", "PRIVATE", "SENSITIVE"}:
-            raise ValidationError("Unsupported data classification", "invalid_data_classification")
+        return await self._ingest(owner_id, title, source_name, content, "PRIVATE")
+
+    async def ingest_server_authorized_public(
+        self, owner_id: UUID, title: str, source_name: str, content: str
+    ) -> Document:
+        """Ingest content from a trusted server-owned seed or demo path."""
+        return await self._ingest(owner_id, title, source_name, content, "PUBLIC")
+
+    async def _ingest(
+        self, owner_id: UUID, title: str, source_name: str, content: str, classification: str
+    ) -> Document:
         normalized = normalize_text(content)
         if not normalized:
             raise ValidationError("Document is empty", "empty_document")

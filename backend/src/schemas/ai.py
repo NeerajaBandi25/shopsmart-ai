@@ -10,7 +10,6 @@ class DocumentTextRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     source_name: str = Field(min_length=1, max_length=255)
     content: str = Field(min_length=1)
-    classification: str = Field(default="PRIVATE", pattern="^(PUBLIC|INTERNAL|PRIVATE|SENSITIVE)$")
 
 
 class DocumentResponse(BaseModel):
