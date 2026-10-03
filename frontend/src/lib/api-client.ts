@@ -66,9 +66,12 @@ export interface Product {
   image_license?: string | null;
   image_license_url?: string | null;
   image_sha256?: string | null;
-  specifications: Record<string, string | number | boolean> | null;
+  specifications: Record<string, unknown> | null;
   stock_quantity: number;
   max_purchase_quantity: number;
+  delivery?: string | null;
+  highlights?: string[];
+  image_gallery?: { url: string; alt: string }[];
 }
 
 export interface ProductPage {
@@ -76,6 +79,26 @@ export interface ProductPage {
   skip: number;
   limit: number;
   total?: number;
+}
+
+export interface HomepageData {
+  categories: { value: string; label: string; count: number }[];
+  featured: Product[];
+  trending: Product[];
+  recommendations: Product[];
+  promotions: {
+    name: string;
+    description: string | null;
+    discount_type: 'percentage' | 'fixed';
+    discount_value: number;
+    ends_at: string;
+    scope_category: string | null;
+  }[];
+}
+
+export async function getHomepage(): Promise<HomepageData> {
+  const response = await fetch('/api/homepage', { credentials: 'include' });
+  return handleApiResponse<HomepageData>(response);
 }
 
 export interface ProductQuery {

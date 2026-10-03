@@ -8,6 +8,8 @@ import { ProductGallery } from '@/components/product-detail/ProductGallery';
 import { ProductPurchaseActions } from '@/components/product-detail/ProductPurchaseActions';
 import { RelatedProducts } from '@/components/product-detail/RelatedProducts';
 import { categoryImageFor } from '@/components/product-detail/product-images';
+import { CompareButton } from '@/components/ShoppingTools';
+import { VariantSelector } from '@/components/product-detail/VariantSelector';
 
 interface ProductDetailsProps {
   productId: string;
@@ -107,6 +109,15 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
             {product.name}
           </h1>
           <p className="mt-2 text-xs uppercase tracking-caps text-ink-500">SKU {product.sku}</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <CompareButton productId={product.id} />
+            <Link
+              href={`/assistant?q=${encodeURIComponent(`Tell me about ${product.name}`)}`}
+              className="min-h-11 rounded-sm border border-ink-300 px-4 py-3 text-sm font-semibold text-ink-800"
+            >
+              Ask AI about this product
+            </Link>
+          </div>
           <div className="mt-6 border-y border-ink-200 py-5">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <p className="font-display text-2xl font-bold text-ink-900">
@@ -132,18 +143,32 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
                 : 'Currently out of stock'}
             </p>
             <p className="mt-2 text-xs leading-relaxed text-ink-500">
-              Delivery availability and timing have not been provided for this listing.
+              {product.delivery ||
+                'Delivery availability and timing have not been provided for this listing.'}
             </p>
           </div>
 
           {product.description && (
             <p className="mt-6 text-base leading-relaxed text-ink-700">{product.description}</p>
           )}
+          <VariantSelector product={product} />
+          <ProductPurchaseActions
+            productId={product.id}
+            stockQuantity={product.stock_quantity}
+            maxPurchaseQuantity={product.max_purchase_quantity}
+          />
 
           <section className="mt-7" aria-labelledby="product-highlights-title">
             <h2 id="product-highlights-title" className="text-sm font-semibold text-ink-900">
               Product highlights
             </h2>
+            {!!product.highlights?.length && (
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-ink-700">
+                {product.highlights.map((highlight) => (
+                  <li key={highlight}>{highlight}</li>
+                ))}
+              </ul>
+            )}
             <dl className="mt-3 grid gap-x-6 gap-y-3 border-y border-ink-100 py-4 sm:grid-cols-2">
               <div>
                 <dt className="text-xs text-ink-500">Brand</dt>
@@ -176,24 +201,21 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
                 Specifications
               </h2>
               <dl className="mt-3 divide-y divide-ink-100 border-y border-ink-100">
-                {Object.entries(product.specifications).map(([label, value]) => (
-                  <div
-                    key={label}
-                    className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4 py-3 text-sm"
-                  >
-                    <dt className="text-ink-500">{label}</dt>
-                    <dd className="break-words font-medium text-ink-800">{String(value)}</dd>
-                  </div>
-                ))}
+                {Object.entries(product.specifications)
+                  .filter(([label]) => !label.startsWith('_'))
+                  .map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4 py-3 text-sm"
+                    >
+                      <dt className="text-ink-500">{label}</dt>
+                      <dd className="break-words font-medium text-ink-800">{String(value)}</dd>
+                    </div>
+                  ))}
               </dl>
             </section>
           )}
 
-          <ProductPurchaseActions
-            productId={product.id}
-            stockQuantity={product.stock_quantity}
-            maxPurchaseQuantity={product.max_purchase_quantity}
-          />
           <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
             <Link
               href="/assistant"

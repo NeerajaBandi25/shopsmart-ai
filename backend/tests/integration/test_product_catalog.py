@@ -94,6 +94,9 @@ class TestPublicProductCatalog:
             "specifications",
             "stock_quantity",
             "max_purchase_quantity",
+            "delivery",
+            "highlights",
+            "image_gallery",
         }
         assert data["items"][0]["category"] is None
         assert data["items"][0]["price"] == 1299

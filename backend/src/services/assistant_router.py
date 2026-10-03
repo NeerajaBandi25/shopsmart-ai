@@ -11,6 +11,8 @@ class AssistantIntent(StrEnum):
     HELP = "HELP"
     PRODUCT_SEARCH = "PRODUCT_SEARCH"
     PRODUCT_COMPARE = "PRODUCT_COMPARE"
+    PRODUCT_ADVICE = "PRODUCT_ADVICE"
+    CHECKOUT = "CHECKOUT"
     PROMOTIONS = "PROMOTIONS"
     COUPON_APPLY = "COUPON_APPLY"
     COUPON_REMOVE = "COUPON_REMOVE"
@@ -35,19 +37,19 @@ class AssistantRoute:
 
 
 _MAX_PRICE = re.compile(
-    r"\b(?:under|below|less than|up to|at most|maximum(?: price)?(?: of)?)\s*(?P<currency>[$₹])?\s*(?P<amount>\d+(?:,\d{2,3})*(?:\.\d{1,2})?)(?![\d,.])\b",
+    r"\b(?:under|below|less than|up to|at most|maximum(?: price)?(?: of)?)\s*(?P<currency>[$₹])?\s*(?P<amount>\d+(?:,\d{2,3})*(?:\.\d{1,2})?)(?P<suffix>k)?\b(?!\w|[.,]\d|[.,]{2})",
     re.IGNORECASE,
 )
 _MIN_PRICE = re.compile(
-    r"\b(?:over|above|more than|greater than|at least|minimum(?: price)?(?: of)?)\s*(?P<currency>[$₹])?\s*(?P<amount>\d+(?:,\d{2,3})*(?:\.\d{1,2})?)(?![\d,.])\b",
+    r"\b(?:over|above|more than|greater than|at least|minimum(?: price)?(?: of)?)\s*(?P<currency>[$₹])?\s*(?P<amount>\d+(?:,\d{2,3})*(?:\.\d{1,2})?)(?P<suffix>k)?\b(?!\w|[.,]\d|[.,]{2})",
     re.IGNORECASE,
 )
 _IN_STOCK = re.compile(r"\bin[- ]stock\b", re.IGNORECASE)
 _PRICE_CUE = re.compile(
-    r"\b(?:under|below|less than|up to|at most|maximum(?: price)?(?: of)?|over|above|more than|greater than|at least|minimum(?: price)?(?: of)?)\b",
+    r"\b(?:under|below|less than|up to|at most|maximum(?: price)?(?: of)?|over|above|more than|greater than|at least|minimum(?: price)?(?: of)?)(?=\s|[$₹]|\d|$)",
     re.IGNORECASE,
 )
-_CATEGORY_CUE = re.compile(r"\bcategory\s*(?:=|:|is)\s*([a-z][a-z-]*)\b", re.IGNORECASE)
+_CATEGORY_CUE = re.compile(r"\bcategory\s*(?:=|:|is)\s*([a-z][a-z_-]*)\b", re.IGNORECASE)
 CATEGORY_ALIASES = {
     "laptop": "laptops",
     "laptops": "laptops",
@@ -72,8 +74,37 @@ CATEGORY_ALIASES = {
     "beauty": "beauty",
     "grocery": "groceries",
     "groceries": "groceries",
+    "smartphone": "smartphones",
+    "smartphones": "smartphones",
+    "headphone": "headphones",
+    "headphones": "headphones",
+    "earbuds": "headphones",
+    "earphones": "headphones",
+    "smartwatch": "smartwatches",
+    "smartwatches": "smartwatches",
+    "watch": "smartwatches",
+    "watches": "smartwatches",
+    "tablet": "tablets",
+    "tablets": "tablets",
+    "camera": "cameras",
+    "cameras": "cameras",
+    "television": "televisions",
+    "televisions": "televisions",
+    "tv": "televisions",
+    "tvs": "televisions",
+    "gaming": "gaming",
+    "gaming laptop": "laptops",
+    "gaming laptops": "laptops",
+    "gaming headphones": "headphones",
+    "gaming headset": "headphones",
+    "home appliances": "home_appliances",
+    "home_appliances": "home_appliances",
+    "kitchen appliances": "kitchen_appliances",
+    "kitchen_appliances": "kitchen_appliances",
+    "home living": "home_living",
+    "home_living": "home_living",
 }
-_UNSUPPORTED_CATEGORY_ALIASES = {"electronic", "electronics", "tablet", "tablets"}
+_UNSUPPORTED_CATEGORY_ALIASES = {"electronic", "electronics"}
 _COUPON_LABEL = re.compile(
     r"\b(?:coupon(?:\s+code)?|code)\s*(?:(?:is|:|=)\s*)?([A-Z0-9][A-Z0-9_-]{0,31})\b",
     re.IGNORECASE,
@@ -93,11 +124,15 @@ def _category_filter(text: str) -> tuple[str | None, bool]:
     ):
         return None, True
 
-    matches = {
-        category
-        for alias, category in CATEGORY_ALIASES.items()
-        if re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", text)
-    }
+    # Match compound categories before their overlapping words (home appliances,
+    # gaming laptops) while still rejecting genuinely mixed-category searches.
+    remaining = text
+    matches = set()
+    for alias in sorted(CATEGORY_ALIASES, key=len, reverse=True):
+        pattern = rf"(?<!\w){re.escape(alias)}(?!\w)"
+        if re.search(pattern, remaining):
+            matches.add(CATEGORY_ALIASES[alias])
+            remaining = re.sub(pattern, " ", remaining)
     if len(matches) > 1:
         return None, True
     return (next(iter(matches)) if matches else None), False
@@ -112,7 +147,13 @@ def _price_cents(match: re.Match[str]) -> int | None:
     amount = match.group("amount")
     if "," in amount and match.group("currency") != "₹":
         return None
-    return int(Decimal(amount.replace(",", "")) * 100)
+    multiplier = 1000 if match.group("suffix") else 1
+    return int(Decimal(amount.replace(",", "")) * multiplier * 100)
+
+
+def strip_price_constraints(text: str) -> str:
+    """Remove the same validated budget spans used by routing from catalog wording."""
+    return _MIN_PRICE.sub(" ", _MAX_PRICE.sub(" ", text))
 
 
 def route_assistant_message(message: str) -> AssistantRoute:
@@ -126,6 +167,10 @@ def route_assistant_message(message: str) -> AssistantRoute:
         term in text for term in ("what can you do", "how can you help")
     ):
         return AssistantRoute(AssistantIntent.HELP)
+    if re.search(r"\b(?:take me to|go to|open|proceed to)\s+(?:the\s+)?checkout\b", text):
+        return AssistantRoute(AssistantIntent.CHECKOUT)
+    if text.startswith("tell me about "):
+        return AssistantRoute(AssistantIntent.PRODUCT_SEARCH)
     if re.search(r"\b(?:remove|clear|delete|forget)\b.{0,30}\bcoupon\b", text):
         return AssistantRoute(AssistantIntent.COUPON_REMOVE)
     coupon_code = _coupon_code(text)
@@ -188,6 +233,7 @@ def route_assistant_message(message: str) -> AssistantRoute:
     is_cart_mutation = any(
         re.search(pattern, text)
         for pattern in (
+            r"^(?:please\s+)?add\s+(?:the\s+)?(?:cheaper|cheapest|first|second|third|recommended)\s+(?:one|product)\b",
             r"\badd(?:\s+\d{1,2})?.{0,80}\bto\s+(?:my\s+)?cart\b",
             r"\bput\b.{0,80}\bin\s+(?:my\s+)?cart\b",
             r"\bremove\b.{0,80}\bfrom\s+(?:my\s+)?cart\b",
@@ -209,6 +255,8 @@ def route_assistant_message(message: str) -> AssistantRoute:
         )
     ):
         return AssistantRoute(AssistantIntent.CART_QUERY)
+    if re.search(r"\b(?:which|what)\b.{0,60}\b(?:better|best)\b|\b(?:react development|occasional gaming)\b", text):
+        return AssistantRoute(AssistantIntent.PRODUCT_ADVICE)
     if any(term in text for term in ("compare", " versus ", " vs ")) or re.search(
         r"\bwhich\b.{0,50}\b(?:cheaper|cheapest|less expensive|lower[- ]priced)\b",
         text,
@@ -227,6 +275,7 @@ def route_assistant_message(message: str) -> AssistantRoute:
                 "recommend",
                 "products",
                 "product",
+                "tell me about",
             )
         )
         or _CATEGORY_CUE.search(text)
@@ -242,7 +291,8 @@ def route_assistant_message(message: str) -> AssistantRoute:
         min_match = _MIN_PRICE.search(text)
         max_price_cents = None
         min_price_cents = None
-        invalid_price_filter = bool(_PRICE_CUE.search(text)) and not (max_match or min_match)
+        valid_price_starts = {match.start() for match in (max_match, min_match) if match}
+        invalid_price_filter = any(cue.start() not in valid_price_starts for cue in _PRICE_CUE.finditer(text))
         if max_match:
             max_price_cents = _price_cents(max_match)
             if max_price_cents is None or max_price_cents > 2_147_483_647:

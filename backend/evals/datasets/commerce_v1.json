@@ -52,6 +52,7 @@
       "id": "filter-price-stock",
       "question": "Find in-stock headphones under $49.99",
       "intent": "PRODUCT_SEARCH",
+      "category": "headphones",
       "max_price_cents": 4999,
       "in_stock_only": true
     },

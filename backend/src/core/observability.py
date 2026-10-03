@@ -1,5 +1,7 @@
 """Lightweight request logging, request IDs, metrics, and security audit events."""
 
+import hashlib
+import hmac
 import json
 import logging
 import re
@@ -13,6 +15,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from src.core.config import settings
 
 request_id_context: ContextVar[str | None] = ContextVar("request_id", default=None)
 
@@ -68,9 +72,8 @@ _LOG_CONTEXT_FIELDS = frozenset(
         "duration_ms",
         "error_type",
         "error_code",
-        "user_id",
-        "client_ip",
-        "user_agent",
+        "user_ref",
+        "client_ref",
         "reason",
         "exception_type",
         "provider",
@@ -187,7 +190,11 @@ def security_audit_event(
     user_agent: str | None = None,
     reason: str | None = None,
 ) -> None:
-    """Emit an allowlisted security event without credentials or token values."""
+    """Audit outcomes with keyed references, without raw identities or browser metadata.
+
+    References correlate events under the current server key; they are pseudonyms,
+    not anonymous data. User-agent text is accepted for caller compatibility but omitted.
+    """
     if event not in _SECURITY_EVENTS:
         return
 
@@ -197,11 +204,9 @@ def security_audit_event(
         "request_id": request_id_context.get(),
     }
     if user_id:
-        context["user_id"] = user_id[:64]
+        context["user_ref"] = _audit_reference("user", user_id)
     if client_ip:
-        context["client_ip"] = client_ip[:64]
-    if user_agent:
-        context["user_agent"] = user_agent[:256]
+        context["client_ref"] = _audit_reference("client", client_ip)
     if reason:
         context["reason"] = reason[:64]
 
@@ -211,6 +216,15 @@ def security_audit_event(
         "security_event",
         extra=context,
     )
+
+
+def _audit_reference(kind: str, value: str) -> str:
+    # Keying prevents offline IP enumeration; domains prevent cross-field correlation.
+    return hmac.new(
+        settings.secret_key.encode("utf-8"),
+        f"security-audit:v1:{kind}:{value}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 class RequestObservabilityMiddleware:

@@ -1,0 +1,894 @@
+.hero {
+  --forest: #142820;
+  --paper: #f0ede4;
+  position: relative;
+  overflow: hidden;
+  color: var(--paper);
+  background: var(--forest);
+}
+.hero::after {
+  position: absolute;
+  z-index: 5;
+  inset-inline: 0;
+  bottom: 0;
+  height: 18px;
+  background: linear-gradient(to bottom, transparent, #fff 100%);
+  content: '';
+  pointer-events: none;
+}
+.ambient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 76% 42%, #9e744c30, transparent 38%),
+    radial-gradient(ellipse at 14% 80%, #5c745024, transparent 33%),
+    linear-gradient(115deg, #12241e, #192d25 56%, #1d2925);
+}
+.shell {
+  position: relative;
+  max-width: 1512px;
+  margin: 0 auto;
+  padding: 0 5.4%;
+}
+.topline,
+.bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  min-height: 58px;
+  border-bottom: 1px solid #edf0df24;
+  color: #d0d4c5b0;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+}
+.topline span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #e3e2d6;
+}
+.topline i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d6bf8d;
+  box-shadow: 0 0 16px #d6bf8d99;
+}
+.stage {
+  display: grid;
+  grid-template-columns: minmax(315px, 0.78fr) minmax(0, 1.22fr);
+  gap: 7%;
+  align-items: center;
+  min-height: min(750px, calc(100svh - 110px));
+  padding: 46px 0 40px;
+}
+.editorial {
+  min-width: 0;
+  animation: copy-in 0.56s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.kicker {
+  color: #dacba9;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.editorial h1 {
+  max-width: 530px;
+  margin-top: 22px;
+  font-family: var(--font-display);
+  font-size: clamp(3.25rem, 6.2vw, 6.1rem);
+  font-weight: 450;
+  line-height: 0.99;
+  letter-spacing: -0.065em;
+}
+.editorial h1 em {
+  color: #ddc49d;
+  font-weight: 400;
+}
+.intro {
+  max-width: 390px;
+  margin-top: 22px;
+  color: #d0d4ca;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  margin-top: 28px;
+}
+.primary,
+.secondary {
+  min-height: 48px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  padding: 0 18px;
+  font-size: 12px;
+}
+.primary {
+  color: #19271f;
+  background: #e2d4b8;
+  font-weight: 700;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+.primary:hover {
+  background: #f3e8d0;
+  transform: translateY(-2px);
+}
+.secondary {
+  padding-inline: 0;
+  color: #ecebe1;
+  border-bottom: 1px solid #e3ddc378;
+}
+.brief,
+.recommendation,
+.purchase {
+  max-width: 490px;
+  margin-top: 31px;
+  border: 1px solid #eee8d232;
+  background: linear-gradient(140deg, #ffffff0d, #fff1df06);
+  backdrop-filter: blur(14px);
+}
+.brief {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 20px;
+}
+.briefMark {
+  color: #e6d0a5;
+  font-size: 24px;
+}
+.brief span:not(.briefMark),
+.recommendationLabel,
+.purchaseItem > span {
+  color: #cfc7b1a6;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+.brief p {
+  margin-top: 9px;
+  color: #fff9eb;
+  font-family: var(--font-display);
+  font-size: clamp(16px, 1.65vw, 22px);
+  line-height: 1.4;
+}
+.brief small {
+  display: inline-block;
+  margin-top: 12px;
+  color: #e1d2ae;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.recommendation {
+  padding: 19px;
+}
+.recommendation > strong {
+  display: block;
+  margin-top: 9px;
+  font-family: var(--font-display);
+  font-size: 21px;
+  line-height: 1.2;
+}
+.recommendation > p {
+  margin-top: 6px;
+  color: #d0d4ca;
+  font-size: 12px;
+}
+.evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+}
+.evidence span {
+  padding: 8px 10px;
+  color: #d2d8c9;
+  border: 1px solid #f0ecdb28;
+  font-size: 10px;
+}
+.evidence b {
+  margin-left: 7px;
+  color: #e5cd9f;
+}
+.recommendation > a,
+.purchase > a {
+  display: block;
+  margin-top: 16px;
+  color: #ead6ac;
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.purchase {
+  padding: 19px;
+}
+.purchaseItem {
+  display: grid;
+  gap: 8px;
+}
+.purchaseItem strong {
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+.purchaseItem b {
+  font-size: 14px;
+}
+.purchase :global(button) {
+  margin-top: 17px;
+  width: 100%;
+}
+.sceneNav {
+  margin-top: 48px;
+}
+.sceneNav > span {
+  color: #d0d4c582;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+}
+.sceneNav > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 13px;
+}
+.sceneNav button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 8px;
+  color: #d1d5c9a0;
+  border-bottom: 1px solid transparent;
+  transition:
+    color 0.2s,
+    border-color 0.2s;
+}
+.sceneNav button i {
+  font-size: 9px;
+  font-style: normal;
+}
+.sceneNav button span {
+  font-size: 10px;
+}
+.sceneNav button[aria-current='step'] {
+  color: #f0ddba;
+  border-color: #d6c39c;
+}
+.visual {
+  min-width: 0;
+}
+.visualMeta,
+.visualFoot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #e8e0cf9c;
+  font-size: 8px;
+  letter-spacing: 0.13em;
+}
+.visualMeta {
+  padding-bottom: 13px;
+}
+.productStage {
+  position: relative;
+  min-height: 485px;
+  height: min(55vw, 590px);
+  max-height: 590px;
+  overflow: hidden;
+  background: #252a25;
+  isolation: isolate;
+  animation: visual-in 0.7s cubic-bezier(0.18, 0.66, 0.26, 1) both;
+}
+.heroImage {
+  object-fit: cover;
+  object-position: center 55%;
+  transform: scale(1.035);
+  transition:
+    transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter 0.7s;
+}
+.scene0 .heroImage {
+  transform: scale(1.035);
+}
+.scene2 .heroImage,
+.scene3 .heroImage {
+  filter: brightness(0.45) saturate(0.72);
+  transform: scale(1.09);
+}
+.scene1 .heroImage {
+  filter: brightness(0.57) saturate(0.75);
+  transform: scale(1.08);
+}
+.scene4 .heroImage {
+  filter: brightness(0.54);
+  transform: scale(1.06);
+}
+.scene5 .heroImage {
+  filter: brightness(0.4) saturate(0.55);
+  transform: scale(1.12);
+}
+.imageShade {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(0deg, #131a16c9, transparent 35%, #111a161c),
+    linear-gradient(90deg, #18221d55, transparent 64%);
+  pointer-events: none;
+}
+.openingNote {
+  position: absolute;
+  z-index: 2;
+  left: 23px;
+  top: 22px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #f4ebd9;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.openingNote span:first-child {
+  color: #d9c69c;
+}
+.imageCaption {
+  position: absolute;
+  z-index: 2;
+  left: 23px;
+  bottom: 22px;
+  display: grid;
+  gap: 5px;
+  max-width: 64%;
+  text-shadow: 0 2px 20px #0008;
+}
+.imageCaption span {
+  color: #ecdfc3c4;
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.imageCaption b {
+  font-family: var(--font-display);
+  font-size: clamp(17px, 2vw, 25px);
+  font-weight: 500;
+  line-height: 1.2;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.intentOverlay,
+.pricePanel,
+.cartStamp {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  right: 8%;
+  width: min(320px, 78%);
+  padding: 22px;
+  color: #1c2922;
+  background: #f1ede4ed;
+  box-shadow: 0 20px 60px #0004;
+  transform: translateY(-50%);
+  animation: float-in 0.55s ease both;
+}
+.intentOverlay > span,
+.pricePanel > span,
+.cartStamp > span {
+  color: #777b6d;
+  font-size: 8px;
+  letter-spacing: 0.13em;
+}
+.intentOverlay p {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #26382b1a;
+  color: #667168;
+  font-size: 10px;
+}
+.intentOverlay p:first-of-type {
+  margin-top: 12px;
+}
+.intentOverlay b {
+  max-width: 56%;
+  color: #26382b;
+  text-align: right;
+  text-transform: capitalize;
+}
+.candidates {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  width: min(560px, 88%);
+  padding: 18px;
+  background: #f1eee8f2;
+  color: #182820;
+  box-shadow: 0 22px 65px #050d0970;
+  transform: translate(-50%, -50%);
+  animation: float-in 0.55s ease both;
+}
+.candidateHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #74796e;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+.candidateHeading b {
+  color: #334738;
+  font-weight: 600;
+}
+.candidate {
+  display: grid;
+  grid-template-columns: 40px 52px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 11px 0;
+  border-bottom: 1px solid #39483720;
+}
+.candidate:last-of-type {
+  border-bottom: 0;
+}
+.candidate > img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  mix-blend-mode: multiply;
+}
+.rank {
+  color: #8e907e;
+  font-family: var(--font-display);
+  font-size: 17px;
+}
+.candidateInfo {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.candidateInfo > b {
+  overflow: hidden;
+  color: #5d675e;
+  font-size: 8px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.candidateInfo > a {
+  overflow: hidden;
+  color: #202d25;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.candidateInfo > span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #737a70;
+  font-size: 8px;
+  line-height: 1.3;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+.candidate > strong {
+  padding-left: 7px;
+  color: #334638;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.compareStrip {
+  display: grid;
+  grid-template-columns: 1fr repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  color: #eae2d0;
+  font-size: 9px;
+}
+.compareStrip span {
+  color: #c5c1b1;
+  text-transform: uppercase;
+}
+.compareStrip b {
+  font-size: 10px;
+  text-align: right;
+}
+.pricePanel {
+  left: 50%;
+  right: auto;
+  width: min(325px, 80%);
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+.pricePanel b {
+  display: block;
+  margin-top: 15px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.18;
+}
+.pricePanel strong {
+  display: block;
+  margin-top: 10px;
+  color: #344937;
+  font-size: 16px;
+}
+.pricePanel p {
+  margin-top: 9px;
+  color: #70786d;
+  font-size: 10px;
+}
+.cartStamp {
+  top: auto;
+  right: 8%;
+  bottom: 18%;
+  width: auto;
+  padding: 22px 26px;
+  transform: none;
+}
+.cartStamp b {
+  display: block;
+  margin-top: 12px;
+  color: #26372c;
+  font-family: var(--font-display);
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1.07;
+}
+.cartStamp i {
+  display: block;
+  margin-top: 12px;
+  color: #797c65;
+  font-size: 19px;
+  font-style: normal;
+  text-align: right;
+}
+.visualFoot {
+  padding-top: 12px;
+  font-size: 7px;
+}
+.progress {
+  height: 2px;
+  background: #f3ecd724;
+}
+.progress i {
+  display: block;
+  height: 100%;
+  background: #e3cda6;
+  transition: width 0.42s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.bottom {
+  min-height: 51px;
+  border: 0;
+  color: #c7caba82;
+  font-size: 8px;
+}
+.bottom > span:last-child {
+  letter-spacing: 0.04em;
+}
+.empty,
+.imageFallback {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  padding: 20px;
+  color: #e0decf;
+  text-align: center;
+}
+.briefForm {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 440px;
+  margin-top: 9px;
+  padding: 8px 8px 8px 0;
+  border-bottom: 1px solid #eee8d26b;
+}
+.briefForm input {
+  min-width: 0;
+  width: 100%;
+  padding: 5px 0;
+  color: #fff9eb;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: clamp(14px, 1.45vw, 19px);
+  line-height: 1.4;
+  outline: none;
+}
+.briefForm input:focus-visible {
+  box-shadow: 0 1px #ead6ac;
+}
+.briefForm button {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  color: #1c2922;
+  background: #e2d4b8;
+  font-size: 17px;
+}
+.comparison {
+  display: grid;
+  gap: 0;
+  padding: 8px 12px;
+  color: #e9e3d4;
+  background: #111f19;
+}
+.compareRow {
+  display: grid;
+  grid-template-columns: minmax(70px, 0.68fr) repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+  min-height: 31px;
+  border-bottom: 1px solid #eee8d21f;
+}
+.compareRow:last-child {
+  border-bottom: 0;
+}
+.compareRow span {
+  color: #c7c9ba;
+  font-size: 8px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.compareRow b {
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 500;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero a:focus-visible,
+.hero button:focus-visible {
+  outline: 2px solid #e6d2a6;
+  outline-offset: 3px;
+}
+@keyframes copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes visual-in {
+  from {
+    opacity: 0.45;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes float-in {
+  from {
+    opacity: 0;
+    translate: 0 9px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@media (max-width: 1023px) {
+  .shell {
+    padding: 0 5%;
+  }
+  .stage {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    min-height: auto;
+    padding: 40px 0 28px;
+  }
+  .editorial {
+    max-width: 730px;
+  }
+  .editorial h1 {
+    max-width: 660px;
+    font-size: clamp(3.7rem, 10vw, 6.5rem);
+  }
+  .sceneNav {
+    margin-top: 29px;
+  }
+  .sceneNav > div {
+    gap: 4px;
+  }
+  .sceneNav button {
+    padding: 0 6px;
+  }
+  .visual {
+    width: 100%;
+  }
+  .productStage {
+    height: min(72vw, 585px);
+    min-height: 440px;
+  }
+  .bottom {
+    margin: 0;
+  }
+}
+@media (max-width: 639px) {
+  .shell {
+    padding: 0 20px;
+  }
+  .topline {
+    min-height: 47px;
+    font-size: 7px;
+    letter-spacing: 0.1em;
+  }
+  .topline span:last-child {
+    text-align: right;
+  }
+  .stage {
+    gap: 22px;
+    padding: 31px 0 22px;
+  }
+  .kicker {
+    font-size: 9px;
+  }
+  .editorial h1 {
+    margin-top: 16px;
+    font-size: clamp(3.15rem, 12.8vw, 4.6rem);
+  }
+  .intro {
+    margin-top: 15px;
+    font-size: 12px;
+  }
+  .ctas {
+    margin-top: 18px;
+    gap: 10px 18px;
+  }
+  .primary,
+  .secondary {
+    min-height: 44px;
+    font-size: 10px;
+  }
+  .sceneNav {
+    margin-top: 25px;
+  }
+  .sceneNav > div {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .sceneNav button {
+    min-height: 34px;
+    justify-content: flex-start;
+    padding-inline: 2px;
+  }
+  .sceneNav button span {
+    font-size: 8px;
+  }
+  .productStage {
+    min-height: 335px;
+    height: 88vw;
+    max-height: 400px;
+  }
+  .visualMeta {
+    font-size: 7px;
+  }
+  .openingNote {
+    left: 14px;
+    top: 15px;
+    font-size: 7px;
+  }
+  .imageCaption {
+    left: 14px;
+    bottom: 14px;
+    max-width: 80%;
+  }
+  .imageCaption b {
+    font-size: 17px;
+  }
+  .intentOverlay {
+    right: 5%;
+    width: 88%;
+    padding: 16px;
+  }
+  .candidates {
+    width: 94%;
+    padding: 12px;
+  }
+  .candidate {
+    grid-template-columns: 29px 39px minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 10px 0;
+  }
+  .candidate > img {
+    width: 39px;
+    height: 39px;
+  }
+  .rank {
+    font-size: 14px;
+  }
+  .candidateInfo > a {
+    font-size: 10px;
+  }
+  .candidateInfo > span {
+    font-size: 7px;
+  }
+  .candidate > strong {
+    font-size: 8px;
+  }
+  .candidateHeading {
+    font-size: 7px;
+  }
+  .comparison {
+    padding: 6px 5px;
+  }
+  .compareRow {
+    grid-template-columns: minmax(48px, 0.6fr) repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    min-height: 30px;
+  }
+  .compareRow span {
+    font-size: 6px;
+  }
+  .compareRow b {
+    font-size: 7px;
+  }
+  .pricePanel {
+    width: 88%;
+    padding: 18px;
+  }
+  .pricePanel b {
+    font-size: 19px;
+  }
+  .cartStamp {
+    right: 5%;
+    bottom: 20%;
+    padding: 17px;
+  }
+  .cartStamp b {
+    font-size: 21px;
+  }
+  .visualFoot {
+    font-size: 6px;
+  }
+  .bottom {
+    min-height: 45px;
+    font-size: 6px;
+    letter-spacing: 0.09em;
+  }
+  .bottom > span:last-child {
+    max-width: 54%;
+    text-align: right;
+    line-height: 1.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editorial,
+  .productStage,
+  .intentOverlay,
+  .candidates,
+  .pricePanel,
+  .cartStamp {
+    animation: none;
+  }
+  .heroImage,
+  .progress i,
+  .primary,
+  .sceneNav button {
+    transition: none;
+  }
+}

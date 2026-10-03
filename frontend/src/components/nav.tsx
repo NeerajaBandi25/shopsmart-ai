@@ -146,6 +146,14 @@ export default function Nav({ probeAuth = true }: NavProps) {
         <div className="flex items-center">
           <button
             type="button"
+            aria-label="Open shopping commands"
+            onClick={() => window.dispatchEvent(new Event('shopsmart-commands'))}
+            className="min-h-11 rounded-sm px-3 text-sm font-semibold text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-500 sm:hidden"
+          >
+            Search
+          </button>
+          <button
+            type="button"
             aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
             aria-expanded={isMobileMenuOpen}
             aria-controls="primary-navigation"

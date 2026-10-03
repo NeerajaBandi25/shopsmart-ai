@@ -1,4 +1,5 @@
 import './../styles/globals.css';
+import { ShoppingTools } from '@/components/ShoppingTools';
 
 export const metadata = {
   title: 'ShopSmart AI | Thoughtful product discovery',
@@ -8,7 +9,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ShoppingTools />
+        {children}
+      </body>
     </html>
   );
 }

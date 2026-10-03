@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import type { Product } from '@/lib/api-client';
 
@@ -11,21 +11,39 @@ interface ProductGalleryProps {
 
 export function ProductGallery({ product, categoryImage }: ProductGalleryProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const image = product.image_url || categoryImage;
+  const [imageIndex, setImageIndex] = useState(0);
+  const expandButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const gallery = product.image_gallery || [];
+  const image = gallery[imageIndex]?.url || product.image_url || categoryImage;
   const isProductImage = Boolean(product.image_url);
   const imageAlt = isProductImage
-    ? product.image_alt || product.name
+    ? gallery[imageIndex]?.alt || product.image_alt || product.name
     : categoryImage
       ? `${product.category} category photograph; product-specific image unavailable`
       : 'Product image unavailable';
 
   useEffect(() => {
     if (!isExpanded) return;
+    const returnFocusTo = expandButton.current;
+    closeButton.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') setIsExpanded(false);
+      // The image dialog has one interactive control. Keep keyboard focus inside
+      // it until dismissal, then restore the shopper's place in the gallery.
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        closeButton.current?.focus();
+      }
     }
     window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape);
+      document.body.style.overflow = previousOverflow;
+      returnFocusTo?.focus();
+    };
   }, [isExpanded]);
 
   return (
@@ -33,6 +51,7 @@ export function ProductGallery({ product, categoryImage }: ProductGalleryProps) 
       <div className="relative aspect-[4/3] overflow-hidden bg-sand-100">
         {image ? (
           <button
+            ref={expandButton}
             type="button"
             onClick={() => setIsExpanded(true)}
             aria-label="Expand product image"
@@ -62,6 +81,22 @@ export function ProductGallery({ product, categoryImage }: ProductGalleryProps) 
           </span>
         )}
       </div>
+      {!!gallery.length && (
+        <div className="mt-3 flex gap-2" aria-label="Product image thumbnails">
+          {gallery.map((item, index) => (
+            <button
+              key={item.url}
+              type="button"
+              aria-label={`Show product image ${index + 1}`}
+              aria-pressed={index === imageIndex}
+              onClick={() => setImageIndex(index)}
+              className={`relative h-16 w-16 overflow-hidden rounded-lg border-2 ${index === imageIndex ? 'border-accent-600' : 'border-ink-200'}`}
+            >
+              <Image src={item.url} alt={item.alt} fill sizes="64px" className="object-contain" />
+            </button>
+          ))}
+        </div>
+      )}
       {isProductImage && product.image_creator && product.image_license && (
         <figcaption className="mt-3 text-xs leading-relaxed text-ink-500">
           Image by{' '}
@@ -108,6 +143,7 @@ export function ProductGallery({ product, categoryImage }: ProductGalleryProps) 
           }}
         >
           <button
+            ref={closeButton}
             type="button"
             onClick={() => setIsExpanded(false)}
             className="absolute right-4 top-4 h-10 border border-white/50 px-3 text-sm font-semibold text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"

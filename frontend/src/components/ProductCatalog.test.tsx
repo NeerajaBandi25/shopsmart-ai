@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { getProducts, type ProductPage } from '@/lib/api-client';
+import { getHomepage, getProducts, type ProductPage } from '@/lib/api-client';
 import { ProductCatalog } from '@/components/ProductCatalog';
 
 jest.mock('@/lib/api-client', () => ({
   getProducts: jest.fn(),
+  getHomepage: jest.fn(),
 }));
 jest.mock('@/lib/cart-api', () => ({ addCartItem: jest.fn() }));
 
@@ -32,13 +33,21 @@ function page(items: ProductPage['items'], skip = 0, total = items.length + skip
 describe('ProductCatalog', () => {
   beforeEach(() => {
     mockedGetProducts.mockReset();
+    jest.mocked(getHomepage).mockResolvedValue({
+      categories: [{ value: 'laptops', label: 'Laptops', count: 8 }],
+      featured: [],
+      trending: [],
+      recommendations: [],
+      promotions: [],
+    });
+    window.history.replaceState(null, '', '/products');
   });
 
   it('shows a loading state while products are being requested', () => {
     mockedGetProducts.mockImplementation(() => new Promise(() => undefined));
 
+    jest.mocked(getHomepage).mockImplementation(() => new Promise(() => undefined));
     render(<ProductCatalog />);
-
     expect(screen.getByRole('status')).toHaveTextContent('Loading products...');
   });
 
@@ -72,7 +81,7 @@ describe('ProductCatalog', () => {
       'href',
       `/products/${product.id}`
     );
-    expect(screen.getAllByText('Category image')).toHaveLength(2);
+    expect(screen.getAllByRole('img', { name: 'Product image unavailable' })).toHaveLength(2);
   });
 
   it('shows an empty state when the API returns no products', async () => {
@@ -88,7 +97,9 @@ describe('ProductCatalog', () => {
 
     render(<ProductCatalog />);
 
-    expect(await screen.findByRole('img', { name: 'Product image unavailable' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('img', { name: 'Product image unavailable' })
+    ).toBeInTheDocument();
     expect(screen.queryByText('Category image')).not.toBeInTheDocument();
   });
 
@@ -144,6 +155,7 @@ describe('ProductCatalog', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search products' }), {
       target: { value: 'laptop' },
     });
+    await screen.findByRole('option', { name: 'Laptops' });
     fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'laptops' } });
     fireEvent.change(screen.getByRole('searchbox', { name: 'Brand' }), {
       target: { value: 'Northstar' },
@@ -167,5 +179,58 @@ describe('ProductCatalog', () => {
         sort: 'price_asc',
       })
     );
+  });
+  it('hydrates full shareable filters and restores browser history', async () => {
+    mockedGetProducts.mockResolvedValue(page([product]));
+    render(
+      <ProductCatalog
+        initialFilters={{
+          category: 'laptops',
+          max_price_minor: 6000000,
+          min_price_minor: 3000000,
+          brand: 'Northstar',
+          subcategory: 'notebooks',
+          in_stock_only: true,
+          sort: 'price_asc',
+        }}
+        initialSkip={24}
+      />
+    );
+    await screen.findByRole('heading', { name: 'Canvas Weekender' });
+    expect(mockedGetProducts).toHaveBeenCalledWith(
+      24,
+      24,
+      expect.objectContaining({
+        category: 'laptops',
+        max_price_minor: 6000000,
+        min_price_minor: 3000000,
+        sort: 'price_asc',
+      })
+    );
+    expect(screen.getByLabelText('Minimum price (₹)')).toHaveValue(30000);
+    expect(screen.getByLabelText('Maximum price (₹)')).toHaveValue(60000);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(window.location.search).toBe('');
+    window.history.replaceState(null, '', '/products?category=laptops&max_price_minor=4000000');
+    fireEvent(window, new PopStateEvent('popstate'));
+    await waitFor(() =>
+      expect(mockedGetProducts).toHaveBeenLastCalledWith(
+        0,
+        24,
+        expect.objectContaining({ category: 'laptops', max_price_minor: 4000000 })
+      )
+    );
+    expect(screen.getByLabelText('Maximum price (₹)')).toHaveValue(40000);
+  });
+
+  it('rejects reversed price ranges before requesting products', async () => {
+    mockedGetProducts.mockResolvedValue(page([product]));
+    render(<ProductCatalog />);
+    await screen.findByRole('heading', { name: 'Canvas Weekender' });
+    fireEvent.change(screen.getByLabelText('Minimum price (₹)'), { target: { value: '2000' } });
+    fireEvent.change(screen.getByLabelText('Maximum price (₹)'), { target: { value: '1000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a valid price range');
+    expect(mockedGetProducts).toHaveBeenCalledTimes(1);
   });
 });

@@ -67,8 +67,8 @@ export function RelatedProducts({ product }: RelatedProductsProps) {
   const specificationKeys = selected
     ? Array.from(
         new Set([
-          ...Object.keys(product.specifications || {}),
-          ...Object.keys(selected.specifications || {}),
+          ...Object.keys(product.specifications || {}).filter((key) => !key.startsWith('_')),
+          ...Object.keys(selected.specifications || {}).filter((key) => !key.startsWith('_')),
         ])
       )
     : [];

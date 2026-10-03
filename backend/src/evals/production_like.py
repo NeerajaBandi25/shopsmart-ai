@@ -127,7 +127,7 @@ async def evaluate_seeded_database(db: AsyncSession) -> dict:
         selected
         and selected["category"] == "laptops"
         and selected["name"] in cheaper["answer"]
-        and f"${selected['price_cents'] / 100:,.2f}" in cheaper["answer"]
+        and f"₹{selected['price_cents'] / 100:,.2f}" in cheaper["answer"]
     )
     await assistant.answer(returning_user, "Add that one to cart", conversation_id)
     cart_after_add = await assistant.answer(returning_user, "What's in my cart?", conversation_id)
@@ -386,7 +386,7 @@ async def evaluate_seeded_database(db: AsyncSession) -> dict:
             error.status_code == 422 and error.error_code == "invalid_price_filter"
         )
     scenarios["invalid_numeric_filter_rejected"] = invalid_filter_rejected
-    unsupported_category = await assistant.answer(new_user, "Show me category=tablets under 60000")
+    unsupported_category = await assistant.answer(new_user, "Show me category=spaceships under 60000")
     scenarios["unknown_category_does_not_fall_back_to_text"] = (
         unsupported_category["intent"] == "UNSUPPORTED"
         and unsupported_category["result_data"] is None

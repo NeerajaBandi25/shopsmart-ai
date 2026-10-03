@@ -1,6 +1,9 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useCommerceStore } from '@/lib/commerce-store';
 import AuthenticatedLayout from '@/app/authenticated-layout';
 import { formatInr } from '@/lib/currency';
 import CommerceResults, {
@@ -23,6 +26,9 @@ type ChatResult = {
   intent: string;
   citations: Citation[];
   result_data: {
+    comparison?: boolean;
+    navigation?: string;
+    buying_brief?: { product_id: string; name: string; reasons: string[] }[];
     products?: ProductResult[];
     cart?: {
       items: { name: string; quantity: number; line_total: number }[];
@@ -51,6 +57,7 @@ type StoredMessage = {
 };
 
 const suggestions = [
+  'Show me the best laptops under ₹60,000',
   'Find in-stock products under ₹5,000',
   'What offers are active?',
   "What's in my cart?",
@@ -80,6 +87,7 @@ function apiErrorMessage(response: Response, fallback: string): string {
 }
 
 export default function AssistantPage() {
+  const router = useRouter();
   const [question, setQuestion] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -94,10 +102,13 @@ export default function AssistantPage() {
   } | null>(null);
 
   useEffect(() => {
+    // PDP and command palette pass shopper wording; it remains editable until submitted.
+    const contextualQuestion = new URLSearchParams(window.location.search).get('q');
+    if (contextualQuestion) setQuestion(contextualQuestion.slice(0, 1000));
     void fetchConversations()
       .then((items) => {
         setConversations(items);
-        if (items.length > 0) void openConversation(items[0].id);
+        if (items.length > 0 && !contextualQuestion) void openConversation(items[0].id);
       })
       .catch(() => setError('Could not load recent conversations.'));
   }, []);
@@ -123,8 +134,13 @@ export default function AssistantPage() {
       if (!response.ok)
         throw new Error(apiErrorMessage(response, 'The assistant is temporarily unavailable.'));
       const result: ChatResult = await response.json();
+      if (result.result_data?.cart)
+        useCommerceStore.getState().syncCartCount(result.result_data.cart);
       setConversationId(result.conversation_id);
       setMessages((items) => [...items, { role: 'assistant', content: result.answer, result }]);
+      // Only the explicit checkout intent may navigate; arbitrary model URLs are ignored.
+      if (result.intent === 'CHECKOUT' && result.result_data?.navigation === '/checkout')
+        router.push('/checkout');
       void fetchConversations()
         .then(setConversations)
         .catch(() => setError('Could not refresh recent conversations.'));
@@ -170,6 +186,8 @@ export default function AssistantPage() {
         throw new Error(message);
       }
       setCartAction({ resultId, kind: 'success', message: 'Added to your cart.' });
+      const cart = await response.json();
+      if (cart?.items) useCommerceStore.getState().syncCartCount(cart);
     } catch (reason) {
       setCartAction({
         resultId,
@@ -320,7 +338,37 @@ export default function AssistantPage() {
                     addingProductId={addingProductId}
                     cartAction={cartAction}
                     onAddToCart={(productId, resultId) => void addToCart(productId, resultId)}
+                    comparison={
+                      message.result.result_data.comparison ||
+                      message.result.intent === 'PRODUCT_COMPARE'
+                    }
+                    onCompare={() => void ask('Compare the first two')}
                   />
+                )}
+                {message.result?.result_data?.buying_brief && (
+                  <section aria-label="AI buying brief" className="grid gap-3 sm:grid-cols-2">
+                    {message.result.result_data.buying_brief.map((brief) => (
+                      <div
+                        key={brief.product_id}
+                        className="rounded-xl border border-accent-100 bg-white p-4"
+                      >
+                        <h3 className="font-semibold text-ink-900">{brief.name}</h3>
+                        <ul className="mt-2 space-y-1 text-sm text-ink-600">
+                          {brief.reasons.map((reason) => (
+                            <li key={reason}>{reason}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </section>
+                )}
+                {message.result?.result_data?.navigation === '/checkout' && (
+                  <Link
+                    href="/checkout"
+                    className="inline-flex min-h-11 items-center rounded-lg bg-accent-700 px-4 text-sm font-semibold text-white"
+                  >
+                    Continue to checkout
+                  </Link>
                 )}
                 {message.result?.result_data?.cart && (
                   <div className="max-w-3xl border-l-2 border-accent-500 pl-4 text-sm text-ink-700">

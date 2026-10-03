@@ -18,6 +18,7 @@ from src.services.ai_governance import (
     ProviderPolicyRegistry,
     ProviderUnavailable,
     UsageTracker,
+    highest_classification,
 )
 from src.services.ai_provider import Evidence, GroundedAnswerProvider, ProviderAnswer
 
@@ -241,10 +242,9 @@ class ProviderGateway:
             metrics.record_ai_event("ai_policy_denied")
             raise PolicyViolation("Provider and model selection are policy-controlled")
         safe_evidence = GroundedAnswerProvider.safe_evidence(evidence)
-        effective_classification = max(
-            (item.classification for item in safe_evidence),
-            key=lambda item: list(DataClassification).index(item),
-            default=DataClassification.PRIVATE,
+        # Public evidence cannot downgrade a private question or caller's policy boundary.
+        effective_classification = highest_classification(
+            [classification, *(item.classification for item in evidence)]
         )
         if not safe_evidence:
             return GatewayResult(

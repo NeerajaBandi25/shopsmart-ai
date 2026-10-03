@@ -14,6 +14,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.models.product import Product
+from src.seed.portfolio_profiles import aligned_families, product_configuration
 
 CATALOG_VERSION = "portfolio-catalog-v2"
 CATALOG_DATABASE = "shopsmart_portfolio"
@@ -1186,6 +1187,7 @@ CATALOG_FAMILIES = {
     "accessories": _SOURCE_CATALOG_FAMILIES["accessories"],
     "home_living": _SOURCE_CATALOG_FAMILIES["home"],
 }
+CATALOG_FAMILIES = aligned_families(CATALOG_FAMILIES)
 
 CATALOG_CATEGORIES = tuple(CATALOG_FAMILIES)
 PRODUCTS_PER_CATEGORY = 80
@@ -1218,21 +1220,26 @@ def build_catalog_products() -> list[Product]:
             family["products"], start=1
         ):
             brand = family["brands"][(product_index - 1) % len(family["brands"])]
-            for variant_index, (variant, color, price_delta) in enumerate(
-                family["variants"], start=1
-            ):
+            for variant_index in range(1, 9):
+                archetype = (product_index - 1) % 5
+                variant, price_delta, configuration = product_configuration(category, archetype, variant_index - 1)
                 sku = f"PORT-{category.upper()}-{product_index:02d}-{variant_index:02d}"
                 price = base_price + price_delta
-                image_path = f"{category}/{(product_index - 1) % 5 + 1:02d}.png"
+                image_path = f"{category}/{(product_index - 1) % 5 + 1:02d}.jpg"
                 image_url = f"/images/products/portfolio/{image_path}"
-                name = f"{brand} {title}, {color + ', ' if color else ''}{variant}"
+                name = f"{brand} {title}, {variant}"
                 specifications: dict[str, Any] = {
                     "Subcategory": subcategory,
                     "Variant": variant,
                     "Key details": feature,
+                    **configuration,
+                    "Image note": "Illustrative portfolio-family product photography; the pictured scene is not a claim about a specific SKU.",
+                    "_presentation": {
+                        "delivery": "Standard portfolio delivery; timing confirmed at checkout",
+                        "highlights": [feature, variant, "Illustrative portfolio-family studio photograph"],
+                        "image_gallery": [{"url": image_url, "alt": f"Studio product photograph illustrating the {category.replace('_', ' ')} product family"}],
+                    },
                 }
-                if color is not None:
-                    specifications["Color"] = color
                 products.append(
                     Product(
                         id=uuid5(NAMESPACE_URL, f"shopsmart/{CATALOG_VERSION}/{sku}"),
@@ -1254,10 +1261,10 @@ def build_catalog_products() -> list[Product]:
                         ),
                         specifications=specifications,
                         image_url=image_url,
-                        image_alt=f"Original illustration of {name}",
+                        image_alt=f"Studio product photograph illustrating the {category.replace('_', ' ')} product family",
                         image_source_url=image_url,
-                        image_creator="ShopSmart portfolio art generator",
-                        image_license="Repository-created original artwork",
+                        image_creator="OpenAI built-in image_gen, commissioned for the ShopSmart portfolio",
+                        image_license="Repository-created AI-generated portfolio-family image",
                         image_license_url=None,
                         image_sha256=_ASSET_HASHES[image_path],
                         max_purchase_quantity=5,
@@ -1330,13 +1337,43 @@ async def seed_catalog_products(session: AsyncSession) -> dict[str, int]:
     return {"inserted": len(pending), "already_present": already_seeded}
 
 
-async def _run_seed(database_url: str) -> dict[str, int]:
+async def repair_catalog_products(session: AsyncSession) -> dict[str, int]:
+    """Refresh authored portfolio metadata only when both reserved identities agree.
+
+    Order item snapshots remain untouched. Existing carts will receive the current
+    catalog price through CartService, exactly as they do after an inventory update.
+    """
+    authored = build_catalog_products()
+    rows = (await session.execute(select(Product).where(
+        or_(Product.id.in_([p.id for p in authored]), Product.sku.in_([p.sku for p in authored]))
+    ))).scalars().all()
+    by_id = {row.id: row for row in rows}
+    by_sku = {row.sku: row for row in rows}
+    fields = ("name", "description", "category", "brand", "price", "list_price", "specifications",
+              "image_url", "image_alt", "image_source_url", "image_creator", "image_license",
+              "image_license_url", "image_sha256")
+    updated = 0
+    for product in authored:
+        row = by_id.get(product.id)
+        sku_row = by_sku.get(product.sku)
+        if row is None and sku_row is None:
+            continue
+        if row is not sku_row:
+            raise CatalogSeedCollisionError("A reserved product ID or SKU belongs to other data.")
+        for field in fields:
+            setattr(row, field, getattr(product, field))
+        updated += 1
+    await session.flush()
+    return {"updated": updated}
+
+
+async def _run_seed(database_url: str, repair: bool = False) -> dict[str, int]:
     engine = create_async_engine(database_url)
     factory: async_sessionmaker[AsyncSession] = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as session:
             async with session.begin():
-                result = await seed_catalog_products(session)
+                result = await repair_catalog_products(session) if repair else await seed_catalog_products(session)
         return result
     finally:
         await engine.dispose()
@@ -1345,6 +1382,7 @@ async def _run_seed(database_url: str) -> dict[str, int]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--repair", action="store_true", help="Refresh reserved local portfolio metadata without changing IDs, stock or orders")
     args = parser.parse_args(argv)
     environment = dict(os.environ)
     database_url = environment.get("DATABASE_URL", "")
@@ -1355,7 +1393,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        result = asyncio.run(_run_seed(database_url))
+        result = asyncio.run(_run_seed(database_url, args.repair))
     except CatalogSeedCollisionError as error:
         print(f"Catalog fixture seed refused; no changes made. {error}")
         return 2
@@ -1365,10 +1403,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
-    print(
-        f"Applied {CATALOG_VERSION}: inserted={result['inserted']}, "
-        f"already_present={result['already_present']}."
-    )
+    print(f"Applied {CATALOG_VERSION}: {result}.")
     return 0
 
 

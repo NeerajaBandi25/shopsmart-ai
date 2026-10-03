@@ -1,34 +1,24 @@
-# ShopSmart Portfolio Readiness
+﻿# ShopSmart completion checkpoint
 
-**Updated**: 2026-10-03
-**Checkout**: `feature/promotions-discount-engine`
-**Portfolio ready**: NO
+Updated: 2026-10-04. Branch: `feature/promotions-discount-engine`. Continue on existing draft PR #46.
+
+## Product scope
+
+- The home hero walks through discover → brief → shortlist → comparison → recommendation → purchase. Its default brief searches for laptops under ₹70,000. Candidate selection uses real active, in-stock catalog rows, actual prices and published specifications; three distinct in-budget options are shown.
+- Home merchandising stays compact while the hero combines shelf products with up to 100 in-stock catalog rows. Public offer shelves omit private coupon codes and eligibility.
+- Seventy-five generated photo-style family images replace cartoon/illustrative family-slot imagery. Manifest records generation receipts, briefs, dimensions, byte counts and hashes. Product pages explicitly describe these as illustrative, not exact-SKU photographs.
+- Product configuration and purchase actions are adjacent. Assistant search results show four products initially with expansion; a grounded follow-up recommends from those results. Home, assistant and PDP omit the floating command pill where it would collide with the primary interaction; Ctrl-K remains available.
+- The dedicated portfolio database repair updated image URLs while preserving product identities, stock and order snapshots.
+
+## Verification
+
+- Frontend: 26 Jest suites / 147 tests pass; lint, TypeScript, Prettier and production build pass.
+- Browser: `.factory/verify-browser.cjs` passes all six hero scenes, three-option shortlist assertion, actual assistant catalog results and follow-up advice, desktop/tablet/mobile widths (1440/1024/390) with zero overflow, reduced motion, and axe with zero violations.
+- Images: validator confirms 75 photos / 15,592,397 bytes, hashes and provenance.
+- Backend homepage service tests: 2 passed, including the expanded 45-product shelf and three laptop candidates.
+- Full backend suite in the current shell: 334 passed, 1 failed, 4 errors, 1 skipped. The four errors occur in PostgreSQL transaction-persistence fixtures because the configured database role lacks permission to create tables in schema `public`; one existing concurrent-login test also fails. An earlier full run on the project test setup completed 339 passed. No schema grants were changed.
+- Current reviewed screenshots are in `docs/portfolio/screenshots/`; canonical home, motion, catalog-mobile, PDP and assistant evidence were refreshed from the final preview build.
 
 ## Guardrails
 
-- Local synthetic data only; do not deploy or merge to a protected branch.
-- The only authorized database is loopback `shopsmart_portfolio`; never connect to `shopsmart_ai`.
-- Preserve the dirty worktree and existing records. No reset, reseed, commit, or push.
-- The app uses the dedicated local ports 8001 (backend) and 3001 (frontend).
-
-## Verified State
-
-| Workstream | Status | Evidence |
-|---|---|---|
-| Database and catalog | VERIFIED | Read-only query to `shopsmart_portfolio`: 1,200 products, 1,200 image URLs, Alembic revision `017_order_delivery_images`. Product art is repository-generated; `frontend/public/images/products/portfolio/manifest.json` records generator provenance and asset hashes. `image_license_url` is empty because the art is internal, not externally licensed. |
-| Storefront and product detail | PARTIAL | Live catalog route returns 1,200 results with INR prices, merchandising metadata, product links, and loaded local illustrations. Filter/detail acceptance and trustworthy responsive captures remain open. |
-| Cart, checkout, order history | JOURNEY VERIFIED | A prior live synthetic checkout persisted the India delivery address and immutable product image snapshot; order history showed the saved order. Automated checkout/cart/order tests pass. |
-| Shopping assistant | JOURNEY VERIFIED | Live INR search returned eight matching products and add-to-cart succeeded. Unsupported return-policy content correctly fell back without a citation. Assistant result cards still need product imagery review. |
-| Backend quality | PASS | Full backend suite: 282 passed, 6 skipped, 1 Pydantic deprecation warning. The SQLite run explicitly skips PostgreSQL row-lock/persistence proofs. |
-| Frontend quality | PASS | `tsc --noEmit`; Jest 24 suites/138 tests; Next lint; optimized production build all passed. |
-| Browser evidence | BLOCKED | The embedded browser reports the requested Playwright viewport but renders its live document at the host pane width (for example, viewportSize 1440 while `window.innerWidth` is 706). Captures produced in this state are invalid and must not be used as responsive evidence. |
-| Accessibility, security, performance, independent critique | OPEN | Complete keyboard/focus, reduced-motion, contrast, security-log, performance, and post-implementation critic checks. |
-
-## Remaining Readiness Gates
-
-1. Obtain reliable screenshots at 390x844, 768x1024, 1024x768, and 1440x900 using a browser whose rendered CSS viewport matches the requested size.
-2. Run and record the complete 14-journey acceptance set, including search/filter/PDP, promotions, cart, checkout, orders, and assistant behavior.
-3. Complete accessibility, security-log, performance, and independent visual reviews; capture findings and fixes.
-4. Update the portfolio evidence index and product audit only after the checks above produce valid evidence.
-
-Do not mark this project portfolio-ready until every gate is complete and verified.
+No branch switch, new PR, merge or deployment. Review browser state uses disposable synthetic accounts. Local application services and the portfolio database were left running; only the isolated preview server was restarted for fresh build artifacts.

@@ -235,7 +235,7 @@
     },
     {
       "id": "unknown-category",
-      "question": "Show me category=tablets under 60000",
+      "question": "Show me category=spaceships under 60000",
       "expected": "unsupported without text-search fallback"
     }
   ]

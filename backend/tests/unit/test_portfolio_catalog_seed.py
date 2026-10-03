@@ -10,6 +10,7 @@ from sqlalchemy import func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.product import Product
+from src.schemas.product import ProductResponse
 from src.seed.portfolio_catalog import (
     CATALOG_CATEGORIES,
     CATALOG_DATABASE,
@@ -19,6 +20,7 @@ from src.seed.portfolio_catalog import (
     CatalogSeedSafetyError,
     build_catalog_products,
     seed_catalog_products,
+    repair_catalog_products,
     validate_catalog_target,
 )
 
@@ -32,7 +34,7 @@ def _local_environment() -> dict[str, str]:
     return {"SHOPSMART_ENV": "test", CATALOG_OPT_IN: "true"}
 
 
-def test_catalog_fixture_is_stable_descriptive_and_uses_verified_local_art():
+def test_catalog_fixture_is_stable_descriptive_and_uses_verified_product_photography():
     first = build_catalog_products()
     second = build_catalog_products()
 
@@ -55,8 +57,11 @@ def test_catalog_fixture_is_stable_descriptive_and_uses_verified_local_art():
         for product in first
     )
     assert all(product.image_alt for product in first)
-    assert all(product.image_creator == "ShopSmart portfolio art generator" for product in first)
-    assert all(product.image_license == "Repository-created original artwork" for product in first)
+    assert all("OpenAI built-in image_gen" in product.image_creator for product in first)
+    assert all(
+        product.image_license == "Repository-created AI-generated portfolio-family image"
+        for product in first
+    )
     assert all(len(product.image_sha256 or "") == 64 for product in first)
     assert all(product.specifications for product in first)
     assert all(
@@ -195,3 +200,51 @@ async def test_seed_refuses_reserved_sku_owned_by_another_product(test_db: Async
 
     assert await test_db.get(Product, conflict.id) is conflict
     assert await test_db.scalar(select(func.count()).select_from(Product)) == 1
+
+
+async def test_repair_refreshes_art_alignment_without_resetting_live_stock(test_db: AsyncSession):
+    await seed_catalog_products(test_db)
+    expected = next(p for p in build_catalog_products() if p.category == "accessories")
+    row = await test_db.get(Product, expected.id)
+    row.name = "Braided USB-C cable"
+    row.stock_quantity = 0
+    await test_db.flush()
+    assert await repair_catalog_products(test_db) == {"updated": 1200}
+    assert row.name == expected.name
+    assert "Sunglasses" in row.name
+    assert row.image_url.endswith("accessories/01.jpg")
+    assert row.stock_quantity == 0
+    assert await test_db.scalar(select(func.count()).select_from(Product)) == 1200
+
+
+async def test_repair_refuses_reserved_identity_collision(test_db: AsyncSession):
+    conflict = Product(id=uuid4(), name="Owned by someone else", sku=build_catalog_products()[0].sku,
+                       price=100, stock_quantity=1, max_purchase_quantity=1, is_active=True)
+    test_db.add(conflict)
+    await test_db.flush()
+    with pytest.raises(CatalogSeedCollisionError):
+        await repair_catalog_products(test_db)
+    assert conflict.name == "Owned by someone else"
+
+
+def test_authored_archetypes_match_distinct_photo_families_and_memory_is_explicit():
+    products = build_catalog_products()
+    for category, expected in {"accessories": ("Sunglasses", "Backpack", "Wallet", "Belt", "Cap"),
+                               "kitchen_appliances": ("Toaster", "Blender", "Kettle", "Coffee", "Mixer"),
+                               "home_living": ("Lamp", "Sofa", "Plant", "Clock", "Shelf")}.items():
+        for number, name in enumerate(expected, 1):
+            related = [p for p in products if p.category == category and p.image_url.endswith(f"/{number:02d}.jpg")]
+            assert related and all(name in p.name for p in related)
+    assert all("RAM" in p.specifications and "Graphics" in p.specifications for p in products if p.category == "laptops")
+
+
+def test_public_presentation_is_record_driven_and_ignores_malformed_metadata():
+    product = build_catalog_products()[0]
+    response = ProductResponse.model_validate(product).model_dump(mode="json")
+    assert response["delivery"] == "Standard portfolio delivery; timing confirmed at checkout"
+    assert response["highlights"][0] == product.specifications["Key details"]
+    assert response["image_gallery"] == [{"url": product.image_url, "alt": product.image_alt}]
+    product.specifications = {"_presentation": "malformed legacy metadata"}
+    legacy = ProductResponse.model_validate(product).model_dump(mode="json")
+    assert legacy["delivery"] is None
+    assert legacy["highlights"] == legacy["image_gallery"] == []

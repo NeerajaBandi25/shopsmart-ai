@@ -136,7 +136,6 @@ export function CategorySection() {
             </div>
           ))}
         </div>
-
       </div>
     </section>
   );

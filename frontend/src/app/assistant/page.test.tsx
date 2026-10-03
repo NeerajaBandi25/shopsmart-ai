@@ -1,6 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AssistantPage from './page';
 
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
+
 jest.mock('@/app/authenticated-layout', () => {
   function MockAuthenticatedLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
@@ -12,6 +15,36 @@ jest.mock('@/app/authenticated-layout', () => {
 describe('shopping assistant page', () => {
   beforeEach(() => {
     global.fetch = jest.fn();
+    mockPush.mockClear();
+  });
+
+  it('navigates only an authoritative checkout response with a populated cart', async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrf_token: 'csrf' }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          conversation_id: 'c-1',
+          message_id: 'm-1',
+          answer: 'Ready for checkout.',
+          answerable: true,
+          citations: [],
+          intent: 'CHECKOUT',
+          result_data: {
+            navigation: '/checkout',
+            cart: { items: [{ name: 'Laptop', quantity: 1, line_total: 100 }], subtotal: 100 },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => [] });
+    render(<AssistantPage />);
+    fireEvent.change(screen.getByLabelText('Message the shopping assistant'), {
+      target: { value: 'Take me to checkout' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/checkout'));
   });
 
   it('shows commerce prompts without a customer document upload workflow', async () => {
