@@ -169,11 +169,13 @@ def mock_email_provider(monkeypatch):
     class MockEmailProvider:
         @staticmethod
         def send_notification(recipient: str, subject: str, body: str) -> bool:
-            sent_emails.append({
-                "recipient": recipient,
-                "subject": subject,
-                "body": body,
-            })
+            sent_emails.append(
+                {
+                    "recipient": recipient,
+                    "subject": subject,
+                    "body": body,
+                }
+            )
             return True
 
         @staticmethod

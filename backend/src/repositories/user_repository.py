@@ -43,9 +43,7 @@ class UserRepository:
         Returns:
             User | None: User object or None if not found
         """
-        result = await self.db.execute(
-            select(User).where(User.email == email)
-        )
+        result = await self.db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
 
     async def get_user_by_id(self, user_id: UUID) -> User | None:
@@ -57,9 +55,7 @@ class UserRepository:
         Returns:
             User | None: User object or None if not found
         """
-        result = await self.db.execute(
-            select(User).where(User.id == user_id)
-        )
+        result = await self.db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
 
     async def user_exists(self, email: str) -> bool:
@@ -71,7 +67,5 @@ class UserRepository:
         Returns:
             bool: True if user exists, False otherwise
         """
-        result = await self.db.execute(
-            select(User.id).where(User.email == email)
-        )
+        result = await self.db.execute(select(User.id).where(User.email == email))
         return result.scalar_one_or_none() is not None

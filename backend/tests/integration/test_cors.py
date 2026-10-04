@@ -37,9 +37,7 @@ async def test_configured_origins_receive_credentialed_cors_headers(origin: str)
     )
     app = create_cors_test_app(settings.cors_origins)
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/resource", headers={"Origin": origin})
 
     assert response.status_code == 200
@@ -51,9 +49,7 @@ async def test_configured_origins_receive_credentialed_cors_headers(origin: str)
 async def test_unconfigured_origin_receives_no_cors_permission():
     app = create_cors_test_app(["https://shop.example.test"])
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
             "/resource", headers={"Origin": "https://untrusted.example.test"}
         )

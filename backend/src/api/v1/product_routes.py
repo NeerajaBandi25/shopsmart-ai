@@ -25,7 +25,8 @@ async def list_products(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=24, ge=1, le=100),
     q: str | None = Query(default=None, max_length=160),
-    category: str | None = Query(
+    category: str
+    | None = Query(
         default=None,
         pattern=(
             "^(laptops|smartphones|headphones|smartwatches|tablets|cameras|televisions|"
@@ -38,9 +39,7 @@ async def list_products(
     min_price_minor: int | None = Query(default=None, ge=0),
     max_price_minor: int | None = Query(default=None, ge=0),
     in_stock_only: bool = Query(default=False),
-    sort: Literal["newest", "price_asc", "price_desc", "name_asc"] = Query(
-        default="newest"
-    ),
+    sort: Literal["newest", "price_asc", "price_desc", "name_asc"] = Query(default="newest"),
     db: AsyncSession = Depends(get_db),
 ) -> ProductPageResponse:
     """Return active products, newest first, without requiring authentication."""

@@ -386,7 +386,9 @@ async def evaluate_seeded_database(db: AsyncSession) -> dict:
             error.status_code == 422 and error.error_code == "invalid_price_filter"
         )
     scenarios["invalid_numeric_filter_rejected"] = invalid_filter_rejected
-    unsupported_category = await assistant.answer(new_user, "Show me category=spaceships under 60000")
+    unsupported_category = await assistant.answer(
+        new_user, "Show me category=spaceships under 60000"
+    )
     scenarios["unknown_category_does_not_fall_back_to_text"] = (
         unsupported_category["intent"] == "UNSUPPORTED"
         and unsupported_category["result_data"] is None

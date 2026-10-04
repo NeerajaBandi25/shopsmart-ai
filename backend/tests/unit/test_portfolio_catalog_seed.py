@@ -35,9 +35,7 @@ from src.seed.portfolio_catalog import (
 )
 
 category_migration = import_module("migrations.versions.015_portfolio_catalog_categories")
-portfolio_family_migration = import_module(
-    "migrations.versions.016_portfolio_product_families"
-)
+portfolio_family_migration = import_module("migrations.versions.016_portfolio_product_families")
 
 
 def _local_environment() -> dict[str, str]:
@@ -75,8 +73,7 @@ def test_catalog_fixture_is_stable_descriptive_and_uses_verified_product_photogr
     assert all(len(product.image_sha256 or "") == 64 for product in first)
     assert all(product.specifications for product in first)
     assert all(
-        {"Subcategory", "Variant", "Key details"}
-        <= product.specifications.keys()
+        {"Subcategory", "Variant", "Key details"} <= product.specifications.keys()
         for product in first
     )
     assert all("Rating" not in product.specifications for product in first)
@@ -252,8 +249,15 @@ async def test_repair_refreshes_art_alignment_without_resetting_live_stock(test_
 
 
 async def test_repair_refuses_reserved_identity_collision(test_db: AsyncSession):
-    conflict = Product(id=uuid4(), name="Owned by someone else", sku=build_catalog_products()[0].sku,
-                       price=100, stock_quantity=1, max_purchase_quantity=1, is_active=True)
+    conflict = Product(
+        id=uuid4(),
+        name="Owned by someone else",
+        sku=build_catalog_products()[0].sku,
+        price=100,
+        stock_quantity=1,
+        max_purchase_quantity=1,
+        is_active=True,
+    )
     test_db.add(conflict)
     await test_db.flush()
     with pytest.raises(CatalogSeedCollisionError):
@@ -263,13 +267,23 @@ async def test_repair_refuses_reserved_identity_collision(test_db: AsyncSession)
 
 def test_authored_archetypes_match_distinct_photo_families_and_memory_is_explicit():
     products = build_catalog_products()
-    for category, expected in {"accessories": ("Sunglasses", "Backpack", "Wallet", "Belt", "Cap"),
-                               "kitchen_appliances": ("Toaster", "Blender", "Kettle", "Coffee", "Mixer"),
-                               "home_living": ("Lamp", "Sofa", "Plant", "Clock", "Shelf")}.items():
+    for category, expected in {
+        "accessories": ("Sunglasses", "Backpack", "Wallet", "Belt", "Cap"),
+        "kitchen_appliances": ("Toaster", "Blender", "Kettle", "Coffee", "Mixer"),
+        "home_living": ("Lamp", "Sofa", "Plant", "Clock", "Shelf"),
+    }.items():
         for number, name in enumerate(expected, 1):
-            related = [p for p in products if p.category == category and p.image_url.endswith(f"/{number:02d}.jpg")]
+            related = [
+                p
+                for p in products
+                if p.category == category and p.image_url.endswith(f"/{number:02d}.jpg")
+            ]
             assert related and all(name in p.name for p in related)
-    assert all("RAM" in p.specifications and "Graphics" in p.specifications for p in products if p.category == "laptops")
+    assert all(
+        "RAM" in p.specifications and "Graphics" in p.specifications
+        for p in products
+        if p.category == "laptops"
+    )
 
 
 def test_public_presentation_is_record_driven_and_ignores_malformed_metadata():

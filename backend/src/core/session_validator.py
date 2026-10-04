@@ -39,9 +39,7 @@ async def validate_session(
         except ValueError:
             return None
 
-        result = await db_session.execute(
-            select(Session).where(Session.id == session_uuid)
-        )
+        result = await db_session.execute(select(Session).where(Session.id == session_uuid))
         session = result.scalar_one_or_none()
 
         if not session:
@@ -52,9 +50,7 @@ async def validate_session(
             return None
 
         # Verify that the user still exists by querying for the user
-        user_result = await db_session.execute(
-            select(User.id).where(User.id == session.user_id)
-        )
+        user_result = await db_session.execute(select(User.id).where(User.id == session.user_id))
         if not user_result.scalar_one_or_none():
             return None
 
@@ -107,9 +103,7 @@ async def invalidate_session(
         bool: True if invalidated, False if not found
     """
     try:
-        result = await db_session.execute(
-            select(Session).where(Session.id == session_id)
-        )
+        result = await db_session.execute(select(Session).where(Session.id == session_id))
         session = result.scalar_one_or_none()
 
         if not session:
@@ -139,9 +133,7 @@ async def invalidate_user_sessions(
     """
     try:
         result = await db_session.execute(
-            select(Session)
-            .where(Session.user_id == user_id)
-            .where(Session.is_active.is_(True))
+            select(Session).where(Session.user_id == user_id).where(Session.is_active.is_(True))
         )
         sessions = result.scalars().all()
 

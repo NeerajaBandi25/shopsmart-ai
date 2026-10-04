@@ -10,7 +10,8 @@ import pytest_asyncio
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -162,7 +163,10 @@ class TestCheckoutEndpoints:
         assert first_data["total_cents"] == 2500
         assert first_data["items"][0]["unit_price_cents"] == 1250
         assert first_data["delivery_address"] == DELIVERY_ADDRESS
-        assert first_data["items"][0]["product_image_url"] == "/images/products/portfolio/test-order.png"
+        assert (
+            first_data["items"][0]["product_image_url"]
+            == "/images/products/portfolio/test-order.png"
+        )
         assert first_data["items"][0]["product_image_alt"] == "Original order illustration"
         assert "price" not in payload["items"][0]
 
@@ -398,3 +402,118 @@ async def test_concurrent_checkouts_do_not_oversell(pg_checkout_factory):
     assert sorted(outcomes) == ["placed", "rejected"]
     assert remaining_stock == 0
     assert order_count == 1
+
+
+async def test_postgres_idempotency_preserves_authoritative_order_price(pg_checkout_factory):
+    factory = pg_checkout_factory
+    user_id = uuid4()
+    product_id = uuid4()
+    async with factory() as setup:
+        setup.add_all(
+            [
+                User(
+                    id=user_id, email=f"idempotency-{user_id}@example.com", password_hash="unused"
+                ),
+                Product(
+                    id=product_id,
+                    name="Authoritative price item",
+                    sku=f"PG-{product_id}",
+                    price=1549,
+                    stock_quantity=3,
+                    max_purchase_quantity=3,
+                    is_active=True,
+                ),
+            ]
+        )
+        await setup.commit()
+
+    async with factory() as checkout:
+        original = await OrderService(checkout).checkout(user_id, "retry-once", [(product_id, 1)])
+        original_order_id = original.id
+        assert original.total_cents == 1549
+
+    async with factory() as update:
+        product = await update.get(Product, product_id)
+        product.price = 2999
+        await update.commit()
+
+    async with factory() as retry:
+        replay = await OrderService(retry).checkout(user_id, "retry-once", [(product_id, 1)])
+        assert replay.id == original_order_id
+        assert replay.total_cents == 1549
+
+    async with factory() as check:
+        stock = await check.scalar(select(Product.stock_quantity).where(Product.id == product_id))
+        order_count = await check.scalar(
+            select(func.count()).select_from(Order).where(Order.user_id == user_id)
+        )
+        persisted = await check.scalar(select(Order).where(Order.id == original_order_id))
+        assert stock == 2
+        assert order_count == 1
+        assert persisted.subtotal_cents == 1549
+        assert persisted.total_cents == 1549
+        assert persisted.items[0].unit_price_cents == 1549
+
+
+async def test_postgres_checkout_database_failure_rolls_back_order_and_stock(pg_checkout_factory):
+    factory = pg_checkout_factory
+    engine = factory.kw["bind"]
+    user_id = uuid4()
+    product_id = uuid4()
+    suffix = uuid4().hex
+    sku = f"PG-ROLLBACK-{suffix}"
+    function_name = f"shopsmart_fail_order_item_{suffix}"
+    trigger_name = f"shopsmart_fail_order_item_{suffix}"
+    async with factory() as setup:
+        setup.add_all(
+            [
+                User(id=user_id, email=f"rollback-{user_id}@example.com", password_hash="unused"),
+                Product(
+                    id=product_id,
+                    name="Rollback item",
+                    sku=sku,
+                    price=2375,
+                    stock_quantity=2,
+                    max_purchase_quantity=2,
+                    is_active=True,
+                ),
+            ]
+        )
+        await setup.commit()
+
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                f"CREATE FUNCTION public.{function_name}() RETURNS trigger LANGUAGE plpgsql "
+                "AS $$ BEGIN RAISE EXCEPTION 'injected persistence failure'; END $$"
+            )
+        )
+        await connection.execute(
+            text(
+                f"CREATE TRIGGER {trigger_name} BEFORE INSERT ON public.order_items "
+                f"FOR EACH ROW WHEN (NEW.product_sku = '{sku}') "
+                f"EXECUTE FUNCTION public.{function_name}()"
+            )
+        )
+
+    try:
+        async with factory() as checkout:
+            with pytest.raises(DBAPIError, match="injected persistence failure"):
+                await OrderService(checkout).checkout(user_id, "rollback-order", [(product_id, 1)])
+            await checkout.rollback()
+
+        async with factory() as check:
+            stock = await check.scalar(
+                select(Product.stock_quantity).where(Product.id == product_id)
+            )
+            order_count = await check.scalar(
+                select(func.count()).select_from(Order).where(Order.user_id == user_id)
+            )
+            assert stock == 2
+            assert order_count == 0
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(f"DROP TRIGGER IF EXISTS {trigger_name} ON public.order_items")
+            )
+            await connection.execute(text(f"DROP FUNCTION IF EXISTS public.{function_name}()"))

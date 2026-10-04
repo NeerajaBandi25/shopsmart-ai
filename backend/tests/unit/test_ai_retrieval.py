@@ -1,4 +1,3 @@
-
 import pytest
 
 from src.models.ai import Document, DocumentChunk

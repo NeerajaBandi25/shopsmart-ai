@@ -30,9 +30,20 @@ class ProductCatalogService:
         in_stock_only: bool = False,
         sort: str = "newest",
     ) -> ProductPageResponse:
-        is_default_query = not any(
-            (query_text, category, brand, subcategory, min_price_cents, max_price_cents, in_stock_only)
-        ) and sort == "newest"
+        is_default_query = (
+            not any(
+                (
+                    query_text,
+                    category,
+                    brand,
+                    subcategory,
+                    min_price_cents,
+                    max_price_cents,
+                    in_stock_only,
+                )
+            )
+            and sort == "newest"
+        )
         lookup = await self.cache.get_page(skip, limit) if is_default_query else None
         if lookup and lookup.page is not None:
             return lookup.page

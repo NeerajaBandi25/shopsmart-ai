@@ -21,17 +21,30 @@ class HomepageService:
         self.db = db
 
     async def get_homepage(self) -> dict:
-        category_rows = (await self.db.execute(
-            select(Product.category, func.count(Product.id))
-            .where(Product.is_active.is_(True), Product.category.is_not(None))
-            .group_by(Product.category).order_by(Product.category)
-        )).all()
-        products = (await self.db.execute(
-            select(Product).where(
-                Product.is_active.is_(True), Product.stock_quantity > 0,
-                Product.image_url.is_not(None),
-            ).order_by(Product.category, Product.name, Product.id).limit(1500)
-        )).scalars().all()
+        category_rows = (
+            await self.db.execute(
+                select(Product.category, func.count(Product.id))
+                .where(Product.is_active.is_(True), Product.category.is_not(None))
+                .group_by(Product.category)
+                .order_by(Product.category)
+            )
+        ).all()
+        products = (
+            (
+                await self.db.execute(
+                    select(Product)
+                    .where(
+                        Product.is_active.is_(True),
+                        Product.stock_quantity > 0,
+                        Product.image_url.is_not(None),
+                    )
+                    .order_by(Product.category, Product.name, Product.id)
+                    .limit(1500)
+                )
+            )
+            .scalars()
+            .all()
+        )
         # Interleave categories so the homepage is a discovery surface rather than
         # a page of near-identical SKU variants from the newest seed batch.
         groups: dict[str, list[Product]] = {}
@@ -57,12 +70,24 @@ class HomepageService:
                 if index < len(group):
                     selections.append(group[index])
         now = datetime.now(timezone.utc)
-        offers = (await self.db.execute(
-            select(Promotion).where(
-                Promotion.active.is_(True), Promotion.eligible_user_id.is_(None),
-                Promotion.starts_at <= now, Promotion.ends_at > now,
-            ).order_by(Promotion.ends_at, Promotion.id).limit(6)
-        )).scalars().all()
+        offers = (
+            (
+                await self.db.execute(
+                    select(Promotion)
+                    .where(
+                        Promotion.active.is_(True),
+                        Promotion.eligible_user_id.is_(None),
+                        Promotion.starts_at <= now,
+                        Promotion.ends_at > now,
+                    )
+                    .order_by(Promotion.ends_at, Promotion.id)
+                    .limit(6)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
         def serialize(rows: list[Product]) -> list[ProductResponse]:
             return [ProductResponse.model_validate(row) for row in rows]
 
@@ -84,8 +109,15 @@ class HomepageService:
             "featured": serialize(selections[:15]),
             "trending": serialize(selections[15:30]),
             "recommendations": serialize(selections[30:45]),
-            "promotions": [{"name": offer.name, "description": offer.description,
-                            "discount_type": offer.promotion_type, "discount_value": offer.value,
-                            "ends_at": offer.ends_at, "scope_category": offer.scope_category}
-                           for offer in offers],
+            "promotions": [
+                {
+                    "name": offer.name,
+                    "description": offer.description,
+                    "discount_type": offer.promotion_type,
+                    "discount_value": offer.value,
+                    "ends_at": offer.ends_at,
+                    "scope_category": offer.scope_category,
+                }
+                for offer in offers
+            ],
         }

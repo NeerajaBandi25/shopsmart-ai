@@ -59,14 +59,13 @@ class SessionRepository:
             Session | None: Session object or None if not found
         """
         from uuid import UUID
+
         try:
             session_uuid = UUID(session_id)
         except ValueError:
             return None
 
-        result = await self.db.execute(
-            select(Session).where(Session.id == session_uuid)
-        )
+        result = await self.db.execute(select(Session).where(Session.id == session_uuid))
         return result.scalar_one_or_none()
 
     async def update_session_activity(self, session_id: str) -> bool:
@@ -79,14 +78,13 @@ class SessionRepository:
             bool: True if updated, False if not found
         """
         from uuid import UUID
+
         try:
             session_uuid = UUID(session_id)
         except ValueError:
             return False
 
-        result = await self.db.execute(
-            select(Session).where(Session.id == session_uuid)
-        )
+        result = await self.db.execute(select(Session).where(Session.id == session_uuid))
         session = result.scalar_one_or_none()
 
         if not session:
@@ -106,14 +104,13 @@ class SessionRepository:
             bool: True if invalidated, False if not found
         """
         from uuid import UUID
+
         try:
             session_uuid = UUID(session_id)
         except ValueError:
             return False
 
-        result = await self.db.execute(
-            select(Session).where(Session.id == session_uuid)
-        )
+        result = await self.db.execute(select(Session).where(Session.id == session_uuid))
         session = result.scalar_one_or_none()
 
         if not session:

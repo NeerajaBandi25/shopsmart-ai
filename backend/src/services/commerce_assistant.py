@@ -170,7 +170,9 @@ class CommerceAssistantService:
             contextual_name = re.match(r"\s*tell me about\s+(.+)", question, re.I)
             search_started = time.perf_counter()
             products = await self.catalog.search_products(
-                query_text=contextual_name.group(1).strip() if contextual_name else " ".join(terms) or None,
+                query_text=contextual_name.group(1).strip()
+                if contextual_name
+                else " ".join(terms) or None,
                 category=None if contextual_name else route.category,
                 min_price_cents=route.min_price_cents,
                 max_price_cents=route.max_price_cents,
@@ -179,7 +181,11 @@ class CommerceAssistantService:
             # Legacy catalog installations use phones/home/appliances. Their
             # portfolio names are aliases, so try that same bounded category only
             # after an empty query; never broaden a category to the whole catalog.
-            portfolio_category = {"phones": "smartphones", "home": "home_living", "appliances": "home_appliances"}.get(route.category)
+            portfolio_category = {
+                "phones": "smartphones",
+                "home": "home_living",
+                "appliances": "home_appliances",
+            }.get(route.category)
             if not products and portfolio_category and not contextual_name:
                 products = await self.catalog.search_products(
                     query_text=" ".join(terms) or None,
@@ -220,7 +226,10 @@ class CommerceAssistantService:
                 )
             else:
                 compared = products[:5]
-                data = {"products": [self._product_data(item) for item in compared], "comparison": True}
+                data = {
+                    "products": [self._product_data(item) for item in compared],
+                    "comparison": True,
+                }
                 conversation.context = {
                     **context,
                     "comparison_product_ids": [str(item.id) for item in compared],
@@ -423,11 +432,21 @@ class CommerceAssistantService:
         for product in products:
             specs = getattr(product, "specifications", None) or {}
             signature = (
-                getattr(product, "brand", None),
-                getattr(product, "category", None),
-                product.price,
-                tuple(sorted((key, str(value)) for key, value in specs.items() if key.lower() != "color")),
-            ) if specs else (str(product.id),)
+                (
+                    getattr(product, "brand", None),
+                    getattr(product, "category", None),
+                    product.price,
+                    tuple(
+                        sorted(
+                            (key, str(value))
+                            for key, value in specs.items()
+                            if key.lower() != "color"
+                        )
+                    ),
+                )
+                if specs
+                else (str(product.id),)
+            )
             if signature not in seen:
                 seen.add(signature)
                 results.append(product)
@@ -448,7 +467,11 @@ class CommerceAssistantService:
             "image_alt": getattr(product, "image_alt", None),
             "brand": getattr(product, "brand", None),
             "list_price_cents": getattr(product, "list_price", None),
-            "specifications": {key: value for key, value in (getattr(product, "specifications", None) or {}).items() if not key.startswith("_")},
+            "specifications": {
+                key: value
+                for key, value in (getattr(product, "specifications", None) or {}).items()
+                if not key.startswith("_")
+            },
         }
 
     @staticmethod
@@ -493,19 +516,27 @@ class CommerceAssistantService:
         cheapest = min(products, key=lambda item: item.price)
         memory = {}
         for product in products:
-            evidence = " ".join(str(value) for value in (getattr(product, "specifications", None) or {}).values())
+            evidence = " ".join(
+                str(value) for value in (getattr(product, "specifications", None) or {}).values()
+            )
             match = re.search(r"\b(\d+)\s*GB\s*(?:RAM|memory)\b", evidence, re.I)
             if match:
                 memory[str(product.id)] = int(match.group(1))
         brief = []
         for product in products:
             specs = getattr(product, "specifications", None) or {}
-            facts = [f"{key}: {value}" for key, value in specs.items() if isinstance(value, (str, int, float))][:8]
+            facts = [
+                f"{key}: {value}"
+                for key, value in specs.items()
+                if isinstance(value, (str, int, float))
+            ][:8]
             reasons = [f"Current price {cls._format_price(product.price)}"]
             if product.price == cheapest.price:
                 reasons.append("Lowest price in this comparison")
             if str(product.id) in memory:
-                reasons.append(f"Published {memory[str(product.id)]} GB RAM supports comparing development workloads")
+                reasons.append(
+                    f"Published {memory[str(product.id)]} GB RAM supports comparing development workloads"
+                )
             reasons.extend(facts)
             brief.append({"product_id": str(product.id), "name": product.name, "reasons": reasons})
         answer = (

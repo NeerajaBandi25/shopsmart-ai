@@ -1030,16 +1030,61 @@ _NEW_PORTFOLIO_FAMILIES: dict[str, dict[str, Any]] = {
             for edition in ("standard", "travel case")
         ),
         "products": (
-            ("over-ear", "Stilltone Active Headphones", 849900, "adaptive noise control and 42-hour battery"),
-            ("studio", "Reference Fold Headphones", 629900, "closed-back acoustic design with replaceable pads"),
-            ("commuting", "Wayline Travel Headphones", 579900, "fold-flat cups and ambient listening mode"),
-            ("sports", "Paceform Sport Earphones", 219900, "secure-fit hooks and sweat-resistant housing"),
-            ("open-ear", "Openpath Air Headphones", 399900, "open-ear drivers for situational awareness"),
-            ("on-ear", "Daymark On-ear Headphones", 329900, "lightweight frame with a detachable cable"),
+            (
+                "over-ear",
+                "Stilltone Active Headphones",
+                849900,
+                "adaptive noise control and 42-hour battery",
+            ),
+            (
+                "studio",
+                "Reference Fold Headphones",
+                629900,
+                "closed-back acoustic design with replaceable pads",
+            ),
+            (
+                "commuting",
+                "Wayline Travel Headphones",
+                579900,
+                "fold-flat cups and ambient listening mode",
+            ),
+            (
+                "sports",
+                "Paceform Sport Earphones",
+                219900,
+                "secure-fit hooks and sweat-resistant housing",
+            ),
+            (
+                "open-ear",
+                "Openpath Air Headphones",
+                399900,
+                "open-ear drivers for situational awareness",
+            ),
+            (
+                "on-ear",
+                "Daymark On-ear Headphones",
+                329900,
+                "lightweight frame with a detachable cable",
+            ),
             ("wireless", "Quiet Arc Earbuds", 499900, "three-size tips and a pocket charging case"),
-            ("studio", "Mixwell Monitor Headphones", 739900, "balanced response with a coiled reference cable"),
-            ("gaming", "Lantern Voice Headset", 459900, "detachable boom microphone and sidetone control"),
-            ("accessibility", "Clearcall Hearing Headset", 389900, "large tactile controls and amplified voice mode"),
+            (
+                "studio",
+                "Mixwell Monitor Headphones",
+                739900,
+                "balanced response with a coiled reference cable",
+            ),
+            (
+                "gaming",
+                "Lantern Voice Headset",
+                459900,
+                "detachable boom microphone and sidetone control",
+            ),
+            (
+                "accessibility",
+                "Clearcall Hearing Headset",
+                389900,
+                "large tactile controls and amplified voice mode",
+            ),
         ),
     },
     "smartwatches": {
@@ -1051,16 +1096,66 @@ _NEW_PORTFOLIO_FAMILIES: dict[str, dict[str, Any]] = {
             for edition in ("standard band", "two-band set")
         ),
         "products": (
-            ("everyday", "Arcday Connected Watch", 899900, "bright always-on display with replaceable bands"),
-            ("fitness", "Stridefield Fitness Watch", 1199900, "multi-sport tracking and recovery summaries"),
-            ("outdoor", "Northlight Trail Watch", 1699900, "dual-band positioning and a reinforced bezel"),
-            ("classic", "Meridian Round Watch", 1399900, "round OLED display with tactile crown navigation"),
-            ("compact", "Petal Mini Watch", 799900, "compact case with a week of typical battery use"),
-            ("health", "Daywell Wellness Watch", 1299900, "sleep and activity trends with on-device summaries"),
-            ("hybrid", "Stillmark Hybrid Watch", 1099900, "analog hands over a discreet notification display"),
-            ("water sports", "Tidepath Swim Watch", 1499900, "water-resistant case with lap tracking"),
-            ("accessibility", "Clearview Tactile Watch", 949900, "high-contrast display and configurable haptics"),
-            ("long battery", "Longleaf Endurance Watch", 1249900, "low-power display with extended activity tracking"),
+            (
+                "everyday",
+                "Arcday Connected Watch",
+                899900,
+                "bright always-on display with replaceable bands",
+            ),
+            (
+                "fitness",
+                "Stridefield Fitness Watch",
+                1199900,
+                "multi-sport tracking and recovery summaries",
+            ),
+            (
+                "outdoor",
+                "Northlight Trail Watch",
+                1699900,
+                "dual-band positioning and a reinforced bezel",
+            ),
+            (
+                "classic",
+                "Meridian Round Watch",
+                1399900,
+                "round OLED display with tactile crown navigation",
+            ),
+            (
+                "compact",
+                "Petal Mini Watch",
+                799900,
+                "compact case with a week of typical battery use",
+            ),
+            (
+                "health",
+                "Daywell Wellness Watch",
+                1299900,
+                "sleep and activity trends with on-device summaries",
+            ),
+            (
+                "hybrid",
+                "Stillmark Hybrid Watch",
+                1099900,
+                "analog hands over a discreet notification display",
+            ),
+            (
+                "water sports",
+                "Tidepath Swim Watch",
+                1499900,
+                "water-resistant case with lap tracking",
+            ),
+            (
+                "accessibility",
+                "Clearview Tactile Watch",
+                949900,
+                "high-contrast display and configurable haptics",
+            ),
+            (
+                "long battery",
+                "Longleaf Endurance Watch",
+                1249900,
+                "low-power display with extended activity tracking",
+            ),
         ),
     },
     "tablets": {
@@ -1072,16 +1167,61 @@ _NEW_PORTFOLIO_FAMILIES: dict[str, dict[str, Any]] = {
             for edition in ("standard", "keyboard cover")
         ),
         "products": (
-            ("study", "Notevale 11 Tablet", 2599000, "11-inch display with stylus-ready note taking"),
-            ("creative", "Colorfield Studio Tablet", 4899000, "laminated display tuned for illustration"),
-            ("reading", "Paperlight Reader Tablet", 1499000, "matte low-glare screen with warm reading mode"),
+            (
+                "study",
+                "Notevale 11 Tablet",
+                2599000,
+                "11-inch display with stylus-ready note taking",
+            ),
+            (
+                "creative",
+                "Colorfield Studio Tablet",
+                4899000,
+                "laminated display tuned for illustration",
+            ),
+            (
+                "reading",
+                "Paperlight Reader Tablet",
+                1499000,
+                "matte low-glare screen with warm reading mode",
+            ),
             ("compact", "Pocket Slate Tablet", 1899000, "8.4-inch display for one-handed reading"),
-            ("family", "Hearthside Family Tablet", 2199000, "profile switching with configurable screen time"),
-            ("business", "Ledger Pro Tablet", 3999000, "secure sign-in with keyboard-cover support"),
-            ("rugged", "Fieldnote Rugged Tablet", 3599000, "reinforced frame for workshop and field use"),
-            ("entertainment", "Panorama Media Tablet", 3299000, "quad speakers with a wide color display"),
-            ("accessibility", "Clearpath Easy Tablet", 1999000, "large-text setup and switch-control support"),
-            ("convertible", "Foldline Detachable Tablet", 4299000, "magnetic keyboard cover with adjustable stand"),
+            (
+                "family",
+                "Hearthside Family Tablet",
+                2199000,
+                "profile switching with configurable screen time",
+            ),
+            (
+                "business",
+                "Ledger Pro Tablet",
+                3999000,
+                "secure sign-in with keyboard-cover support",
+            ),
+            (
+                "rugged",
+                "Fieldnote Rugged Tablet",
+                3599000,
+                "reinforced frame for workshop and field use",
+            ),
+            (
+                "entertainment",
+                "Panorama Media Tablet",
+                3299000,
+                "quad speakers with a wide color display",
+            ),
+            (
+                "accessibility",
+                "Clearpath Easy Tablet",
+                1999000,
+                "large-text setup and switch-control support",
+            ),
+            (
+                "convertible",
+                "Foldline Detachable Tablet",
+                4299000,
+                "magnetic keyboard cover with adjustable stand",
+            ),
         ),
     },
     "cameras": {
@@ -1093,16 +1233,66 @@ _NEW_PORTFOLIO_FAMILIES: dict[str, dict[str, Any]] = {
             for edition in ("standard kit", "creator kit")
         ),
         "products": (
-            ("mirrorless", "Lumenfield 24 Camera", 7299000, "24 MP sensor with in-body stabilization"),
-            ("travel", "Wayfarer Compact Camera", 3899000, "one-inch sensor and a retractable zoom lens"),
-            ("video", "Framewell Creator Camera", 8499000, "oversampled 4K recording with a flip screen"),
-            ("wildlife", "Longreach Telephoto Camera", 9499000, "fast subject tracking for distant action"),
-            ("street", "Stillpoint Rangefinder Camera", 6299000, "quiet shutter with direct exposure controls"),
-            ("instant", "Keepsake Instant Camera", 999900, "automatic exposure with credit-card-size prints"),
-            ("action", "Ridgeview Action Camera", 2599000, "wide-angle stabilization in a compact body"),
-            ("film", "Daylight 35 Film Camera", 1499000, "manual focus with a built-in light meter"),
-            ("document", "Cleartext Document Camera", 1199900, "overhead capture with page-edge correction"),
-            ("studio", "Softbox Studio Camera", 10499000, "high-resolution capture with tethered shooting"),
+            (
+                "mirrorless",
+                "Lumenfield 24 Camera",
+                7299000,
+                "24 MP sensor with in-body stabilization",
+            ),
+            (
+                "travel",
+                "Wayfarer Compact Camera",
+                3899000,
+                "one-inch sensor and a retractable zoom lens",
+            ),
+            (
+                "video",
+                "Framewell Creator Camera",
+                8499000,
+                "oversampled 4K recording with a flip screen",
+            ),
+            (
+                "wildlife",
+                "Longreach Telephoto Camera",
+                9499000,
+                "fast subject tracking for distant action",
+            ),
+            (
+                "street",
+                "Stillpoint Rangefinder Camera",
+                6299000,
+                "quiet shutter with direct exposure controls",
+            ),
+            (
+                "instant",
+                "Keepsake Instant Camera",
+                999900,
+                "automatic exposure with credit-card-size prints",
+            ),
+            (
+                "action",
+                "Ridgeview Action Camera",
+                2599000,
+                "wide-angle stabilization in a compact body",
+            ),
+            (
+                "film",
+                "Daylight 35 Film Camera",
+                1499000,
+                "manual focus with a built-in light meter",
+            ),
+            (
+                "document",
+                "Cleartext Document Camera",
+                1199900,
+                "overhead capture with page-edge correction",
+            ),
+            (
+                "studio",
+                "Softbox Studio Camera",
+                10499000,
+                "high-resolution capture with tethered shooting",
+            ),
         ),
     },
     "televisions": {
@@ -1114,16 +1304,61 @@ _NEW_PORTFOLIO_FAMILIES: dict[str, dict[str, Any]] = {
             for edition in ("standard panel", "cinema panel")
         ),
         "products": (
-            ("OLED", "Nightglass OLED Television", 6499000, "self-lit pixels with a low-reflection finish"),
+            (
+                "OLED",
+                "Nightglass OLED Television",
+                6499000,
+                "self-lit pixels with a low-reflection finish",
+            ),
             ("QLED", "Brightline QLED Television", 4499000, "quantum-dot color with local dimming"),
-            ("Mini LED", "Sunward Mini LED Television", 5599000, "fine-grained backlight control for bright rooms"),
-            ("cinema", "Wideframe Cinema Television", 7299000, "wide color coverage with a filmmaker picture mode"),
-            ("gaming", "Currentflow Gaming Television", 5999000, "variable refresh input with low-latency mode"),
-            ("compact", "Hearthview Compact Television", 2499000, "small-room display with clear dialogue mode"),
-            ("art display", "Stillroom Art Television", 8199000, "matte panel with an adjustable gallery frame"),
-            ("outdoor", "Terraceview Outdoor Television", 12999000, "weather-resistant enclosure for covered patios"),
-            ("accessible", "Clearvoice Accessible Television", 3799000, "spoken menus and high-contrast captions"),
-            ("large format", "Panorama 75 Television", 10999000, "75-inch panel with a slim wall mount"),
+            (
+                "Mini LED",
+                "Sunward Mini LED Television",
+                5599000,
+                "fine-grained backlight control for bright rooms",
+            ),
+            (
+                "cinema",
+                "Wideframe Cinema Television",
+                7299000,
+                "wide color coverage with a filmmaker picture mode",
+            ),
+            (
+                "gaming",
+                "Currentflow Gaming Television",
+                5999000,
+                "variable refresh input with low-latency mode",
+            ),
+            (
+                "compact",
+                "Hearthview Compact Television",
+                2499000,
+                "small-room display with clear dialogue mode",
+            ),
+            (
+                "art display",
+                "Stillroom Art Television",
+                8199000,
+                "matte panel with an adjustable gallery frame",
+            ),
+            (
+                "outdoor",
+                "Terraceview Outdoor Television",
+                12999000,
+                "weather-resistant enclosure for covered patios",
+            ),
+            (
+                "accessible",
+                "Clearvoice Accessible Television",
+                3799000,
+                "spoken menus and high-contrast captions",
+            ),
+            (
+                "large format",
+                "Panorama 75 Television",
+                10999000,
+                "75-inch panel with a slim wall mount",
+            ),
         ),
     },
     "gaming": {
@@ -1135,16 +1370,66 @@ _NEW_PORTFOLIO_FAMILIES: dict[str, dict[str, Any]] = {
             for bundle in ("Console only", "with second controller")
         ),
         "products": (
-            ("console", "Emberbyte Living-room Console", 4999000, "quiet cooling with a 1 TB solid-state drive"),
-            ("handheld", "Arcforge Pocket Gaming System", 3299000, "7-inch variable-refresh handheld display"),
-            ("controller", "Tandemix Adaptive Controller", 699900, "remappable controls with two rear paddles"),
-            ("keyboard", "Quorrel Mechanical Gaming Keyboard", 899900, "hot-swappable linear switches and quiet foam"),
-            ("mouse", "Emberbyte Precision Gaming Mouse", 599900, "lightweight shell with adjustable sensitivity"),
-            ("monitor", "Arcforge 27 Gaming Monitor", 2899000, "27-inch 165 Hz display with an adjustable stand"),
-            ("streaming", "Tandemix Capture Station", 1199900, "hardware capture for dual-PC streaming"),
-            ("simulation", "Quorrel Flight Control Set", 2199900, "modular throttle and reversible control stick"),
-            ("audio", "Emberbyte Spatial Headset", 999900, "closed-back drivers with a detachable microphone"),
-            ("accessibility", "Arcforge Switch Gaming Hub", 849900, "three configurable switch inputs and profile memory"),
+            (
+                "console",
+                "Emberbyte Living-room Console",
+                4999000,
+                "quiet cooling with a 1 TB solid-state drive",
+            ),
+            (
+                "handheld",
+                "Arcforge Pocket Gaming System",
+                3299000,
+                "7-inch variable-refresh handheld display",
+            ),
+            (
+                "controller",
+                "Tandemix Adaptive Controller",
+                699900,
+                "remappable controls with two rear paddles",
+            ),
+            (
+                "keyboard",
+                "Quorrel Mechanical Gaming Keyboard",
+                899900,
+                "hot-swappable linear switches and quiet foam",
+            ),
+            (
+                "mouse",
+                "Emberbyte Precision Gaming Mouse",
+                599900,
+                "lightweight shell with adjustable sensitivity",
+            ),
+            (
+                "monitor",
+                "Arcforge 27 Gaming Monitor",
+                2899000,
+                "27-inch 165 Hz display with an adjustable stand",
+            ),
+            (
+                "streaming",
+                "Tandemix Capture Station",
+                1199900,
+                "hardware capture for dual-PC streaming",
+            ),
+            (
+                "simulation",
+                "Quorrel Flight Control Set",
+                2199900,
+                "modular throttle and reversible control stick",
+            ),
+            (
+                "audio",
+                "Emberbyte Spatial Headset",
+                999900,
+                "closed-back drivers with a detachable microphone",
+            ),
+            (
+                "accessibility",
+                "Arcforge Switch Gaming Hub",
+                849900,
+                "three configurable switch inputs and profile memory",
+            ),
         ),
     },
     "home_appliances": {
@@ -1156,16 +1441,66 @@ _NEW_PORTFOLIO_FAMILIES: dict[str, dict[str, Any]] = {
             for edition in ("standard", "extended filter set")
         ),
         "products": (
-            ("laundry", "Quietwater Front-load Washer", 3499000, "load-sensing wash with a quick cycle"),
-            ("refrigeration", "Hearthwell Bottom-freezer Fridge", 4299000, "separate humidity zones for fresh produce"),
-            ("floor care", "Stillhome Cordless Vacuum", 1899000, "sealed filtration with a removable battery"),
-            ("air care", "Clearfield Room Air Purifier", 1599000, "replaceable particle and odor filters"),
-            ("climate", "Morrowen Inverter Air Conditioner", 3699000, "variable-speed cooling with a washable filter"),
-            ("water", "Springwell Countertop Filter", 1299000, "replaceable carbon filter with a change indicator"),
-            ("dish care", "Alderwick Compact Dishwasher", 2999000, "place settings for smaller kitchens"),
-            ("heating", "Elderglen Ceramic Room Heater", 799900, "tip-over shutoff and adjustable thermostat"),
-            ("laundry", "Ruskvale Heat-pump Dryer", 3899000, "sensor drying with a low-temperature cycle"),
-            ("air care", "Breezefield Tower Fan", 899900, "quiet airflow with a timed sleep setting"),
+            (
+                "laundry",
+                "Quietwater Front-load Washer",
+                3499000,
+                "load-sensing wash with a quick cycle",
+            ),
+            (
+                "refrigeration",
+                "Hearthwell Bottom-freezer Fridge",
+                4299000,
+                "separate humidity zones for fresh produce",
+            ),
+            (
+                "floor care",
+                "Stillhome Cordless Vacuum",
+                1899000,
+                "sealed filtration with a removable battery",
+            ),
+            (
+                "air care",
+                "Clearfield Room Air Purifier",
+                1599000,
+                "replaceable particle and odor filters",
+            ),
+            (
+                "climate",
+                "Morrowen Inverter Air Conditioner",
+                3699000,
+                "variable-speed cooling with a washable filter",
+            ),
+            (
+                "water",
+                "Springwell Countertop Filter",
+                1299000,
+                "replaceable carbon filter with a change indicator",
+            ),
+            (
+                "dish care",
+                "Alderwick Compact Dishwasher",
+                2999000,
+                "place settings for smaller kitchens",
+            ),
+            (
+                "heating",
+                "Elderglen Ceramic Room Heater",
+                799900,
+                "tip-over shutoff and adjustable thermostat",
+            ),
+            (
+                "laundry",
+                "Ruskvale Heat-pump Dryer",
+                3899000,
+                "sensor drying with a low-temperature cycle",
+            ),
+            (
+                "air care",
+                "Breezefield Tower Fan",
+                899900,
+                "quiet airflow with a timed sleep setting",
+            ),
         ),
     },
 }
@@ -1206,7 +1541,10 @@ _ASSET_HASHES = {image["file"]: image["sha256"] for image in _ASSET_MANIFEST["im
 _HERO_LAPTOP_IMAGES = {
     1: ("laptops/hero/vellune-studybook-hero.png", "laptops/hero/vellune-studybook-alt.png"),
     5: ("laptops/hero/vellune-copperfield-hero.png", "laptops/hero/vellune-copperfield-alt.png"),
-    6: ("laptops/hero/merroway-featherweight-hero.png", "laptops/hero/merroway-featherweight-alt.png"),
+    6: (
+        "laptops/hero/merroway-featherweight-hero.png",
+        "laptops/hero/merroway-featherweight-alt.png",
+    ),
 }
 
 
@@ -1228,10 +1566,14 @@ def build_catalog_products() -> list[Product]:
             brand = family["brands"][(product_index - 1) % len(family["brands"])]
             for variant_index in range(1, 9):
                 archetype = (product_index - 1) % 5
-                variant, price_delta, configuration = product_configuration(category, archetype, variant_index - 1)
+                variant, price_delta, configuration = product_configuration(
+                    category, archetype, variant_index - 1
+                )
                 sku = f"PORT-{category.upper()}-{product_index:02d}-{variant_index:02d}"
                 price = base_price + price_delta
-                hero_images = _HERO_LAPTOP_IMAGES.get(product_index) if category == "laptops" else None
+                hero_images = (
+                    _HERO_LAPTOP_IMAGES.get(product_index) if category == "laptops" else None
+                )
                 image_path = (
                     hero_images[0]
                     if hero_images
@@ -1247,10 +1589,18 @@ def build_catalog_products() -> list[Product]:
                     "Image note": "Illustrative portfolio-family product photography; the pictured scene is not a claim about a specific SKU.",
                     "_presentation": {
                         "delivery": "Standard portfolio delivery; timing confirmed at checkout",
-                        "highlights": [feature, variant, "Illustrative portfolio-family studio photograph"],
+                        "highlights": [
+                            feature,
+                            variant,
+                            "Illustrative portfolio-family studio photograph",
+                        ],
                         "image_gallery": (
                             [
-                                {"url": image_url, "alt": f"Premium studio view of {name}", "role": "hero"},
+                                {
+                                    "url": image_url,
+                                    "alt": f"Premium studio view of {name}",
+                                    "role": "hero",
+                                },
                                 {
                                     "url": f"/images/products/portfolio/{hero_images[1]}",
                                     "alt": f"Alternate studio view of {name}",
@@ -1258,7 +1608,12 @@ def build_catalog_products() -> list[Product]:
                                 },
                             ]
                             if hero_images
-                            else [{"url": image_url, "alt": f"Studio product photograph illustrating the {category.replace('_', ' ')} product family"}]
+                            else [
+                                {
+                                    "url": image_url,
+                                    "alt": f"Studio product photograph illustrating the {category.replace('_', ' ')} product family",
+                                }
+                            ]
                         ),
                     },
                 }
@@ -1272,7 +1627,13 @@ def build_catalog_products() -> list[Product]:
                         brand=brand,
                         price=price,
                         list_price=(
-                            price + max(5000, round(price * (0.05 + ((product_index + variant_index) % 17) / 100)))
+                            price
+                            + max(
+                                5000,
+                                round(
+                                    price * (0.05 + ((product_index + variant_index) % 17) / 100)
+                                ),
+                            )
                             if (product_index + variant_index) % 4
                             else None
                         ),
@@ -1366,14 +1727,38 @@ async def repair_catalog_products(session: AsyncSession) -> dict[str, int]:
     catalog price through CartService, exactly as they do after an inventory update.
     """
     authored = build_catalog_products()
-    rows = (await session.execute(select(Product).where(
-        or_(Product.id.in_([p.id for p in authored]), Product.sku.in_([p.sku for p in authored]))
-    ))).scalars().all()
+    rows = (
+        (
+            await session.execute(
+                select(Product).where(
+                    or_(
+                        Product.id.in_([p.id for p in authored]),
+                        Product.sku.in_([p.sku for p in authored]),
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     by_id = {row.id: row for row in rows}
     by_sku = {row.sku: row for row in rows}
-    fields = ("name", "description", "category", "brand", "price", "list_price", "specifications",
-              "image_url", "image_alt", "image_source_url", "image_creator", "image_license",
-              "image_license_url", "image_sha256")
+    fields = (
+        "name",
+        "description",
+        "category",
+        "brand",
+        "price",
+        "list_price",
+        "specifications",
+        "image_url",
+        "image_alt",
+        "image_source_url",
+        "image_creator",
+        "image_license",
+        "image_license_url",
+        "image_sha256",
+    )
     updated = 0
     for product in authored:
         row = by_id.get(product.id)
@@ -1395,7 +1780,11 @@ async def _run_seed(database_url: str, repair: bool = False) -> dict[str, int]:
     try:
         async with factory() as session:
             async with session.begin():
-                result = await repair_catalog_products(session) if repair else await seed_catalog_products(session)
+                result = (
+                    await repair_catalog_products(session)
+                    if repair
+                    else await seed_catalog_products(session)
+                )
         return result
     finally:
         await engine.dispose()
@@ -1404,7 +1793,11 @@ async def _run_seed(database_url: str, repair: bool = False) -> dict[str, int]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true")
-    parser.add_argument("--repair", action="store_true", help="Refresh reserved local portfolio metadata without changing IDs, stock or orders")
+    parser.add_argument(
+        "--repair",
+        action="store_true",
+        help="Refresh reserved local portfolio metadata without changing IDs, stock or orders",
+    )
     args = parser.parse_args(argv)
     environment = dict(os.environ)
     database_url = environment.get("DATABASE_URL", "")

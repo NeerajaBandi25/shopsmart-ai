@@ -226,7 +226,9 @@ class TestPublicProductCatalog:
             "BRAND-SUBCATEGORY-MATCH"
         ]
 
-    async def test_detail_hides_inactive_and_missing_products(self, test_client: AsyncClient, test_db):
+    async def test_detail_hides_inactive_and_missing_products(
+        self, test_client: AsyncClient, test_db
+    ):
         inactive = _product(
             "CATALOG-INACTIVE",
             datetime(2026, 9, 1),
@@ -237,9 +239,7 @@ class TestPublicProductCatalog:
         await test_db.flush()
 
         response = await test_client.get(f"/api/v1/products/{inactive.id}")
-        missing = await test_client.get(
-            "/api/v1/products/00000000-0000-0000-0000-000000000099"
-        )
+        missing = await test_client.get("/api/v1/products/00000000-0000-0000-0000-000000000099")
 
         assert response.status_code == 404
         assert missing.status_code == 404

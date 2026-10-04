@@ -188,7 +188,9 @@ def test_log_formatter_excludes_raw_identity_fields_even_from_other_callers():
 
 
 @pytest.mark.parametrize("provider_class", [MockEmailProvider, ProductionEmailProvider])
-def test_email_provider_logs_exclude_recipient_subject_and_body(provider_class, caplog, monkeypatch):
+def test_email_provider_logs_exclude_recipient_subject_and_body(
+    provider_class, caplog, monkeypatch
+):
     provider_logger = logging.getLogger(provider_class.__module__)
     # Alembic fileConfig disables existing module loggers during full-suite setup.
     # Isolate capture state so privacy is tested whether or not migrations ran first.

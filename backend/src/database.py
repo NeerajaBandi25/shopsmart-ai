@@ -32,6 +32,7 @@ async def init_db() -> None:
     """Initialize database tables."""
     async with engine.begin() as conn:
         from src.models.base import Base
+
         await conn.run_sync(Base.metadata.create_all)
 
 

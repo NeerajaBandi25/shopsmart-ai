@@ -89,4 +89,5 @@ class Settings(BaseSettings):
             raise ValueError("OBSERVABILITY_METRICS_TOKEN must be at least 32 URL-safe characters")
         return token
 
+
 settings = Settings()

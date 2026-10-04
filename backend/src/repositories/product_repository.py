@@ -168,7 +168,12 @@ class ProductRepository:
         if in_stock_only:
             conditions.append(Product.stock_quantity > 0)
         safe_query = query_text.strip()[:160] if query_text and query_text.strip() else None
-        if safe_query and safe_query.lower() in {"coding", "programming", "react", "react development"}:
+        if safe_query and safe_query.lower() in {
+            "coding",
+            "programming",
+            "react",
+            "react development",
+        }:
             # A transparent development preset uses published RAM, not an LLM
             # performance claim. Existing category, budget and stock constraints stay intact.
             memory = Product.specifications["RAM"].as_string()

@@ -34,19 +34,23 @@ class HeroStoryService:
 
     async def get_story(self) -> HeroStoryResponse | None:
         rows = (
-            await self.db.execute(
-                select(Product)
-                .where(
-                    Product.is_active.is_(True),
-                    Product.stock_quantity > 0,
-                    Product.category == "laptops",
-                    Product.price <= BUDGET_MINOR,
-                    Product.image_url.is_not(None),
+            (
+                await self.db.execute(
+                    select(Product)
+                    .where(
+                        Product.is_active.is_(True),
+                        Product.stock_quantity > 0,
+                        Product.category == "laptops",
+                        Product.price <= BUDGET_MINOR,
+                        Product.image_url.is_not(None),
+                    )
+                    .order_by(Product.price, Product.id)
+                    .limit(600)
                 )
-                .order_by(Product.price, Product.id)
-                .limit(600)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         # Prefer 16 GB+ configurations for development; only widen when the
         # catalog cannot supply three distinct, image-backed product families.
@@ -61,8 +65,7 @@ class HeroStoryService:
             key=lambda family: min((product.price, str(product.id)) for product in family),
         )[:SHORTLIST_SIZE]
         family_representatives = [
-            min(family, key=lambda product: (product.price, str(product.id)))
-            for family in families
+            min(family, key=lambda product: (product.price, str(product.id))) for family in families
         ]
         if not family_representatives:
             return None

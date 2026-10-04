@@ -86,9 +86,7 @@ class AuthService:
 
         await self.db.commit()
 
-        security_audit_event(
-            "registration_success", success=True, user_id=str(user.id)
-        )
+        security_audit_event("registration_success", success=True, user_id=str(user.id))
 
         return {
             "user_id": str(user.id),
@@ -96,9 +94,7 @@ class AuthService:
             "created_at": user.created_at.isoformat(),
         }
 
-    async def login_user(
-        self, email: str, password: str, ip_address: str, user_agent: str
-    ) -> dict:
+    async def login_user(self, email: str, password: str, ip_address: str, user_agent: str) -> dict:
         """Authenticate user and create session with single-session enforcement.
 
         Args:
@@ -167,7 +163,10 @@ class AuthService:
         user = await user_repo.get_user_by_email(email)
         if not user or not verify_password(password, user.password_hash):
             await login_attempt_repo.log_attempt(
-                email=email, ip_address=ip_address, success=False, failure_reason="invalid_credentials"
+                email=email,
+                ip_address=ip_address,
+                success=False,
+                failure_reason="invalid_credentials",
             )
             await self.db.commit()
             await asyncio.to_thread(record_failed_attempt, ip_address)
@@ -313,9 +312,7 @@ class AuthService:
         session_repo = SessionRepository(db=self.db)
         await session_repo.invalidate_user_sessions(user.id)
         await self.db.commit()
-        security_audit_event(
-            "password_change_success", success=True, user_id=str(user.id)
-        )
+        security_audit_event("password_change_success", success=True, user_id=str(user.id))
 
     @staticmethod
     def _is_valid_email(email: str) -> bool:

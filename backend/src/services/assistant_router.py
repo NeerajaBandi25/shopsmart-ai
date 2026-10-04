@@ -255,7 +255,10 @@ def route_assistant_message(message: str) -> AssistantRoute:
         )
     ):
         return AssistantRoute(AssistantIntent.CART_QUERY)
-    if re.search(r"\b(?:which|what)\b.{0,60}\b(?:better|best)\b|\b(?:react development|occasional gaming)\b", text):
+    if re.search(
+        r"\b(?:which|what)\b.{0,60}\b(?:better|best)\b|\b(?:react development|occasional gaming)\b",
+        text,
+    ):
         return AssistantRoute(AssistantIntent.PRODUCT_ADVICE)
     if any(term in text for term in ("compare", " versus ", " vs ")) or re.search(
         r"\bwhich\b.{0,50}\b(?:cheaper|cheapest|less expensive|lower[- ]priced)\b",
@@ -292,7 +295,9 @@ def route_assistant_message(message: str) -> AssistantRoute:
         max_price_cents = None
         min_price_cents = None
         valid_price_starts = {match.start() for match in (max_match, min_match) if match}
-        invalid_price_filter = any(cue.start() not in valid_price_starts for cue in _PRICE_CUE.finditer(text))
+        invalid_price_filter = any(
+            cue.start() not in valid_price_starts for cue in _PRICE_CUE.finditer(text)
+        )
         if max_match:
             max_price_cents = _price_cents(max_match)
             if max_price_cents is None or max_price_cents > 2_147_483_647:
