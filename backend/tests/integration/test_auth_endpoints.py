@@ -777,7 +777,7 @@ class TestRollingSessionTimeout:
             activity = await test_client.get("/api/v1/auth/me", cookies={"session_id": session_id})
             assert activity.status_code == 200
             self._assert_refreshed_cookie(activity, session_id)
-            assert session.last_activity == clock()
+            assert session.last_activity.replace(tzinfo=None) == clock()
             latest_activity = session.last_activity
 
             # More than 30 days after login, but only 29 days after activity.
@@ -788,7 +788,7 @@ class TestRollingSessionTimeout:
 
             assert still_active.status_code == 200
             self._assert_refreshed_cookie(still_active, session_id)
-            assert session.last_activity == clock()
+            assert session.last_activity.replace(tzinfo=None) == clock()
             assert session.last_activity > latest_activity
 
     async def test_t099_continuous_activity_has_no_absolute_expiration_cap(
@@ -821,7 +821,7 @@ class TestRollingSessionTimeout:
 
                 assert response.status_code == 200
                 self._assert_refreshed_cookie(response, session_id)
-                assert session.last_activity == clock()
+                assert session.last_activity.replace(tzinfo=None) == clock()
 
             # At the exact inactivity boundary the session is still valid;
             # only exceeding the boundary expires it.

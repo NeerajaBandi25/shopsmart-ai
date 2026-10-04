@@ -13,9 +13,9 @@ from src.schemas.product import (
     ProductPageResponse,
     ProductResponse,
 )
-from src.services.product_catalog_service import ProductCatalogService
-from src.services.homepage_service import HomepageService
 from src.services.hero_story_service import HeroStoryService
+from src.services.homepage_service import HomepageService
+from src.services.product_catalog_service import ProductCatalogService
 
 router = APIRouter(prefix="/products", tags=["Products"])
 

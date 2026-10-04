@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { getProduct, type Product } from '@/lib/api-client';
-import { formatInr } from '@/lib/currency';
 
 const COMPARE_KEY = 'shopsmart-compare-ids';
 
@@ -49,12 +47,8 @@ function readCompareIds(): string[] {
 export function ShoppingTools() {
   const pathname = usePathname();
   const palette = useRef<HTMLDialogElement>(null);
-  const comparison = useRef<HTMLDialogElement>(null);
   const [query, setQuery] = useState('');
   const [ids, setIds] = useState<string[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const refresh = () => setIds(readCompareIds());
@@ -76,43 +70,24 @@ export function ShoppingTools() {
     };
   }, []);
 
-  async function openComparison() {
-    comparison.current?.showModal();
-    setLoading(true);
-    setError('');
-    try {
-      // Persist IDs only. Refresh authoritative facts when reopening comparison
-      // so navigation cannot turn cached browser prices into commerce authority.
-      setProducts(await Promise.all(ids.map(getProduct)));
-    } catch {
-      setError('A selected product is unavailable. Remove it and try again.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <>
       <button
         type="button"
         onClick={() => palette.current?.showModal()}
-        className={`${pathname === '/' || pathname.startsWith('/products/') || pathname.startsWith('/assistant') ? 'hidden' : 'fixed bottom-5 right-5 z-30 hidden min-h-11 items-center gap-3 rounded-full bg-ink-900 px-5 py-3 text-sm font-semibold text-white shadow-lg focus-visible:ring-2 focus-visible:ring-accent-500 sm:flex'}`}
+        className={`${pathname === '/' || pathname === '/compare' || pathname.startsWith('/products/') || pathname.startsWith('/assistant') ? 'hidden' : 'fixed bottom-5 right-5 z-30 hidden min-h-11 items-center gap-3 rounded-full bg-ink-900 px-5 py-3 text-sm font-semibold text-white shadow-lg focus-visible:ring-2 focus-visible:ring-accent-500 sm:flex'}`}
         aria-label="Open shopping commands"
       >
         Search & ask <kbd className="hidden text-xs text-white/70 sm:inline">Ctrl K</kbd>
       </button>
-      {ids.length > 0 && (
+      {ids.length > 0 && pathname !== '/compare' && (
         <aside
           aria-label="Comparison tray"
           className="flex items-center justify-center border-b border-ink-200 bg-white px-4 py-1 sm:fixed sm:bottom-5 sm:left-4 sm:z-30 sm:max-w-[55vw] sm:rounded-full sm:border sm:py-3 sm:shadow-lg"
         >
-          <button
-            type="button"
-            onClick={openComparison}
-            className="min-h-11 text-sm font-semibold text-ink-900"
-          >
+          <Link href="/compare" className="min-h-11 py-3 text-sm font-semibold text-ink-900">
             Compare ({ids.length}/3)
-          </button>
+          </Link>
           <button
             type="button"
             aria-label="Clear comparison"
@@ -174,89 +149,6 @@ export function ShoppingTools() {
         <p className="mt-5 text-xs text-ink-500">
           Press Escape to close. Product facts and cart totals come from the store.
         </p>
-      </dialog>
-      <dialog
-        ref={comparison}
-        aria-labelledby="comparison-title"
-        className="w-[calc(100%-2rem)] max-w-5xl rounded-2xl border border-ink-200 bg-white p-5 text-ink-900 shadow-2xl backdrop:bg-ink-950/60"
-      >
-        <div className="flex items-center justify-between gap-4">
-          <h2 id="comparison-title" className="font-display text-2xl font-bold">
-            Your shortlist
-          </h2>
-          <button
-            type="button"
-            onClick={() => comparison.current?.close()}
-            className="min-h-11 px-2"
-          >
-            Close comparison
-          </button>
-        </div>
-        {loading ? (
-          <p role="status" className="py-8">
-            Refreshing product details…
-          </p>
-        ) : error ? (
-          <p role="alert" className="py-8">
-            {error}
-          </p>
-        ) : (
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[500px] text-left text-sm">
-              <caption className="sr-only">
-                Current prices, stock and specifications for your selected products
-              </caption>
-              <thead>
-                <tr>
-                  <th className="p-3">Product</th>
-                  {products.map((product) => (
-                    <th key={product.id} className="p-3">
-                      <Link
-                        href={`/products/${product.id}`}
-                        onClick={() => comparison.current?.close()}
-                        className="underline"
-                      >
-                        {product.name}
-                      </Link>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  'Price',
-                  'Availability',
-                  ...Array.from(
-                    new Set(
-                      products.flatMap((product) =>
-                        Object.keys(product.specifications || {}).filter(
-                          (key) => !key.startsWith('_')
-                        )
-                      )
-                    )
-                  ),
-                ].map((label) => (
-                  <tr key={label} className="border-t border-ink-100">
-                    <th scope="row" className="p-3 font-medium">
-                      {label}
-                    </th>
-                    {products.map((product) => (
-                      <td key={product.id} className="p-3">
-                        {label === 'Price'
-                          ? formatInr(product.price)
-                          : label === 'Availability'
-                            ? product.stock_quantity > 0
-                              ? 'In stock'
-                              : 'Out of stock'
-                            : String(product.specifications?.[label] ?? 'Not provided')}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </dialog>
     </>
   );

@@ -39,6 +39,14 @@ class HomepageService:
             group = groups.setdefault(product.category or "other", [])
             if not any(item.image_url == product.image_url for item in group):
                 group.append(product)
+
+        def category_art(category: str) -> dict[str, str | None]:
+            product = next(iter(groups.get(category, [])), None)
+            return {
+                "image_url": product.image_url if product else None,
+                "image_alt": product.image_alt if product else None,
+            }
+
         selections = []
         editorial_order = ["laptops", "smartphones", "headphones", "fashion", "home_living"]
         category_order = [category for category in editorial_order if category in groups]
@@ -55,10 +63,21 @@ class HomepageService:
                 Promotion.starts_at <= now, Promotion.ends_at > now,
             ).order_by(Promotion.ends_at, Promotion.id).limit(6)
         )).scalars().all()
-        serialize = lambda rows: [ProductResponse.model_validate(row) for row in rows]
+        def serialize(rows: list[Product]) -> list[ProductResponse]:
+            return [ProductResponse.model_validate(row) for row in rows]
+
         return {
-            "categories": [{"value": category, "label": category.replace("_", " ").title(),
-                            "count": count} for category, count in category_rows],
+            "categories": [
+                {
+                    "value": category,
+                    "label": category.replace("_", " ").title(),
+                    "count": count,
+                    # Use an actual product image from this category so the
+                    # category discovery art stays tied to the live catalog.
+                    **category_art(category),
+                }
+                for category, count in category_rows
+            ],
             # Return three complete editorial rounds. The page still renders
             # compact shelves, while its guided finder can work from the full
             # image-backed candidate pool instead of only the first 24 rows.

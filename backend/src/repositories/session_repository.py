@@ -1,5 +1,6 @@
 """Session repository for data access."""
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import and_, select
@@ -91,8 +92,7 @@ class SessionRepository:
         if not session:
             return False
 
-        from datetime import datetime
-        session.last_activity = datetime.utcnow()
+        session.last_activity = datetime.now(timezone.utc)
         await self.db.flush()
         return True
 
@@ -136,7 +136,7 @@ class SessionRepository:
             select(Session).where(
                 and_(
                     Session.user_id == user_id,
-                    Session.is_active == True,
+                    Session.is_active.is_(True),
                 )
             )
         )
@@ -161,7 +161,7 @@ class SessionRepository:
             select(Session).where(
                 and_(
                     Session.user_id == user_id,
-                    Session.is_active == True,
+                    Session.is_active.is_(True),
                 )
             )
         )

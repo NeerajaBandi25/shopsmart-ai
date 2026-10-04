@@ -14,7 +14,12 @@ from src.services.ai_gateway import ProviderGateway
 from src.services.ai_governance import DataClassification
 from src.services.ai_repository import ConversationRepository
 from src.services.assistant_knowledge import KnowledgeRetrievalService
-from src.services.assistant_router import CATEGORY_ALIASES, AssistantIntent, route_assistant_message, strip_price_constraints
+from src.services.assistant_router import (
+    CATEGORY_ALIASES,
+    AssistantIntent,
+    route_assistant_message,
+    strip_price_constraints,
+)
 from src.services.cart_service import CartService
 from src.services.order_service import OrderService
 from src.services.product_catalog_service import ProductCatalogService
@@ -34,8 +39,12 @@ _STOP_WORDS = {
     "product",
     "products",
     "recommend",
+    "rs",
+    "rupee",
+    "rupees",
     "search",
     "show",
+    "inr",
     "some",
     "the",
     "that",

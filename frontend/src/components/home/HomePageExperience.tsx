@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AddToCartButton } from '@/components/AddToCartButton';
+import { CategoryCard } from '@/components/CategoryCard';
 import { formatInr } from '@/lib/currency';
 import {
   getHomepage,
@@ -175,27 +176,39 @@ export function HomePageExperience({ hasSession = false }: { hasSession?: boolea
             </div>
             <nav
               aria-label="Product categories"
-              className="mt-7 grid grid-cols-2 gap-x-6 sm:grid-cols-3 lg:grid-cols-5"
+              className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
             >
-              {(merchandise?.categories || []).map((category, index) => (
-                <Link
-                  key={category.value}
-                  href={`/products?category=${encodeURIComponent(category.value)}`}
-                  className="group flex min-h-24 items-center gap-3 border-t border-sand-200 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
-                >
-                  <span aria-hidden="true" className="font-display text-2xl text-accent-700">
-                    {String(index + 1).padStart(2, '0')}
-                  </span>
-                  <span>
-                    <span className="block text-sm font-semibold text-ink-900 group-hover:text-accent-700">
-                      {category.label}
+              {(merchandise?.categories || []).map((category, index) =>
+                category.image_url ? (
+                  <CategoryCard
+                    key={category.value}
+                    numeral={String(index + 1).padStart(2, '0')}
+                    name={category.label}
+                    href={`/products?category=${encodeURIComponent(category.value)}`}
+                    image={category.image_url}
+                    alt={category.image_alt || `${category.label} from the product catalog`}
+                    badge={`${category.count} listings`}
+                  />
+                ) : (
+                  <Link
+                    key={category.value}
+                    href={`/products?category=${encodeURIComponent(category.value)}`}
+                    className="group flex min-h-24 items-center gap-3 border-t border-sand-200 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+                  >
+                    <span aria-hidden="true" className="font-display text-2xl text-accent-700">
+                      {String(index + 1).padStart(2, '0')}
                     </span>
-                    <span className="mt-1 block text-xs text-ink-500">
-                      {category.count} listings
+                    <span>
+                      <span className="block text-sm font-semibold text-ink-900 group-hover:text-accent-700">
+                        {category.label}
+                      </span>
+                      <span className="mt-1 block text-xs text-ink-500">
+                        {category.count} listings
+                      </span>
                     </span>
-                  </span>
-                </Link>
-              ))}
+                  </Link>
+                )
+              )}
             </nav>
           </div>
         </section>

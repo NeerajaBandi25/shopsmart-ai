@@ -21,6 +21,13 @@ def test_secret_key_loads_from_environment(monkeypatch):
     assert configured_settings.secret_key == "test-secret-key"
 
 
+def test_table_creation_is_disabled_by_default(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+    monkeypatch.delenv("AUTO_CREATE_TABLES", raising=False)
+
+    assert Settings(_env_file=None).auto_create_tables is False
+
+
 def test_secret_key_must_not_be_empty(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "  ")
 

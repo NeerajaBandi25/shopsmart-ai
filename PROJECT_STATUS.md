@@ -2,9 +2,8 @@
 
 ## Historical Phase
 
-The Agent Harness Phase 1C work below is a completed historical increment. Current
-portfolio-completion status is recorded later in this file and in
-`.factory/status.md`.
+The Agent Harness Phase 1C work below is a completed historical increment.
+Current application verification is tracked in `.factory/status.md`.
 
 ## Project Rule
 
@@ -95,25 +94,25 @@ The launcher/provider does not define project state.
 
 ## Current Application Work
 
-The active portfolio-completion checkout is `feature/promotions-discount-engine`.
-The current local application is a unified commerce and AI assistant product,
-not the historical Phase 1C-only state above. Current verification and explicit
-remaining readiness gates are recorded in `.factory/status.md` and
-`docs/product-audit.md`.
+The active application checkout is `feature/promotions-discount-engine`; the current
+local product combines the storefront, commerce services, and AI assistant. Current
+production-completion status is **VERIFYING**, not ready for production. Use
+`.factory/status.md` as the active workstream checkpoint for verified product claims,
+validation evidence, and remaining gates. Do not use the dated baseline in
+`docs/product-audit.md` as a current blocker list.
 
-Latest verified state (2026-10-03): `shopsmart_portfolio` is at Alembic revision
-`017_order_delivery_images` with 1,200 products and repository-generated product
-art. The full SQLite backend run passed 282 tests with 6 database-specific
-skips; frontend TypeScript, 138 Jest tests, lint, and production build passed.
-This is not a portfolio-ready claim: reliable responsive captures and the
-accessibility, security, performance, journey, and independent-review gates are
-still outstanding.
+## Historical Verification Snapshot (2026-10-03)
+
+The previously recorded database revision, product count, and backend/frontend test
+counts are a historical snapshot only. They do not establish the current state or
+satisfy current production-completion gates; consult `.factory/status.md` for the
+latest recorded verification.
 
 ## Next Engineering Work
 
-Close the remaining gates in `.factory/status.md`. Preserve the local-only
-database restrictions and existing records. Do not deploy, merge, commit, or
-push as part of this portfolio verification.
+Continue the active work from `.factory/status.md` and the user's current task. Keep
+changes on the existing branch and Draft PR. Do not merge or deploy unless explicitly
+requested.
 
 ## Important Constraints
 

@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import or_, select
 from sqlalchemy.engine import make_url

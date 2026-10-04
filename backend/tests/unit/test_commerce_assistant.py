@@ -175,6 +175,22 @@ async def test_laptop_search_passes_structured_category_and_price(assistant):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("currency", ["rupees", "rs", "inr"])
+async def test_laptop_budget_units_do_not_become_a_name_query(assistant, currency):
+    service, _gateway, _db = assistant
+
+    await service.answer(uuid4(), f"Find in-stock laptops under 70000 {currency}")
+
+    service.catalog.search.assert_awaited_once_with(
+        query_text=None,
+        category="laptops",
+        min_price_cents=None,
+        max_price_cents=7_000_000,
+        in_stock_only=True,
+    )
+
+
+@pytest.mark.asyncio
 async def test_unsupported_category_never_calls_text_search(assistant):
     service, _gateway, _db = assistant
 
@@ -657,3 +673,13 @@ async def test_checkout_requires_owner_cart_items_and_never_places_an_order(assi
     assert ready['result_data']['navigation'] == '/checkout'
     service.orders.get_user_orders.assert_not_awaited()
     gateway.answer.assert_not_awaited()
+
+
+def test_currency_units_are_not_treated_as_product_search_terms():
+    terms = CommerceAssistantService._search_terms(
+        "Find laptops under 70000 rupees", category="laptops"
+    )
+
+    # Category and budget express intent; a leftover currency word must not
+    # become a product-name filter that removes otherwise matching results.
+    assert terms == []

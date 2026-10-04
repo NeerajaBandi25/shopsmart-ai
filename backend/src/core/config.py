@@ -5,18 +5,22 @@ import re
 from typing import Optional
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     # Database
     database_url: str = os.getenv(
         "DATABASE_URL", "postgresql+asyncpg://user:password@localhost/shopsmart_ai"
     )
     database_echo: bool = os.getenv("DATABASE_ECHO", "False").lower() == "true"
-    auto_create_tables: bool = os.getenv("AUTO_CREATE_TABLES", "True").lower() == "true"
+    # Schema creation is an explicit local/test opt-in; production starts only
+    # after the release process has applied Alembic migrations.
+    auto_create_tables: bool = os.getenv("AUTO_CREATE_TABLES", "False").lower() == "true"
 
     # Security
     secret_key: str
@@ -84,12 +88,5 @@ class Settings(BaseSettings):
         if not re.fullmatch(r"[A-Za-z0-9._~-]{32,}", token):
             raise ValueError("OBSERVABILITY_METRICS_TOKEN must be at least 32 URL-safe characters")
         return token
-
-    class Config:
-        """Pydantic config."""
-
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-
 
 settings = Settings()

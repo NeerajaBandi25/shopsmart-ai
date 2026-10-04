@@ -5,8 +5,18 @@ from uuid import uuid4
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import CheckConstraint, Column, Integer, MetaData, String, Table, create_engine
-from sqlalchemy import func, insert, select
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    func,
+    insert,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.product import Product
@@ -19,8 +29,8 @@ from src.seed.portfolio_catalog import (
     CatalogSeedCollisionError,
     CatalogSeedSafetyError,
     build_catalog_products,
-    seed_catalog_products,
     repair_catalog_products,
+    seed_catalog_products,
     validate_catalog_target,
 )
 

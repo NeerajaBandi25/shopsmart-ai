@@ -1,12 +1,12 @@
 """Session validation logic with inactivity timeout."""
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.exc import SQLAlchemyError
 
 from src.core.config import settings
 from src.models.session import Session
@@ -59,10 +59,14 @@ async def validate_session(
             return None
 
         # Check inactivity timeout: NOW() - last_activity > 30 days
-        now = datetime.utcnow()
-        inactivity_threshold = now.timestamp() - settings.session_timeout_seconds
+        now = datetime.now(timezone.utc)
+        last_activity = session.last_activity
+        # SQLite strips timezone metadata, while PostgreSQL preserves it. Legacy
+        # naive values were written as UTC, so normalize them before comparison.
+        if last_activity.tzinfo is None:
+            last_activity = last_activity.replace(tzinfo=timezone.utc)
 
-        if session.last_activity.timestamp() < inactivity_threshold:
+        if last_activity < now - timedelta(seconds=settings.session_timeout_seconds):
             # Session expired due to inactivity
             return None
 
@@ -137,7 +141,7 @@ async def invalidate_user_sessions(
         result = await db_session.execute(
             select(Session)
             .where(Session.user_id == user_id)
-            .where(Session.is_active == True)
+            .where(Session.is_active.is_(True))
         )
         sessions = result.scalars().all()
 

@@ -1,9 +1,8 @@
 """Public product catalog response schemas."""
 
-from uuid import UUID
-from typing import Any
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, computed_field
 
@@ -101,6 +100,8 @@ class HomepageCategory(BaseModel):
     value: str
     label: str
     count: int
+    image_url: str | None = None
+    image_alt: str | None = None
 
 
 class PublicPromotion(BaseModel):

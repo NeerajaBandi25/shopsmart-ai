@@ -98,8 +98,14 @@ const candidates: Product[] = [
 function page(items: Product[]): HomepageData {
   return {
     categories: [
-      { value: 'laptops', label: 'Laptops', count: 8 },
-      { value: 'smartphones', label: 'Smartphones', count: 12 },
+      {
+        value: 'laptops',
+        label: 'Laptops',
+        count: 8,
+        image_url: '/images/products/portfolio/laptops/03.jpg',
+        image_alt: 'Catalog laptop',
+      },
+      { value: 'smartphones', label: 'Smartphones', count: 12, image_url: null, image_alt: null },
     ],
     featured: items,
     trending: [],
@@ -268,6 +274,9 @@ describe('homepage shopping experience', () => {
     expect(
       await within(categoryNavigation).findByRole('link', { name: /Smartphones/ })
     ).toHaveAttribute('href', '/products?category=smartphones');
+    expect(
+      await within(categoryNavigation).findByRole('img', { name: 'Catalog laptop' })
+    ).toBeInTheDocument();
   });
 
   it('shows catalog errors with a working retry action', async () => {

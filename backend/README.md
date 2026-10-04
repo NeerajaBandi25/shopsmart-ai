@@ -19,7 +19,7 @@ Copy-Item .env.example .env
 
 Set `DATABASE_URL` to a PostgreSQL `postgresql+asyncpg://` URL, set a unique non-empty `SECRET_KEY`, and set `CORS_ORIGINS` to a JSON array of exact frontend origins. `REDIS_URL` is optional. `PRODUCT_CATALOG_CACHE_TTL_SECONDS` controls public catalog cache freshness (default 60, must be positive). Do not commit `.env` or reuse production secrets locally.
 
-The public product catalog caches only successful pages under the `shopsmart:product-catalog:v1` namespace. Keys include the current pagination parameters and a generation token. A successful checkout advances that generation after its stock transaction commits, invalidating every cached page. No product-administration API exists; product edits made directly in the database become visible after the configured TTL. PostgreSQL remains the source of truth, and catalog reads fall back to it when Redis is disabled or unavailable.
+The public product catalog caches only successful, unfiltered newest-first pages under the `shopsmart:product-catalog:v2` namespace. Keys include pagination parameters and a generation token. A successful checkout advances that generation after its stock transaction commits, making prior cached pages unreachable. Filtered searches bypass the page cache. No product-administration API exists; direct database edits are not covered by checkout invalidation. PostgreSQL remains the source of truth, and catalog reads fall back to it when Redis is disabled or unavailable.
 
 Apply migrations and start the API:
 
@@ -32,7 +32,7 @@ The versioned API prefix is `/api/v1`. Authentication routes include registratio
 
 ## Commerce Assistant Knowledge
 
-`POST /api/v1/ai/chat` is an authenticated commerce assistant. Product, cart, and order facts come from the existing services; provider/model governance details are not returned to customers. No promotion service or structured product brand/variant fields currently exist; canonical product categories are supported. The assistant does not invent offers or claim unsupported filters. RAG is reserved for curated ShopSmart policies and guides. Customer-owned document APIs are hidden from OpenAPI and disabled unless `AI_USER_DOCUMENTS_ENABLED=true` is set for an isolated internal/test environment.
+`POST /api/v1/ai/chat` is an authenticated commerce assistant. Product, cart, order, and promotion facts come from the existing services; provider/model governance details are not returned to customers. Catalog records include brand and canonical category fields. The assistant does not invent offers or claim unsupported filters. RAG is used for curated ShopSmart policy/support knowledge, not live price or stock. Customer-owned document APIs are hidden from OpenAPI and disabled unless `AI_USER_DOCUMENTS_ENABLED=true` is set in a local, development, or test environment.
 
 Apply the Alembic migrations before starting the updated backend. To publish an approved policy source, create a server-side JSON file with `source_key`, `title`, `category`, and `content`, then explicitly enable the guarded command:
 

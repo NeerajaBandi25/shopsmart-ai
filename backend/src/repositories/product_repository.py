@@ -100,7 +100,7 @@ class ProductRepository:
         """
         query = select(Product)
         if active_only:
-            query = query.where(Product.is_active == True)
+            query = query.where(Product.is_active.is_(True))
         query = query.order_by(Product.created_at.desc(), Product.id.desc())
         query = query.offset(skip).limit(limit)
 
@@ -200,12 +200,6 @@ class ProductRepository:
             .limit(min(max(limit, 1), 100))
         )
         return list(result.scalars().all()), int(count_result.scalar_one())
-
-    async def count_active_products(self) -> int:
-        result = await self.db.execute(
-            select(func.count()).select_from(Product).where(Product.is_active.is_(True))
-        )
-        return int(result.scalar_one())
 
     async def update_product(
         self,

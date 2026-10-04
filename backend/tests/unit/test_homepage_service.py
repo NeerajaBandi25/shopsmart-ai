@@ -36,6 +36,9 @@ async def test_homepage_uses_active_imaged_stock_and_live_public_offers(test_db)
     assert {row["value"]: row["count"] for row in homepage["categories"]} == {
         "beauty": 1, "laptops": 1,
     }
+    categories = {row["value"]: row for row in homepage["categories"]}
+    assert categories["laptops"]["image_url"] == "/product.png"
+    assert categories["beauty"]["image_url"] is None
 
 
 @pytest.mark.asyncio

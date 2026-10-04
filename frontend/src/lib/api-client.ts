@@ -92,7 +92,13 @@ export interface HeroStoryData {
 }
 
 export interface HomepageData {
-  categories: { value: string; label: string; count: number }[];
+  categories: {
+    value: string;
+    label: string;
+    count: number;
+    image_url?: string | null;
+    image_alt?: string | null;
+  }[];
   featured: Product[];
   trending: Product[];
   recommendations: Product[];
