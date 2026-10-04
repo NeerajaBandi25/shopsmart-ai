@@ -37,6 +37,7 @@ def isolate_process_rate_limiter(monkeypatch):
     from src.core import rate_limiter as rate_limiter_module
 
     monkeypatch.setattr(rate_limiter_module.settings, "redis_url", None)
+    monkeypatch.setattr(rate_limiter_module.settings, "app_env", "test")
     monkeypatch.setattr(rate_limiter_module, "rate_limiter", rate_limiter_module.RateLimiter())
 
 

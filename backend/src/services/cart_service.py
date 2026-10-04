@@ -5,6 +5,7 @@ import hmac
 import logging
 from datetime import datetime, timezone
 from time import perf_counter
+from typing import Sequence
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -12,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.core.exceptions import AppException, ValidationError
+from src.models.cart import CartItem
+from src.models.product import Product
 from src.repositories.cart_repository import CartRepository
 from src.services.promotion_service import PromotionService, normalize_coupon_code
 
@@ -180,15 +183,10 @@ class CartService:
             raise
         coupon_hash = self._coupon_hash(normalized_code)
         cart = await self.repository.get_cart(user_id)
-        lines = (
-            [
-                (product, cart_item.quantity)
-                for cart_item, product in await self.repository.list_items(cart.id)
-            ]
-            if cart is not None
-            else []
-        )
+        cart_items = await self.repository.list_items(cart.id) if cart is not None else []
+        lines = [(product, cart_item.quantity) for cart_item, product in cart_items]
         quote = await self.promotions.quote(user_id, lines, normalized_code)
+        quote["items"] = self._cart_items(cart_items)
         evaluation = quote["coupon_evaluation"] or {}
         self._log_promotion_operation(
             "coupon_check",
@@ -302,8 +300,17 @@ class CartService:
             raise ValidationError("Requested quantity exceeds the purchase limit", "quantity_limit")
 
     async def _cart_response(self, cart_id: UUID, user_id: UUID, coupon_code: str | None) -> dict:
-        items = []
         lines = await self.repository.list_items(cart_id)
+        quote = await self.promotions.quote(
+            user_id,
+            [(product, cart_item.quantity) for cart_item, product in lines],
+            coupon_code,
+        )
+        return {"items": self._cart_items(lines), **quote}
+
+    @staticmethod
+    def _cart_items(lines: Sequence[tuple[CartItem, Product]]) -> list[dict]:
+        items = []
         for cart_item, product in lines:
             line_total = product.price * cart_item.quantity
             items.append(
@@ -320,9 +327,4 @@ class CartService:
                     "max_purchase_quantity": product.max_purchase_quantity,
                 }
             )
-        quote = await self.promotions.quote(
-            user_id,
-            [(product, cart_item.quantity) for cart_item, product in lines],
-            coupon_code,
-        )
-        return {"items": items, **quote}
+        return items

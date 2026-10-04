@@ -154,7 +154,7 @@ export function HomePageExperience({ hasSession = false }: { hasSession?: boolea
         />
 
         <section aria-labelledby="category-heading" className="border-b border-ink-100 bg-white">
-          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+          <div className="mx-auto max-w-7xl px-4 pt-12 pb-6 sm:px-6 sm:pt-16 sm:pb-8 lg:px-8">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-caps text-accent-700">
@@ -214,7 +214,7 @@ export function HomePageExperience({ hasSession = false }: { hasSession?: boolea
         </section>
 
         <section aria-labelledby="featured-heading" className="bg-blush-50">
-          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+          <div className="mx-auto max-w-7xl px-4 pt-8 pb-12 sm:px-6 sm:pt-10 sm:pb-16 lg:px-8">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-caps text-accent-700">

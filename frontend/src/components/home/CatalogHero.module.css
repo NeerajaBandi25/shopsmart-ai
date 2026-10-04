@@ -1313,6 +1313,17 @@
   color: #f4f1e8;
   text-align: center;
 }
+.loading {
+  height: 520vh;
+  min-height: 520vh;
+  align-content: start;
+  padding-top: 16vh;
+}
+.fallback {
+  min-height: 90vh;
+  align-content: start;
+  padding-top: 16vh;
+}
 .unavailable > p:first-child {
   color: #a9ff67;
   font-size: 10px;
@@ -1373,6 +1384,15 @@
 @media (max-width: 700px) {
   .story {
     height: 560vh;
+  }
+  .loading {
+    height: 560vh;
+    min-height: 560vh;
+    padding-top: 14vh;
+  }
+  .fallback {
+    min-height: 90vh;
+    padding-top: 14vh;
   }
   .sticky {
     top: 90px;
@@ -1824,6 +1844,13 @@
 @media (prefers-reduced-motion: reduce) {
   .story {
     height: auto;
+    min-height: 100vh;
+  }
+  .loading {
+    height: auto;
+    min-height: 100vh;
+  }
+  .fallback {
     min-height: 100vh;
   }
   .sticky {

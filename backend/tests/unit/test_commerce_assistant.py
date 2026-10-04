@@ -54,6 +54,7 @@ class FakeCart:
                     "discount_cents": 0,
                 },
                 "applied_promotions": [],
+                "items": [],
                 "subtotal": 0,
                 "total_cents": 0,
             }
@@ -284,6 +285,47 @@ async def test_coupon_check_is_read_only_and_never_uses_rag_or_provider(assistan
     service.knowledge.retrieve.assert_not_awaited()
     gateway.answer.assert_not_awaited()
     assert result["result_data"]["coupon_evaluation"]["eligible"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("question", "eligible", "expected_answer"),
+    [
+        (
+            "Coupon code SAVE20?",
+            True,
+            "That coupon is eligible for your current cart.",
+        ),
+        (
+            "Coupon code NOFAKE90?",
+            False,
+            "I couldn't verify an eligible coupon for your current cart.",
+        ),
+    ],
+)
+async def test_coupon_question_serializes_complete_authoritative_cart_quote(
+    assistant, question, eligible, expected_answer
+):
+    service, _gateway, _db = assistant
+    service.cart.check_coupon.return_value = {
+        "items": [],
+        "coupon_evaluation": {
+            "eligible": eligible,
+            "reason_code": "eligible" if eligible else "unknown_or_ineligible",
+            "discount_cents": 200 if eligible else 0,
+        },
+        "applied_promotions": [],
+        "subtotal": 1000,
+        "discount_total_cents": 200 if eligible else 0,
+        "total_cents": 800 if eligible else 1000,
+    }
+
+    result = await service.answer(uuid4(), question)
+
+    assert result["answer"] == expected_answer
+    assert result["result_data"]["coupon_evaluation"]["eligible"] is eligible
+    assert result["result_data"]["cart"]["items"] == []
+    service.cart.apply_coupon.assert_not_awaited()
 
 
 @pytest.mark.asyncio

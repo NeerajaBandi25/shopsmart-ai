@@ -106,6 +106,25 @@ class TestRegistrationErrorCases:
         assert isinstance(data["error_code"], str)
 
 
+@pytest.mark.parametrize("password", ["A" * 73, "é" * 37])
+async def test_register_and_login_reject_passwords_over_bcrypt_byte_limit(
+    test_client: AsyncClient, password: str
+):
+    registration = await test_client.post(
+        "/api/v1/auth/register",
+        json={"email": "oversized@example.com", "password": password},
+    )
+    login = await test_client.post(
+        "/api/v1/auth/login",
+        json={"email": "oversized@example.com", "password": password},
+    )
+
+    assert registration.status_code == 422
+    assert login.status_code == 422
+    assert "password" in registration.text
+    assert "password" in login.text
+
+
 class TestImmediateLoginAfterRegistration:
     """T034: Test immediate login after registration."""
 

@@ -58,7 +58,12 @@ function ProductComparison({ products }: { products: ProductResult[] }) {
   return (
     <div className="mt-5">
       <h3 className="mb-2 text-sm font-semibold text-ink-900">Compare these results</h3>
-      <div className="overflow-x-auto rounded border border-ink-200 bg-white">
+      <div
+        role="region"
+        aria-label="Scrollable product comparison"
+        tabIndex={0}
+        className="overflow-x-auto rounded border border-ink-200 bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600"
+      >
         <table className="w-full min-w-[34rem] text-left text-sm">
           <caption className="sr-only">Catalog fields returned for these products</caption>
           <thead className="bg-gray-100 text-xs uppercase text-ink-600">

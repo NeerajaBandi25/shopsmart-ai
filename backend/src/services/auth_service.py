@@ -1,6 +1,7 @@
 """Authentication service for user registration, login, logout."""
 
 import asyncio
+import logging
 import math
 import re
 from datetime import datetime, timedelta, timezone
@@ -9,19 +10,31 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.exceptions import AuthenticationError, ConflictError, RateLimitError, ValidationError
-from src.core.observability import security_audit_event
+from src.core.exceptions import (
+    AppException,
+    AuthenticationError,
+    ConflictError,
+    RateLimitError,
+    ValidationError,
+)
+from src.core.observability import request_id_context, security_audit_event
 from src.core.rate_limiter import (
     check_login_rate_limit,
     record_failed_attempt,
     record_successful_login,
 )
-from src.core.security import generate_csrf_token, hash_password, verify_password
+from src.core.security import (
+    generate_csrf_token,
+    hash_password,
+    password_fits_bcrypt,
+    verify_password,
+)
 from src.models.user import User
 from src.repositories.user_repository import UserRepository
 
 LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5
 LOGIN_RATE_LIMIT_WINDOW_MINUTES = 15
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -50,6 +63,8 @@ class AuthService:
             ValidationError (400): Invalid email or weak password
             ConflictError (409): Email already exists
         """
+        self._validate_password_length(password)
+
         # Validate email format (RFC 5322 simplified)
         if not self._is_valid_email(email):
             security_audit_event("registration_failure", success=False, reason="invalid_email")
@@ -115,13 +130,16 @@ class AuthService:
         from src.repositories.session_repository import SessionRepository
         from src.repositories.user_repository import UserRepository
 
+        self._validate_password_length(password)
+
         # Initialize repositories
         user_repo = UserRepository(db=self.db)
         session_repo = SessionRepository(db=self.db)
         login_attempt_repo = LoginAttemptRepository(db=self.db)
 
-        # LoginAttempt rows remain the durable audit trail; the limiter provides
-        # shared Redis state when available and process-local fallback otherwise.
+        # LoginAttempt rows remain the durable audit trail. Redis atomically
+        # reserves each admitted attempt; the local fallback records failures
+        # after authentication, preserving development behavior.
         # The Redis client is synchronous, so run its calls outside the event loop.
         is_rate_limited = await asyncio.to_thread(check_login_rate_limit, ip_address)
         if is_rate_limited:
@@ -225,7 +243,20 @@ class AuthService:
             email=email, ip_address=ip_address, success=True, failure_reason=None
         )
         await self.db.commit()
-        await asyncio.to_thread(record_successful_login, ip_address)
+        try:
+            await asyncio.to_thread(record_successful_login, ip_address)
+        except AppException as exc:
+            # The session is already committed. Returning 503 here would hide
+            # a live session from the client; stale limiter entries only make
+            # subsequent login attempts more restrictive until their TTL ends.
+            logger.warning(
+                "login_rate_limit_reset_failed",
+                extra={
+                    "event": "login_rate_limit_reset_failed",
+                    "exception_type": type(exc).__name__,
+                    "request_id": request_id_context.get(),
+                },
+            )
 
         security_audit_event(
             "login_success",
@@ -281,6 +312,9 @@ class AuthService:
             ValidationError (400): incorrect current password or weak new password
         """
         from src.repositories.session_repository import SessionRepository
+
+        self._validate_password_length(current_password)
+        self._validate_password_length(new_password)
 
         user = await self.user_repo.get_user_by_id(user_id)
         if not user or not verify_password(current_password, user.password_hash):
@@ -348,7 +382,7 @@ class AuthService:
         Returns:
             bool: True if strong, False otherwise
         """
-        if not password or len(password) < 8:
+        if not password or len(password) < 8 or not password_fits_bcrypt(password):
             return False
 
         has_upper = any(c.isupper() for c in password)
@@ -357,3 +391,11 @@ class AuthService:
         has_special = any(not c.isalnum() for c in password)
 
         return has_upper and has_lower and has_digit and has_special
+
+    @staticmethod
+    def _validate_password_length(password: str) -> None:
+        if not password_fits_bcrypt(password):
+            raise ValidationError(
+                "Password must not exceed 72 UTF-8 bytes",
+                "password_too_long",
+            )

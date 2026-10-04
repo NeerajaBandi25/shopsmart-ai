@@ -20,7 +20,9 @@ class Settings(BaseSettings):
     database_echo: bool = os.getenv("DATABASE_ECHO", "False").lower() == "true"
     # Schema creation is an explicit local/test opt-in; production starts only
     # after the release process has applied Alembic migrations.
-    auto_create_tables: bool = os.getenv("AUTO_CREATE_TABLES", "False").lower() == "true"
+    # Let BaseSettings read this per instance; binding os.getenv at import time
+    # makes tests and command-local overrides stale after environment changes.
+    auto_create_tables: bool = False
 
     # Security
     secret_key: str

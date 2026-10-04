@@ -4,13 +4,14 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Cookie, Depends, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.v1.deps import get_current_user, get_db, require_csrf_token
 from src.core.config import settings
 from src.core.exceptions import AuthenticationError
 from src.core.observability import security_audit_event
+from src.core.security import password_fits_bcrypt
 from src.services.auth_service import AuthService
 
 # ============================================================================
@@ -22,7 +23,14 @@ class RegisterRequest(BaseModel):
     """Registration request model."""
 
     email: str = Field(..., min_length=1, description="User email address")
-    password: str = Field(..., min_length=1, description="User password")
+    password: str = Field(..., min_length=1, max_length=72, description="User password")
+
+    @field_validator("password")
+    @classmethod
+    def validate_bcrypt_password_length(cls, value: str) -> str:
+        if not password_fits_bcrypt(value):
+            raise ValueError("Password must not exceed 72 UTF-8 bytes")
+        return value
 
 
 class RegisterResponse(BaseModel):
@@ -37,7 +45,14 @@ class LoginRequest(BaseModel):
     """Login request model."""
 
     email: str = Field(..., min_length=1, description="User email address")
-    password: str = Field(..., min_length=1, description="User password")
+    password: str = Field(..., min_length=1, max_length=72, description="User password")
+
+    @field_validator("password")
+    @classmethod
+    def validate_bcrypt_password_length(cls, value: str) -> str:
+        if not password_fits_bcrypt(value):
+            raise ValueError("Password must not exceed 72 UTF-8 bytes")
+        return value
 
 
 class LoginResponse(BaseModel):

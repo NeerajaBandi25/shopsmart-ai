@@ -1,6 +1,7 @@
 """Session validation logic with inactivity timeout."""
 
 from datetime import datetime, timedelta, timezone
+import logging
 from typing import Optional
 from uuid import UUID
 
@@ -9,8 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from src.core.config import settings
+from src.core.observability import request_id_context
 from src.models.session import Session
 from src.models.user import User
+
+_logger = logging.getLogger("shopsmart.session")
 
 
 async def validate_session(
@@ -75,17 +79,31 @@ async def validate_session(
             "user_id": session.user_id,
             "refresh_cookie": True,  # Signal to refresh cookie in response
         }
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
         # Rollback transaction on database errors to release any locks
         await db_session.rollback()
-        # Log the error in a real application, but for now just return None
-        # to treat database errors as invalid sessions (secure fail-closed)
+        _logger.error(
+            "session_validation_database_error",
+            extra={
+                "event": "session_validation_database_error",
+                "exception_type": type(exc).__name__,
+                "request_id": request_id_context.get(),
+            },
+        )
+        # Treat database errors as invalid sessions (secure fail-closed).
         return None
-    except Exception:
+    except Exception as exc:
         # Rollback transaction on unexpected errors to release any locks
         await db_session.rollback()
-        # Unexpected errors - in a real app these would be logged and monitored
-        # For security, we fail closed but preserve the ability to diagnose
+        _logger.error(
+            "session_validation_unexpected_error",
+            extra={
+                "event": "session_validation_unexpected_error",
+                "exception_type": type(exc).__name__,
+                "request_id": request_id_context.get(),
+            },
+        )
+        # Preserve fail-closed behavior while exposing only safe diagnostics.
         return None
 
 

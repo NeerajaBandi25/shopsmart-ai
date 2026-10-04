@@ -258,8 +258,14 @@ export function CatalogHero({
   }
 
   if (!story || !selected) {
+    const isLoading = status === 'loading';
     return (
-      <section className={styles.unavailable} aria-labelledby="hero-heading">
+      <section
+        className={`${styles.unavailable} ${isLoading ? styles.loading : styles.fallback}`}
+        aria-labelledby="hero-heading"
+        data-hero-loading-shell={isLoading ? 'reserved' : undefined}
+        data-hero-fallback={isLoading ? undefined : 'compact'}
+      >
         <p>SHOPSMART / LIVE CATALOG</p>
         <h1 id="hero-heading">A clearer way to choose.</h1>
         <p>

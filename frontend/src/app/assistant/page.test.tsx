@@ -143,6 +143,10 @@ describe('shopping assistant page', () => {
     expect(
       await screen.findByRole('table', { name: 'Catalog fields returned for these products' })
     ).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Scrollable product comparison' })).toHaveAttribute(
+      'tabindex',
+      '0'
+    );
     expect(
       screen.getByRole('row', { name: /Wireless headphones Audio ₹49\.99 In stock \(3\)/ })
     ).toBeInTheDocument();

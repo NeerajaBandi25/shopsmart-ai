@@ -207,6 +207,32 @@ describe('homepage shopping experience', () => {
     await waitFor(() => expect(mockedGetHeroStory).toHaveBeenCalledTimes(1));
   });
 
+  it('reserves the hero story layout while its live shortlist is loading', async () => {
+    mockedGetHomepage.mockResolvedValue(page([product]));
+    mockedGetHeroStory.mockReturnValue(new Promise(() => {}));
+
+    render(<HomePageExperience />);
+
+    const loadingHeading = await screen.findByRole('heading', {
+      name: 'A clearer way to choose.',
+    });
+    expect(loadingHeading.closest('section')).toHaveAttribute(
+      'data-hero-loading-shell',
+      'reserved'
+    );
+  });
+
+  it('keeps a compact, actionable fallback when the live shortlist is unavailable', async () => {
+    mockedGetHomepage.mockResolvedValue(page([product]));
+    mockedGetHeroStory.mockResolvedValue(null);
+
+    render(<HomePageExperience />);
+
+    const browseLink = await screen.findByRole('link', { name: /Explore products/ });
+    expect(browseLink.closest('section')).toHaveAttribute('data-hero-fallback', 'compact');
+    expect(browseLink.closest('section')).not.toHaveAttribute('data-hero-loading-shell');
+  });
+
   it('restores the signed-in cart and eligible coupon in the hero after reload', async () => {
     const homepage = page([product]);
     homepage.promotions = [

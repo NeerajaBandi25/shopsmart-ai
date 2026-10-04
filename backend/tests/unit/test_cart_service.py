@@ -227,6 +227,7 @@ async def test_coupon_normalizes_code_and_invalid_attempt_preserves_existing(
     assert current["coupon_code"] == "SAVE20"
     checked = await service.check_coupon(user_id, "NOTREAL")
     assert checked["coupon_evaluation"]["eligible"] is False
+    assert checked["items"][0]["product_id"] == product.id
     assert [record.operation for record in promotion_logs] == [
         "coupon_apply",
         "coupon_apply",
