@@ -51,7 +51,7 @@ def test_catalog_fixture_is_stable_descriptive_and_uses_verified_product_photogr
     assert all("Model " not in product.name for product in first)
     assert all("Fictional catalog sample" not in product.description for product in first)
     image_urls = {product.image_url for product in first}
-    assert len(image_urls) == 75
+    assert len(image_urls) == 77
     assert all(
         product.image_url and product.image_url.startswith("/images/products/portfolio/")
         for product in first
@@ -78,6 +78,30 @@ def test_catalog_fixture_is_stable_descriptive_and_uses_verified_product_photogr
     assert all(
         product.list_price is None or product.list_price >= product.price for product in first
     )
+
+
+def test_shortlisted_laptop_families_expose_hero_and_alternate_image_roles():
+    products = {product.sku: product for product in build_catalog_products()}
+    expected = {
+        "PORT-LAPTOPS-01-03": "vellune-studybook",
+        "PORT-LAPTOPS-05-06": "vellune-copperfield",
+        "PORT-LAPTOPS-06-05": "merroway-featherweight",
+    }
+
+    for sku, family in expected.items():
+        product = products[sku]
+        gallery = ProductResponse.model_validate(product).image_gallery
+        assert [image["role"] for image in gallery] == ["hero", "alternate"]
+        assert gallery[0]["url"].endswith(f"{family}-hero.png")
+        assert gallery[1]["url"].endswith(f"{family}-alt.png")
+
+    for family_index in ("01", "05", "06"):
+        family_urls = {
+            product.image_url
+            for product in products.values()
+            if product.sku.startswith(f"PORT-LAPTOPS-{family_index}-")
+        }
+        assert len(family_urls) == 1
 
 
 def test_category_migration_preserves_rows_and_allows_new_families():
@@ -239,7 +263,7 @@ def test_authored_archetypes_match_distinct_photo_families_and_memory_is_explici
 
 
 def test_public_presentation_is_record_driven_and_ignores_malformed_metadata():
-    product = build_catalog_products()[0]
+    product = build_catalog_products()[80]
     response = ProductResponse.model_validate(product).model_dump(mode="json")
     assert response["delivery"] == "Standard portfolio delivery; timing confirmed at checkout"
     assert response["highlights"][0] == product.specifications["Key details"]

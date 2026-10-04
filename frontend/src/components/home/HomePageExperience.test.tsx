@@ -110,7 +110,7 @@ function page(items: Product[]): HomepageData {
 
 function heroStory(): HeroStoryData {
   return {
-    query: 'Best laptop for React development and local AI under ₹70,000',
+    query: 'Best laptop for coding and local AI under ₹70,000',
     budget_minor: 7_000_000,
     candidates,
     recommended_product_id: 'laptop-1',
@@ -180,9 +180,11 @@ describe('homepage shopping experience', () => {
     mockedGetHomepage.mockResolvedValue(page([product]));
     const { container } = render(<HomePageExperience />);
 
-    expect(await screen.findAllByRole('heading', { name: 'BUY WITH CLARITY.' })).toHaveLength(2);
-    expect(screen.getAllByText(/React development/)).toHaveLength(2);
-    expect(screen.getByText('16 GB+ memory')).toBeInTheDocument();
+    expect(await screen.findAllByRole('heading', { name: 'ASK BETTER. BUY BETTER.' })).toHaveLength(
+      2
+    );
+    expect(screen.getAllByText(heroStory().query)).toHaveLength(2);
+    expect(screen.getByText('16 GB+')).toBeInTheDocument();
     expect(screen.getByText(/SHOPSMART ANALYSIS/)).toBeInTheDocument();
     expect(screen.getByText(heroStory().recommendation)).toBeInTheDocument();
     expect(container.querySelector('a[href="/products/laptop-1"]')).toBeInTheDocument();

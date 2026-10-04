@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.product import Product
 from src.schemas.product import HeroEvidence, HeroStoryResponse, ProductResponse
 
-BRIEF = "Best laptop for React development and local AI under ₹70,000"
+BRIEF = "Best laptop for coding and local AI under ₹70,000"
 BUDGET_MINOR = 7_000_000
 SHORTLIST_SIZE = 3
 

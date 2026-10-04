@@ -11,39 +11,33 @@ import { formatInr } from '@/lib/currency';
 import styles from './CatalogHero.module.css';
 
 const steps = [
-  { label: 'Ask', progress: 0.025 },
-  { label: 'Understand', progress: 0.19 },
-  { label: 'Discover', progress: 0.37 },
-  { label: 'Compare', progress: 0.55 },
-  { label: 'Decide', progress: 0.73 },
+  { label: 'Ask', progress: 0.02 },
+  { label: 'Intent', progress: 0.23 },
+  { label: 'Discover', progress: 0.43 },
+  { label: 'Compare', progress: 0.62 },
+  { label: 'Best fit', progress: 0.78 },
   { label: 'Buy', progress: 0.9 },
-];
-
-const sceneHeadlines = [
-  ['BUY WITH', 'CLARITY.'],
-  ['START WITH', 'WHAT MATTERS.'],
-  ['THREE WAYS', 'FORWARD.'],
-  ['SEE WHAT', 'SETS THEM APART.'],
-  ['ONE CLEAR', 'BEST FIT.'],
-  ['MAKE THE', 'CALL YOURS.'],
+  { label: 'Explore', progress: 0.98 },
 ];
 
 const comparisonFields = [
   { label: 'MEMORY', key: 'RAM' },
   { label: 'WEIGHT', key: 'Weight' },
   { label: 'DISPLAY', key: 'Display' },
-  { label: 'PROCESSOR', key: 'Processor' },
   { label: 'GRAPHICS', key: 'Graphics' },
   { label: 'STORAGE', key: 'Storage' },
 ];
+
+const sceneStops = [0, 0.16, 0.34, 0.52, 0.72, 0.86, 0.96, 1];
 
 function sceneForProgress(progress: number): number {
   if (progress < 0.16) return 0;
   if (progress < 0.34) return 1;
   if (progress < 0.52) return 2;
-  if (progress < 0.7) return 3;
-  if (progress < 0.87) return 4;
-  return 5;
+  if (progress < 0.72) return 3;
+  if (progress < 0.86) return 4;
+  if (progress < 0.96) return 5;
+  return 6;
 }
 
 function matchingOffer(promotions: HomepageData['promotions'], category: string | null) {
@@ -53,13 +47,22 @@ function matchingOffer(promotions: HomepageData['promotions'], category: string 
 }
 
 function evidenceFor(story: HeroStoryData) {
-  return story.evidence.map((fact) => (
-    <span className={styles.evidenceChip} key={fact.label}>
-      <i aria-hidden="true" />
-      <span>{fact.label}</span>
+  return story.evidence.slice(0, 3).map((fact, index) => (
+    <span className={styles.evidenceChip} key={`${fact.label}-${index}`}>
+      <i aria-hidden="true">0{index + 1}</i>
       <b>{fact.value}</b>
+      <small>{fact.label}</small>
     </span>
   ));
+}
+
+function imageForRole(product: NonNullable<HeroStoryData['candidates'][number]>, role: string) {
+  return (
+    product.image_gallery?.find((image) => image.role === role) ?? {
+      url: product.image_url ?? '',
+      alt: product.image_alt ?? product.name,
+    }
+  );
 }
 
 export function CatalogHero({
@@ -86,7 +89,18 @@ export function CatalogHero({
   const syncCartCount = useCommerceStore((state) => state.syncCartCount);
   const products = story?.candidates ?? [];
   const selected = products.find((product) => product.id === story?.recommended_product_id);
-  const offer = matchingOffer(promotions, selected?.category ?? 'laptops');
+  const displayProducts = selected
+    ? [
+        ...products.filter((product) => product.id !== selected.id).slice(0, 1),
+        selected,
+        ...products.filter((product) => product.id !== selected.id).slice(1),
+      ]
+    : products;
+  const openingProduct = displayProducts.find((product) => product.id !== selected?.id) ?? selected;
+  const openingImage = openingProduct ? imageForRole(openingProduct, 'hero') : null;
+  const intentImage = openingProduct ? imageForRole(openingProduct, 'alternate') : null;
+  const purchaseImage = selected ? imageForRole(selected, 'alternate') : null;
+  const offer = matchingOffer(promotions, selected?.category ?? null);
   const selectedCartItem = cart?.items.find((item) => item.product_id === selected?.id);
   const selectedAlreadyAdded = Boolean(selectedCartItem?.quantity);
   const selectedAtLimit = Boolean(
@@ -120,9 +134,11 @@ export function CatalogHero({
   useEffect(() => {
     const section = sectionRef.current;
     if (!section) return;
-
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const updateMotionPreference = () => setReducedMotion(motionPreference.matches);
+    const updateMotionPreference = () => {
+      setReducedMotion(motionPreference.matches);
+      section.dataset.reduced = String(motionPreference.matches);
+    };
     updateMotionPreference();
     motionPreference.addEventListener('change', updateMotionPreference);
 
@@ -130,33 +146,49 @@ export function CatalogHero({
     const updateProgress = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        if (!section || motionPreference.matches) return;
+        if (motionPreference.matches) return;
         const bounds = section.getBoundingClientRect();
         const travel = Math.max(1, section.offsetHeight - window.innerHeight);
         const progress = Math.min(1, Math.max(0, -bounds.top / travel));
         section.style.setProperty('--story-progress', String(progress));
-        section.style.setProperty('--scene-drift', `${progress * 46}px`);
-        section.style.setProperty('--glow-scale', String(1 + progress * 0.08));
-        section.style.setProperty('--progress-width', `${progress * 100}%`);
-        section.style.setProperty('--hero-scale', String(1.1 - progress * 0.48));
-        const release = Math.min(1, Math.max(0, (progress - 0.94) / 0.06));
-        section.style.setProperty('--light-reveal', String(release));
-        section.style.setProperty('--release-wipe', `${(1 - release) * 100}%`);
-        section.dataset.release = String(progress >= 0.965);
+        section.style.setProperty('--light-shift', `${progress * 100}%`);
+        section.style.setProperty('--reveal', `${Math.min(100, Math.max(0, progress * 122))}%`);
         const nextScene = sceneForProgress(progress);
+        const sceneProgress = Math.min(
+          1,
+          Math.max(
+            0,
+            (progress - sceneStops[nextScene]) /
+              Math.max(0.001, sceneStops[nextScene + 1] - sceneStops[nextScene])
+          )
+        );
+        section.style.setProperty('--scene-progress', String(sceneProgress));
+        section.style.setProperty('--object-lift', `${-18 * sceneProgress}px`);
+        section.style.setProperty('--object-tilt', `${6 * sceneProgress}deg`);
+        section.style.setProperty('--object-scale', String(1.08 - sceneProgress * 0.12));
+        section.style.setProperty('--mask-x', `${43 + sceneProgress * 10}%`);
+        section.style.setProperty('--mask-y', `${42 + sceneProgress * 8}%`);
+        section.style.setProperty('--intent-product-y', `${14 + sceneProgress * 7}vh`);
+        section.style.setProperty('--intent-drift', `${(0.5 - sceneProgress) * 36}px`);
+        section.style.setProperty('--intent-orbit-y', `${55 + (0.5 - sceneProgress) * 8}%`);
+        section.style.setProperty('--candidate-left-shift', `${(sceneProgress - 0.5) * 46}px`);
+        section.style.setProperty('--candidate-right-shift', `${(0.5 - sceneProgress) * 46}px`);
+        section.style.setProperty('--candidate-center-lift', `${(0.5 - sceneProgress) * 22}px`);
+        section.style.setProperty('--compare-left-y', `${8 - sceneProgress * 8}%`);
+        section.style.setProperty('--compare-right-y', `${7 - sceneProgress * 7}%`);
+        section.style.setProperty('--compare-left-tilt', `${14 - sceneProgress * 10}deg`);
+        section.style.setProperty('--compare-right-tilt', `${-14 + sceneProgress * 10}deg`);
+        section.style.setProperty('--compare-rail-bottom', `${18 + sceneProgress * 3}%`);
+        section.style.setProperty('--recommendation-scale', String(0.9 + sceneProgress * 0.1));
         section.dataset.scene = String(nextScene);
         setScene((current) => (current === nextScene ? current : nextScene));
       });
     };
-
     if (!motionPreference.matches) {
       updateProgress();
       window.addEventListener('scroll', updateProgress, { passive: true });
       window.addEventListener('resize', updateProgress);
-    } else {
-      section.dataset.scene = '0';
     }
-
     return () => {
       cancelAnimationFrame(frame);
       motionPreference.removeEventListener('change', updateMotionPreference);
@@ -228,7 +260,7 @@ export function CatalogHero({
   if (!story || !selected) {
     return (
       <section className={styles.unavailable} aria-labelledby="hero-heading">
-        <p className={styles.overline}>SHOPSMART INTELLIGENCE</p>
+        <p>SHOPSMART / LIVE CATALOG</p>
         <h1 id="hero-heading">A clearer way to choose.</h1>
         <p>
           {status === 'loading'
@@ -245,29 +277,17 @@ export function CatalogHero({
   const comparisonValues = comparisonFields
     .map((field) => ({
       ...field,
-      values: products.map((product) =>
-        String(product.specifications?.[field.key] ?? 'Not listed')
-      ),
+      values: displayProducts.map((product) => String(product.specifications?.[field.key] ?? '—')),
     }))
     .filter(
-      (field) =>
-        field.values.some((value) => value !== 'Not listed') && new Set(field.values).size > 1
-    );
-  comparisonValues.push({
-    label: 'PRICE',
-    key: 'price',
-    values: products.map((product) => formatInr(product.price)),
-  });
-  const visibleComparisonValues = [
-    ...comparisonValues.filter((fact) => fact.key !== 'price').slice(0, 3),
-    comparisonValues[comparisonValues.length - 1],
-  ];
-  const displayCopy = sceneHeadlines[scene];
+      (field) => field.values.some((value) => value !== '—') && new Set(field.values).size > 1
+    )
+    .slice(0, 3);
   const discount = cart?.coupon_evaluation?.eligible
     ? cart.coupon_evaluation.discount_cents
     : (cart?.discount_total_cents ?? 0);
   const finalPrice = cart?.total_cents ?? selected.price;
-  const hasVerifiedOffer = discount > 0;
+  const cartCount = cart?.items.reduce((total, item) => total + item.quantity, 0) ?? 0;
 
   return (
     <section
@@ -277,274 +297,286 @@ export function CatalogHero({
       style={
         {
           '--story-progress': '0',
-          '--scene-drift': '0px',
-          '--hero-scale': '1.1',
-          '--glow-scale': '1',
-          '--progress-width': '0%',
-          '--light-reveal': '0',
+          '--scene-progress': '0',
+          '--light-shift': '0%',
+          '--reveal': '0%',
+          '--object-lift': '0px',
+          '--object-tilt': '0deg',
+          '--object-scale': '1',
+          '--mask-x': '43%',
+          '--mask-y': '42%',
+          '--intent-product-y': '14vh',
+          '--intent-drift': '0px',
+          '--intent-orbit-y': '55%',
+          '--candidate-left-shift': '0px',
+          '--candidate-right-shift': '0px',
+          '--candidate-center-lift': '0px',
+          '--compare-left-y': '8%',
+          '--compare-right-y': '7%',
+          '--compare-left-tilt': '14deg',
+          '--compare-right-tilt': '-14deg',
+          '--compare-rail-bottom': '18%',
+          '--recommendation-scale': '1',
         } as CSSProperties
       }
-      aria-label="ShopSmart guided shopping story"
+      aria-label="ShopSmart AI shopping story"
     >
       <div className={styles.sticky}>
-        <div className={styles.environment} aria-hidden="true">
-          <div className={styles.environmentGlow} />
-          <div className={styles.environmentFloor} />
-          <div className={styles.environmentGrain} />
-        </div>
+        <div className={styles.stage} data-scene={scene}>
+          <div className={styles.ambient} aria-hidden="true">
+            <div className={styles.halo} />
+            <div className={styles.lightBlade} />
+            <div className={styles.floorLine} />
+            <div className={styles.grain} />
+          </div>
 
-        <div className={styles.topline}>
-          <Link href="/" className={styles.wordmark} aria-label="ShopSmart home">
-            SHOPSMART <i>AI</i>
-          </Link>
-          <span className={styles.edition}>A LIVE CATALOG, MADE LEGIBLE</span>
-          <Link href="/cart" className={styles.cartIndicator} aria-label="View cart">
-            <span className={styles.cartGlyph} aria-hidden="true">
-              ↗
-            </span>
-            <span>CART</span>
-            <b>{cart?.items.reduce((total, item) => total + item.quantity, 0) ?? 0}</b>
-          </Link>
-        </div>
+          <header className={styles.topbar}>
+            <Link href="/" className={styles.wordmark} aria-label="ShopSmart home">
+              SHOPSMART<span>AI</span>
+            </Link>
+            <p>
+              LIVE CATALOG <i /> DECISION ENGINE
+            </p>
+            <Link href="/cart" className={styles.cartLink} aria-label="View cart">
+              CART <b>{cartCount}</b>
+            </Link>
+          </header>
 
-        <div className={styles.sceneCanvas} data-scene={scene}>
-          <div className={styles.copyLayer} aria-hidden="true">
-            {sceneHeadlines.map((headline, index) => (
-              <div className={styles.headlineScene} data-headline={index} key={headline[0]}>
-                <span>{headline[0]}</span>
-                <em>{headline[1]}</em>
+          <div className={styles.storyCanvas}>
+            <h1 className={styles.openingTitle} data-layer="opening" aria-hidden={scene !== 0}>
+              <span>ASK BETTER.</span>
+              <span>
+                BUY <i>BETTER.</i>
+              </span>
+            </h1>
+            <div className={styles.openingLabel} data-layer="opening" aria-hidden={scene !== 0}>
+              <span>01 — THE QUESTION</span>
+              <span>SCROLL TO SEE IT THINK</span>
+            </div>
+
+            <div className={styles.primaryObject} data-layer="primary" aria-hidden="true">
+              <div className={styles.primaryMask}>
+                {openingImage && (
+                  <>
+                    <Image
+                      src={openingImage.url || '/images/products/portfolio/laptops/01.jpg'}
+                      alt=""
+                      fill
+                      priority
+                      sizes="(max-width: 700px) 96vw, 72vw"
+                      className={`${styles.primaryImage} ${styles.askImage}`}
+                    />
+                    <Image
+                      src={
+                        intentImage?.url ||
+                        openingImage.url ||
+                        '/images/products/portfolio/laptops/01.jpg'
+                      }
+                      alt=""
+                      fill
+                      sizes="(max-width: 700px) 96vw, 72vw"
+                      className={`${styles.primaryImage} ${styles.intentImage}`}
+                    />
+                  </>
+                )}
               </div>
-            ))}
-          </div>
-          <h1 className={styles.srOnly} aria-live="polite">
-            {displayCopy.join(' ')}
-          </h1>
-
-          <div className={styles.introMeta} data-visible={scene === 0}>
-            <span className={styles.liveDot} />
-            <span>ASK → DISCOVER → DECIDE</span>
-            <p>Your priorities in. A reasoned choice out.</p>
-          </div>
-
-          <figure className={styles.heroObject} data-visible={scene < 2} aria-hidden="true">
-            <div className={styles.heroImageMask}>
-              <Image
-                src={selected.image_url || '/images/products/portfolio/laptops/01.jpg'}
-                alt=""
-                fill
-                priority
-                sizes="(max-width: 700px) 74vw, 48vw"
-                className={styles.heroImage}
-              />
+              <span className={styles.objectLight} />
+              <span className={styles.primaryBrand}>
+                {openingProduct?.brand || openingProduct?.category}
+              </span>
+              <span className={styles.primaryName}>{openingProduct?.name}</span>
             </div>
-            <figcaption>
-              <span>{selected.brand || selected.category}</span>
-              <b>{selected.name}</b>
-            </figcaption>
-          </figure>
 
-          <div
-            className={styles.intentScene}
-            data-story-view="intent"
-            data-visible={scene === 1}
-            aria-hidden={scene !== 1}
-          >
-            <span className={styles.sceneIndex}>01 / THE BRIEF</span>
-            <p className={styles.queryText}>
-              <span>Find me a</span> <b>laptop</b> <span>for</span> <b>React development</b>{' '}
-              <span>and</span> <b>local AI</b>
-            </p>
-            <div className={styles.intentTokens}>
-              <span>16 GB+ memory</span>
-              <span>IN STOCK</span>
-              <span>UNDER {formatInr(story.budget_minor)}</span>
+            <div className={styles.intentStory} data-layer="intent" aria-hidden={scene !== 1}>
+              <p className={styles.eyebrow}>02 — YOUR INTENT, DECODED</p>
+              <h2>{story.query}</h2>
+              <div className={styles.intentOrbit} aria-label="Understood requirements">
+                <span>CODING</span>
+                <span>LOCAL AI</span>
+                <span>16 GB+</span>
+                <b>UNDER {formatInr(story.budget_minor)}</b>
+              </div>
+              <p className={styles.understood}>
+                <i>✳</i> Request understood <span>·</span> checking real stock and specs
+              </p>
             </div>
-            <p className={styles.recognition}>
-              <i aria-hidden="true">✳</i> Intent understood <span>·</span> budget and availability
-              checked against the catalog
-            </p>
-          </div>
 
-          <div
-            className={styles.candidateScene}
-            data-story-view="candidates"
-            data-visible={scene === 2}
-            aria-hidden={scene !== 2}
-          >
-            <div className={styles.sectionLabel}>
-              <span>02 / THREE LIVE OPTIONS</span>
-              <b>FROM THE CATALOG</b>
-            </div>
-            <div className={styles.objects}>
-              {products.map((product, index) => (
-                <article
-                  className={`${styles.object} ${styles[`object${index + 1}`]}`}
-                  data-selected={product.id === story.recommended_product_id}
-                  key={product.id}
-                >
+            <div className={styles.discoveryStory} data-layer="discovery" aria-hidden={scene !== 2}>
+              <div className={styles.sceneHeading}>
+                <span>03 / DISCOVER</span>
+                <h2>Three ways forward.</h2>
+              </div>
+              <div className={styles.productConstellation}>
+                {displayProducts.map((product, index) => (
                   <Link
                     href={`/products/${encodeURIComponent(product.id)}`}
-                    className={styles.objectLink}
+                    className={`${styles.candidate} ${styles[`candidate${index + 1}`]}`}
+                    data-selected={product.id === selected.id}
+                    key={product.id}
                     tabIndex={scene === 2 ? 0 : -1}
-                    aria-label={`View ${product.name}`}
+                    aria-label={`View ${product.name}, ${formatInr(product.price)}`}
                   >
-                    <span className={styles.objectImage}>
+                    <span className={styles.candidateImage}>
                       <Image
                         src={product.image_url || ''}
                         alt={product.image_alt || product.name}
                         fill
-                        sizes="(max-width: 700px) 30vw, 24vw"
+                        sizes="(max-width: 700px) 58vw, 38vw"
                         loading={index === 0 ? 'eager' : 'lazy'}
                       />
                     </span>
-                    <span className={styles.objectNumber}>0{index + 1}</span>
-                    <span className={styles.objectBrand}>{product.brand || product.category}</span>
-                    <strong className={styles.objectName}>{product.name}</strong>
-                    <span className={styles.objectPrice}>{formatInr(product.price)}</span>
+                    <span className={styles.candidateIndex}>0{index + 1}</span>
+                    <span className={styles.candidateMeta}>
+                      <small>{product.brand || product.category}</small>
+                      <b>{product.name}</b>
+                      <i>{formatInr(product.price)}</i>
+                    </span>
                   </Link>
-                </article>
-              ))}
+                ))}
+              </div>
+              <p className={styles.sourceNote}>
+                THREE IN-STOCK MATCHES <i /> FROM YOUR LIVE CATALOG
+              </p>
             </div>
-            <div className={styles.candidateFoot}>
-              <span>Three distinct image-backed families</span>
-              <i />
-            </div>
-          </div>
 
-          <div
-            className={styles.comparisonScene}
-            data-story-view="comparison"
-            data-visible={scene === 3}
-            aria-hidden={scene !== 3}
-          >
-            <div className={styles.sectionLabel}>
-              <span>03 / THE DIFFERENCE IS IN THE DETAIL</span>
-              <b>CATALOG FACTS, ALIGNED</b>
-            </div>
-            <div className={styles.compareObjects}>
-              {products.map((product, index) => (
-                <div
-                  className={`${styles.compareObject} ${styles[`object${index + 1}`]}`}
-                  key={product.id}
-                >
-                  <span className={styles.compareImage}>
-                    <Image
-                      src={product.image_url || ''}
-                      alt=""
-                      fill
-                      sizes="(max-width: 700px) 26vw, 20vw"
-                      loading="lazy"
-                    />
-                  </span>
-                </div>
-              ))}
-            </div>
-            <svg
-              className={styles.connectorMap}
-              viewBox="0 0 1000 400"
-              preserveAspectRatio="none"
-              aria-hidden="true"
+            <div
+              className={styles.comparisonStory}
+              data-layer="comparison"
+              aria-hidden={scene !== 3}
             >
-              <path d="M160 125 C160 270 160 270 160 352 M500 125 C500 270 500 270 500 352 M840 125 C840 270 840 270 840 352" />
-              <path d="M160 352 H840" />
-              <circle cx="160" cy="352" r="4" />
-              <circle cx="500" cy="352" r="4" />
-              <circle cx="840" cy="352" r="4" />
-            </svg>
-            <div className={styles.factOrbit}>
-              {visibleComparisonValues.map((fact, index) => (
-                <div className={`${styles.factLine} ${styles[`fact${index + 1}`]}`} key={fact.key}>
-                  <span>{fact.label}</span>
-                  {fact.values.map((value, valueIndex) => (
-                    <b key={`${fact.key}-${products[valueIndex].id}`}>{value}</b>
+              <div className={styles.sceneHeading}>
+                <span>04 / COMPARE</span>
+                <h2>
+                  Same brief.
+                  <br />
+                  <em>Different strengths.</em>
+                </h2>
+              </div>
+              <div className={styles.compareObjects}>
+                {displayProducts.map((product, index) => (
+                  <div
+                    className={`${styles.compareProduct} ${styles[`compare${index + 1}`]}`}
+                    key={product.id}
+                  >
+                    <span className={styles.compareImage}>
+                      <Image
+                        src={product.image_url || ''}
+                        alt=""
+                        fill
+                        sizes="(max-width: 700px) 34vw, 25vw"
+                        loading="lazy"
+                      />
+                    </span>
+                    <b>{product.brand || product.name}</b>
+                  </div>
+                ))}
+              </div>
+              <div
+                className={styles.comparisonRail}
+                aria-label="Live product specification comparison"
+              >
+                {comparisonValues.map((fact) => (
+                  <div className={styles.specRail} key={fact.key}>
+                    <span className={styles.specLabel}>{fact.label}</span>
+                    {fact.values.map((value, valueIndex) => (
+                      <b
+                        className={
+                          displayProducts[valueIndex].id === selected.id ? styles.specChosen : ''
+                        }
+                        key={`${fact.key}-${displayProducts[valueIndex].id}`}
+                      >
+                        {value}
+                        <i aria-hidden="true" />
+                      </b>
+                    ))}
+                  </div>
+                ))}
+                <div className={`${styles.specRail} ${styles.priceRail}`}>
+                  <span className={styles.specLabel}>PRICE</span>
+                  {displayProducts.map((product) => (
+                    <b
+                      className={product.id === selected.id ? styles.specChosen : ''}
+                      key={product.id}
+                    >
+                      {formatInr(product.price)}
+                      <i aria-hidden="true" />
+                    </b>
                   ))}
                 </div>
-              ))}
+              </div>
+              <p className={styles.sourceNote}>
+                PUBLISHED PRODUCT SPECS <i /> DIFFERENCES, MADE VISIBLE
+              </p>
             </div>
-            <p className={styles.factsDisclaimer}>
-              Published specifications only · no unverified performance claims
-            </p>
-          </div>
 
-          <div
-            className={styles.decisionScene}
-            data-story-view="recommendation"
-            data-visible={scene === 4}
-            aria-hidden={scene !== 4}
-          >
-            <div className={styles.sectionLabel}>
-              <span>04 / SHOPSMART ANALYSIS</span>
-              <b>BEST FIT</b>
-            </div>
-            <div className={styles.decisionProduct}>
-              <span className={styles.decisionImage}>
-                <Image
-                  src={selected.image_url || ''}
-                  alt=""
-                  fill
-                  sizes="(max-width: 700px) 68vw, 42vw"
-                  loading="lazy"
-                />
-              </span>
-              <div className={styles.decisionHalo} />
-              <span className={styles.bestFitStamp}>
-                BEST
-                <br />
-                FIT
-              </span>
-            </div>
-            <div className={styles.decisionCopy}>
-              <p className={styles.overline}>A CLEARER CALL</p>
-              <h2>{selected.name}</h2>
-              <p className={styles.decisionReason}>{story.recommendation}</p>
-              <div className={styles.evidenceList}>{evidenceFor(story)}</div>
-              <strong className={styles.decisionPrice}>{formatInr(selected.price)}</strong>
-              <span className={styles.budgetDelta}>
-                {formatInr(story.savings_minor)} below your budget
-              </span>
-            </div>
-            <div className={styles.recedingProducts} aria-hidden="true">
-              {products
-                .filter((product) => product.id !== selected.id)
-                .map((product, index) => (
-                  <span
-                    className={styles.recedingProduct}
-                    key={product.id}
-                    style={{ '--offset': index } as CSSProperties}
-                  >
-                    <Image src={product.image_url || ''} alt="" fill sizes="12vw" loading="lazy" />
-                  </span>
-                ))}
-            </div>
-          </div>
-
-          <div
-            className={styles.commerceScene}
-            data-story-view="commerce"
-            data-visible={scene === 5}
-            aria-hidden={scene !== 5}
-          >
-            <div className={styles.sectionLabel}>
-              <span>05 / WHEN YOU’RE READY</span>
-              <b>THE CHOICE IS YOURS</b>
-            </div>
-            <div className={styles.commerceObject}>
-              <span className={styles.commerceImage}>
-                <Image
-                  src={selected.image_url || ''}
-                  alt=""
-                  fill
-                  sizes="(max-width: 700px) 58vw, 36vw"
-                  loading="lazy"
-                />
-              </span>
-              <div className={styles.commerceCopy}>
-                <span className={styles.overline}>SELECTED FROM THE LIVE CATALOG</span>
+            <div
+              className={styles.recommendationStory}
+              data-layer="recommendation"
+              aria-hidden={scene !== 4}
+            >
+              <p className={styles.eyebrow}>05 — SHOPSMART ANALYSIS</p>
+              <div className={styles.recommendationObject}>
+                {products
+                  .filter((product) => product.id !== selected.id)
+                  .map((product, index) => (
+                    <span
+                      className={`${styles.recedingObject} ${styles[`receding${index + 1}`]}`}
+                      key={product.id}
+                    >
+                      <Image
+                        src={product.image_url || ''}
+                        alt=""
+                        fill
+                        sizes="16vw"
+                        loading="lazy"
+                      />
+                    </span>
+                  ))}
+                <span className={styles.recommendationImage}>
+                  <Image
+                    src={selected.image_url || ''}
+                    alt=""
+                    fill
+                    sizes="(max-width: 700px) 92vw, 62vw"
+                    loading="lazy"
+                  />
+                </span>
+                <span className={styles.bestFit}>
+                  BEST
+                  <br />
+                  <b>FIT</b>
+                </span>
+              </div>
+              <div className={styles.recommendationCopy}>
                 <h2>{selected.name}</h2>
+                <p>{story.recommendation}</p>
+                <div className={styles.evidence}>{evidenceFor(story)}</div>
+                <div className={styles.recommendationPrice}>
+                  <b>{formatInr(selected.price)}</b>
+                  <span>{formatInr(story.savings_minor)} below your budget</span>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.commerceStory} data-layer="commerce" aria-hidden={scene !== 5}>
+              <p className={styles.eyebrow}>06 — WHEN YOU’RE READY</p>
+              <div className={styles.commerceProduct}>
+                <div className={styles.commerceProductImage}>
+                  <Image
+                    src={purchaseImage?.url || selected.image_url || ''}
+                    alt=""
+                    fill
+                    sizes="(max-width: 700px) 88vw, 58vw"
+                    loading="lazy"
+                  />
+                </div>
                 <p>
-                  {selected.stock_quantity} in stock <i /> {selected.brand}
+                  {selected.brand || selected.category}
+                  <span>·</span>
+                  {selected.stock_quantity} IN STOCK
                 </p>
-                <strong>{formatInr(selected.price)}</strong>
+                <h2>{selected.name}</h2>
+                <b className={styles.commercePrice}>{formatInr(selected.price)}</b>
                 <button
                   className={styles.addButton}
                   type="button"
@@ -569,73 +601,102 @@ export function CatalogHero({
                   {cartMessage || (selectedAlreadyAdded ? 'This product is in your cart.' : '')}
                 </p>
               </div>
-            </div>
-            <div
-              className={styles.cartFlight}
-              data-flying={cartState === 'added'}
-              aria-hidden="true"
-            >
-              <Image src={selected.image_url || ''} alt="" fill sizes="120px" />
-            </div>
-            <div
-              className={styles.cartDestination}
-              data-arrived={cartState === 'added'}
-              aria-live="polite"
-            >
-              <span>YOUR CART</span>
-              <b>{cart?.items.reduce((total, item) => total + item.quantity, 0) ?? 0}</b>
-              {cartState === 'added' && <i aria-hidden="true">✓</i>}
-            </div>
-            {offer && (
-              <div className={styles.offerPanel}>
-                <span className={styles.overline}>LIVE OFFER · CART CHECKS ELIGIBILITY</span>
-                <strong>{offer.name}</strong>
-                <p>
-                  {offer.discount_type === 'percentage'
-                    ? `${offer.discount_value}% off eligible items`
-                    : `${formatInr(offer.discount_value)} off eligible items`}
-                </p>
-                {(cartState === 'added' || selectedAlreadyAdded) && (
-                  <form className={styles.couponForm} onSubmit={applyOffer}>
-                    <label className="sr-only" htmlFor="hero-offer-code">
-                      Offer code
-                    </label>
-                    <input
-                      id="hero-offer-code"
-                      value={coupon}
-                      onChange={(event) => setCoupon(event.target.value)}
-                      placeholder="Enter offer code"
-                      autoComplete="off"
-                    />
-                    <button type="submit" disabled={!coupon.trim()}>
-                      CHECK & APPLY
-                    </button>
-                  </form>
-                )}
-                {couponMessage && (
-                  <span className={styles.couponResult} role="status">
-                    {couponMessage}
-                  </span>
-                )}
-                {hasVerifiedOffer && (
-                  <b className={styles.verifiedDiscount}>
-                    CART VERIFIED · −{formatInr(discount)} · NEW TOTAL {formatInr(finalPrice)}
-                  </b>
-                )}
-                {cartState !== 'added' && !selectedAlreadyAdded && (
-                  <small>Add the selected product to check this offer against your cart.</small>
-                )}
+              <div
+                className={styles.cartOrbit}
+                data-arrived={cartState === 'added'}
+                aria-live="polite"
+              >
+                <span>YOUR CART</span>
+                <b>{cartCount}</b>
+                {cartState === 'added' && <i>✓</i>}
               </div>
-            )}
-            <Link
-              href={`/products/${encodeURIComponent(selected.id)}`}
-              className={styles.detailLink}
-            >
-              Read the full product detail <span aria-hidden="true">↗</span>
-            </Link>
+              <span
+                className={styles.cartFlight}
+                data-flying={cartState === 'added'}
+                aria-hidden="true"
+              >
+                <Image src={selected.image_url || ''} alt="" fill sizes="100px" />
+              </span>
+              {offer && (
+                <div className={styles.offerStory}>
+                  <span>LIVE CATALOG OFFER · VERIFIED IN CART</span>
+                  <b>{offer.name}</b>
+                  <small>
+                    {offer.discount_type === 'percentage'
+                      ? `${offer.discount_value}% off eligible items`
+                      : `${formatInr(offer.discount_value)} off eligible items`}
+                  </small>
+                  {(cartState === 'added' || selectedAlreadyAdded) && (
+                    <form onSubmit={applyOffer}>
+                      <label className="sr-only" htmlFor="hero-offer-code">
+                        Promotion code
+                      </label>
+                      <input
+                        id="hero-offer-code"
+                        value={coupon}
+                        onChange={(event) => setCoupon(event.target.value)}
+                        placeholder="Promotion code"
+                        autoComplete="off"
+                      />
+                      <button type="submit" disabled={!coupon.trim()}>
+                        APPLY
+                      </button>
+                    </form>
+                  )}
+                  {couponMessage && <small role="status">{couponMessage}</small>}
+                  {discount > 0 && (
+                    <strong>
+                      CART VERIFIED · −{formatInr(discount)} · {formatInr(finalPrice)} TOTAL
+                    </strong>
+                  )}
+                </div>
+              )}
+              <Link
+                className={styles.pdpLink}
+                href={`/products/${encodeURIComponent(selected.id)}`}
+              >
+                PRODUCT DETAILS <span>↗</span>
+              </Link>
+            </div>
+
+            <div className={styles.releaseStory} data-layer="release" aria-hidden={scene !== 6}>
+              <p className={styles.eyebrow}>07 — DECIDE, THEN EXPLORE</p>
+              <h2>
+                Now the catalog
+                <br />
+                <em>opens up.</em>
+              </h2>
+              <Link
+                className={styles.releaseProduct}
+                href={`/products/${encodeURIComponent(selected.id)}`}
+              >
+                <span className={styles.releaseImage}>
+                  <Image src={selected.image_url || ''} alt="" fill sizes="28vw" loading="lazy" />
+                </span>
+                <span>
+                  <small>YOUR BEST FIT · LIVE CATALOG</small>
+                  <b>{selected.name}</b>
+                  <i>
+                    {formatInr(selected.price)} <em>VIEW PRODUCT ↗</em>
+                  </i>
+                </span>
+              </Link>
+              <nav aria-label="Explore catalog categories">
+                {categories.slice(0, 3).map((category, index) => (
+                  <Link
+                    href={`/products?category=${encodeURIComponent(category.value)}`}
+                    key={category.value}
+                  >
+                    <i>0{index + 1}</i>
+                    <b>{category.label}</b>
+                    <small>{category.count} products</small>
+                  </Link>
+                ))}
+              </nav>
+            </div>
           </div>
 
-          <div className={styles.sceneNav} aria-label="Shopping story progress">
+          <nav className={styles.progressNav} aria-label="Shopping story progress">
             <div className={styles.progressTrack}>
               <i />
             </div>
@@ -647,66 +708,20 @@ export function CatalogHero({
                 aria-current={scene === index ? 'step' : undefined}
                 onClick={() => jumpToStep(step.progress)}
               >
-                <span>0{index + 1}</span>
-                <b>{step.label}</b>
-              </button>
-            ))}
-          </div>
-          <p className={styles.scrollCue} aria-hidden="true">
-            <span>SCROLL TO MOVE THROUGH THE DECISION</span>
-            <i>↓</i>
-          </p>
-        </div>
-
-        <div className={styles.releaseCue} aria-hidden="true">
-          <span>YOUR NEXT FIND IS JUST BELOW</span>
-          <i />
-        </div>
-        <div className={styles.releaseStorefront}>
-          <p>THE STORY CONTINUES IN THE CATALOG</p>
-          <h2>Browse by category</h2>
-          <nav aria-label="Browse catalog categories">
-            {categories.slice(0, 3).map((category, index) => (
-              <Link
-                href={`/products?category=${encodeURIComponent(category.value)}`}
-                key={category.value}
-              >
                 <i>0{index + 1}</i>
-                <b>{category.label}</b>
-                <small>{category.count} listings</small>
-              </Link>
+                <span>{step.label}</span>
+              </button>
             ))}
           </nav>
         </div>
-        <Link
-          href={`/products/${encodeURIComponent(selected.id)}`}
-          className={styles.releasePreview}
-          aria-label={`Continue with ${selected.name} in the live catalog`}
-        >
-          <span className={styles.releaseImage}>
-            <Image src={selected.image_url || ''} alt="" fill sizes="72px" />
-          </span>
-          <span className={styles.releaseCopy}>
-            <i>FROM THE DECISION TO THE CATALOG</i>
-            <b>{selected.name}</b>
-            <small>{formatInr(selected.price)} · View product</small>
-          </span>
-          <span className={styles.releaseArrow} aria-hidden="true">
-            ↗
-          </span>
-        </Link>
       </div>
 
       <div className={styles.reducedStory} data-reduced-story="true">
-        <div className={styles.reducedIntro}>
-          <p className={styles.overline}>SHOPSMART INTELLIGENCE · A LIVE CATALOG</p>
-          <h2>
-            BUY WITH <em>CLARITY.</em>
-          </h2>
-          <p>{story.query}</p>
-        </div>
+        <p className={styles.eyebrow}>SHOPSMART · LIVE CATALOG</p>
+        <h2>ASK BETTER. BUY BETTER.</h2>
+        <p className={styles.reducedQuery}>{story.query}</p>
         <div className={styles.reducedCandidates}>
-          {products.map((product) => (
+          {displayProducts.map((product) => (
             <article key={product.id} data-recommended={product.id === selected.id}>
               <Image
                 src={product.image_url || ''}
@@ -714,13 +729,14 @@ export function CatalogHero({
                 width={360}
                 height={360}
               />
-              <span>{product.brand}</span>
+              <span>{product.brand || product.category}</span>
               <h3>{product.name}</h3>
               <b>{formatInr(product.price)}</b>
               {product.id === selected.id && <p>BEST FIT · {story.recommendation}</p>}
             </article>
           ))}
         </div>
+        <div className={styles.reducedFacts}>{evidenceFor(story)}</div>
         <button
           className={styles.addButton}
           type="button"
@@ -731,7 +747,7 @@ export function CatalogHero({
             ? 'ADDED TO CART ✓'
             : cartState === 'adding'
               ? 'ADDING…'
-              : 'ADD SELECTED TO CART'}
+              : 'ADD TO CART'}
         </button>
         <p role="status">
           {cartMessage || (selectedAlreadyAdded ? 'This product is in your cart.' : '')}

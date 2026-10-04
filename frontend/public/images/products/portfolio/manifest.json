@@ -1,5 +1,5 @@
 {
-  "provenance": "ShopSmart portfolio-family images generated with the built-in OpenAI image_gen tool. Each record contains its generation prompt, receipt, dimensions, byte count and SHA-256. Images are unbranded illustrative portfolio-family photography, not a claim that the scene depicts a specific retail SKU.",
+  "provenance": "ShopSmart portfolio-family images generated with the built-in OpenAI image_gen tool. Each record contains its generation prompt, receipt, dimensions, byte count and SHA-256. Images are unbranded illustrative portfolio-family photography, not a claim that the scene depicts a specific retail SKU. Shortlisted laptop hero-family assets are curated illustrative product renders; semantic hero/alternate roles are stored with product gallery metadata.",
   "images": [
     {
       "file": "laptops/01.jpg",
@@ -1050,6 +1050,90 @@
       "generation_brief": "Photorealistic premium interior product photograph of a slim unbranded open display shelf in light oak and charcoal metal with a carefully styled few neutral books and small ceramic vessels, airy plaster wall and calm natural side light, square composition.",
       "external_assets": [],
       "branding": "Unbranded portfolio-family illustration; not a photograph of a specific SKU"
+    },
+    {
+      "file": "laptops/hero/merroway-featherweight-hero.png",
+      "subject": "ShopSmart shortlisted laptop hero family: merroway-featherweight-hero",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1848242,
+      "sha256": "d55bfb9acd5789504e225d0f60bdf689ed1de3f28f6e466c352235bfadf1f29d",
+      "medium": "AI-generated photorealistic product render, PNG",
+      "generator": "OpenAI built-in image_gen",
+      "generator_receipt": "9544ea3d-3d84-4305-aaff-3297affdf50d",
+      "external_assets": [],
+      "branding": "Unbranded illustrative portfolio product render; not a claim that the depicted hardware is the exact retail SKU",
+      "generation_brief": "Premium three-quarter view of a slim silver notebook with a minimal abstract display, warm charcoal studio light."
+    },
+    {
+      "file": "laptops/hero/merroway-featherweight-alt.png",
+      "subject": "ShopSmart shortlisted laptop hero family: merroway-featherweight-alt",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1882289,
+      "sha256": "7d17eadb12422bd1663d207d9356273891468f6c4beb4d5e571d703515ae7f01",
+      "medium": "AI-generated photorealistic product render, PNG",
+      "generator": "OpenAI built-in image_gen",
+      "generator_receipt": "f29cabb9-17b5-459b-91f9-230095a23390",
+      "external_assets": [],
+      "branding": "Unbranded illustrative portfolio product render; not a claim that the depicted hardware is the exact retail SKU",
+      "generation_brief": "Alternate rear three-quarter view of the same slim silver notebook, matching warm charcoal studio lighting."
+    },
+    {
+      "file": "laptops/hero/vellune-studybook-hero.png",
+      "subject": "ShopSmart shortlisted laptop hero family: vellune-studybook-hero",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1738641,
+      "sha256": "2d03d49a570d3744eba87f2b3cedea9ce49f1783b6a1e7930a13ce4f0effd816",
+      "medium": "AI-generated photorealistic product render, PNG",
+      "generator": "OpenAI built-in image_gen",
+      "generator_receipt": "3b3389cc-5586-41a4-a435-cd5875ca5209",
+      "external_assets": [],
+      "branding": "Unbranded illustrative portfolio product render; not a claim that the depicted hardware is the exact retail SKU",
+      "generation_brief": "Premium three-quarter view of a silver 14-inch notebook with an abstract display in a warm charcoal studio."
+    },
+    {
+      "file": "laptops/hero/vellune-studybook-alt.png",
+      "subject": "ShopSmart shortlisted laptop hero family: vellune-studybook-alt",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1842006,
+      "sha256": "f94dae7aed02553547acad9829f80672f85d51bd3d7f521279ca57fa42a07d2e",
+      "medium": "AI-generated photorealistic product render, PNG",
+      "generator": "OpenAI built-in image_gen",
+      "generator_receipt": "dc8fb340-913b-4b7d-8751-a16e60233234",
+      "external_assets": [],
+      "branding": "Unbranded illustrative portfolio product render; not a claim that the depicted hardware is the exact retail SKU",
+      "generation_brief": "Alternate angled view of the same silver 14-inch notebook, consistent warm charcoal studio lighting."
+    },
+    {
+      "file": "laptops/hero/vellune-copperfield-hero.png",
+      "subject": "ShopSmart shortlisted laptop hero family: vellune-copperfield-hero",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2069689,
+      "sha256": "6870ad028e5dabeb1d1613ffca4e4737e7ef82d0a7a88d9bfe23bf234e080322",
+      "medium": "AI-generated photorealistic product render, PNG",
+      "generator": "OpenAI built-in image_gen",
+      "generator_receipt": "335db310-5ec6-4709-8b61-357db10566e3",
+      "external_assets": [],
+      "branding": "Unbranded illustrative portfolio product render; not a claim that the depicted hardware is the exact retail SKU",
+      "generation_brief": "Copper notebook three-quarter product view with visible keyboard and refined charcoal studio lighting."
+    },
+    {
+      "file": "laptops/hero/vellune-copperfield-alt.png",
+      "subject": "ShopSmart shortlisted laptop hero family: vellune-copperfield-alt",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2057357,
+      "sha256": "b61b7285c79b5e1a29ebea11c3c5a8cfd5ba77ab131fa81acda591d18fcb1efe",
+      "medium": "AI-generated photorealistic product render, PNG",
+      "generator": "OpenAI built-in image_gen",
+      "generator_receipt": "04fb73f4-2c12-48fb-b179-2d0f385c6e6d",
+      "external_assets": [],
+      "branding": "Unbranded illustrative portfolio product render; not a claim that the depicted hardware is the exact retail SKU",
+      "generation_brief": "Alternate rear three-quarter view of the same copper notebook, consistent charcoal studio lighting."
     }
   ]
 }

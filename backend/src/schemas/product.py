@@ -58,9 +58,17 @@ class ProductResponse(BaseModel):
         values = self._presentation_metadata().get("image_gallery", [])
         if not isinstance(values, list):
             return []
-        return [{"url": value["url"], "alt": value.get("alt", self.name)} for value in values
-                if isinstance(value, dict) and isinstance(value.get("url"), str)
-                and isinstance(value.get("alt", self.name), str)][:8]
+        return [
+            {
+                "url": value["url"],
+                "alt": value.get("alt", self.name),
+                **({"role": value["role"]} if isinstance(value.get("role"), str) else {}),
+            }
+            for value in values
+            if isinstance(value, dict)
+            and isinstance(value.get("url"), str)
+            and isinstance(value.get("alt", self.name), str)
+        ][:8]
 
 
 class ProductPageResponse(BaseModel):

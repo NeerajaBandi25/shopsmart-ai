@@ -87,6 +87,8 @@ async def test_hero_story_uses_distinct_in_stock_under_budget_products(test_db):
     story = await HeroStoryService(test_db).get_story()
 
     assert story is not None
+    assert "coding" in story.query.lower()
+    assert "react" not in story.query.lower()
     assert [product.name for product in story.candidates] == [
         "Study 16",
         "Office 16",

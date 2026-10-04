@@ -1203,6 +1203,12 @@ _ASSET_ROOT = (
 _ASSET_MANIFEST = json.loads((_ASSET_ROOT / "manifest.json").read_text(encoding="utf-8"))
 _ASSET_HASHES = {image["file"]: image["sha256"] for image in _ASSET_MANIFEST["images"]}
 
+_HERO_LAPTOP_IMAGES = {
+    1: ("laptops/hero/vellune-studybook-hero.png", "laptops/hero/vellune-studybook-alt.png"),
+    5: ("laptops/hero/vellune-copperfield-hero.png", "laptops/hero/vellune-copperfield-alt.png"),
+    6: ("laptops/hero/merroway-featherweight-hero.png", "laptops/hero/merroway-featherweight-alt.png"),
+}
+
 
 class CatalogSeedSafetyError(ValueError):
     """The requested catalog seed target is not explicitly allowlisted."""
@@ -1225,7 +1231,12 @@ def build_catalog_products() -> list[Product]:
                 variant, price_delta, configuration = product_configuration(category, archetype, variant_index - 1)
                 sku = f"PORT-{category.upper()}-{product_index:02d}-{variant_index:02d}"
                 price = base_price + price_delta
-                image_path = f"{category}/{(product_index - 1) % 5 + 1:02d}.jpg"
+                hero_images = _HERO_LAPTOP_IMAGES.get(product_index) if category == "laptops" else None
+                image_path = (
+                    hero_images[0]
+                    if hero_images
+                    else f"{category}/{(product_index - 1) % 5 + 1:02d}.jpg"
+                )
                 image_url = f"/images/products/portfolio/{image_path}"
                 name = f"{brand} {title}, {variant}"
                 specifications: dict[str, Any] = {
@@ -1237,7 +1248,18 @@ def build_catalog_products() -> list[Product]:
                     "_presentation": {
                         "delivery": "Standard portfolio delivery; timing confirmed at checkout",
                         "highlights": [feature, variant, "Illustrative portfolio-family studio photograph"],
-                        "image_gallery": [{"url": image_url, "alt": f"Studio product photograph illustrating the {category.replace('_', ' ')} product family"}],
+                        "image_gallery": (
+                            [
+                                {"url": image_url, "alt": f"Premium studio view of {name}", "role": "hero"},
+                                {
+                                    "url": f"/images/products/portfolio/{hero_images[1]}",
+                                    "alt": f"Alternate studio view of {name}",
+                                    "role": "alternate",
+                                },
+                            ]
+                            if hero_images
+                            else [{"url": image_url, "alt": f"Studio product photograph illustrating the {category.replace('_', ' ')} product family"}]
+                        ),
                     },
                 }
                 products.append(

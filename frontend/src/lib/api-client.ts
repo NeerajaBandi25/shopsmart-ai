@@ -71,7 +71,7 @@ export interface Product {
   max_purchase_quantity: number;
   delivery?: string | null;
   highlights?: string[];
-  image_gallery?: { url: string; alt: string }[];
+  image_gallery?: { url: string; alt: string; role?: string }[];
 }
 
 export interface ProductPage {
