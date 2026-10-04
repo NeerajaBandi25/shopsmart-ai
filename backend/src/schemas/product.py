@@ -72,6 +72,23 @@ class ProductPageResponse(BaseModel):
     total: int
 
 
+class HeroEvidence(BaseModel):
+    label: str
+    value: str
+
+
+class HeroStoryResponse(BaseModel):
+    """A compact shortlist and evidence-backed pick from the live catalog."""
+
+    query: str
+    budget_minor: int
+    candidates: list[ProductResponse]
+    recommended_product_id: UUID
+    recommendation: str
+    evidence: list[HeroEvidence]
+    savings_minor: int
+
+
 class HomepageCategory(BaseModel):
     value: str
     label: str

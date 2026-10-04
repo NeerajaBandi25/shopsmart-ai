@@ -5,7 +5,13 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AddToCartButton } from '@/components/AddToCartButton';
 import { formatInr } from '@/lib/currency';
-import { getHomepage, getProducts, type HomepageData, type Product } from '@/lib/api-client';
+import {
+  getHomepage,
+  getHeroStory,
+  type HomepageData,
+  type HeroStoryData,
+  type Product,
+} from '@/lib/api-client';
 import { CatalogHero } from './CatalogHero';
 import styles from './HomeMerchandise.module.css';
 
@@ -87,9 +93,9 @@ function ProductTile({ product }: { product: Product }) {
   );
 }
 
-export function HomePageExperience() {
+export function HomePageExperience({ hasSession = false }: { hasSession?: boolean }) {
   const [merchandise, setMerchandise] = useState<HomepageData | null>(null);
-  const [catalogCandidates, setCatalogCandidates] = useState<Product[]>([]);
+  const [heroStory, setHeroStory] = useState<HeroStoryData | null>(null);
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [retry, setRetry] = useState(0);
 
@@ -97,11 +103,11 @@ export function HomePageExperience() {
     let active = true;
     setStatus('loading');
 
-    Promise.all([getHomepage(), getProducts(0, 100, { in_stock_only: true }).catch(() => null)])
-      .then(([page, catalog]) => {
+    Promise.all([getHomepage(), getHeroStory().catch(() => null)])
+      .then(([page, story]) => {
         if (active) {
           setMerchandise(page);
-          setCatalogCandidates(catalog?.items || []);
+          setHeroStory(story);
           setStatus('success');
         }
       })
@@ -120,16 +126,6 @@ export function HomePageExperience() {
   const discoveryProducts = (merchandise?.trending || [])
     .filter((product) => product.stock_quantity > 0)
     .slice(0, 4);
-  const heroProducts = Array.from(
-    new Map(
-      [
-        ...featuredProducts,
-        ...catalogCandidates,
-        ...(merchandise?.trending || []).filter((product) => product.stock_quantity > 0),
-        ...(merchandise?.recommendations || []).filter((product) => product.stock_quantity > 0),
-      ].map((product) => [product.id, product])
-    ).values()
-  );
   const products = Array.from(
     new Map(
       [...featuredProducts, ...discoveryProducts].map((product) => [product.id, product])
@@ -148,7 +144,13 @@ export function HomePageExperience() {
   return (
     <>
       <main>
-        <CatalogHero products={heroProducts} status={status} />
+        <CatalogHero
+          story={heroStory}
+          promotions={merchandise?.promotions || []}
+          categories={merchandise?.categories || []}
+          hasSession={hasSession}
+          status={status}
+        />
 
         <section aria-labelledby="category-heading" className="border-b border-ink-100 bg-white">
           <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">

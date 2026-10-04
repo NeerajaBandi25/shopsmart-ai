@@ -7,9 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.v1.deps import get_db
-from src.schemas.product import HomepageResponse, ProductPageResponse, ProductResponse
+from src.schemas.product import (
+    HeroStoryResponse,
+    HomepageResponse,
+    ProductPageResponse,
+    ProductResponse,
+)
 from src.services.product_catalog_service import ProductCatalogService
 from src.services.homepage_service import HomepageService
+from src.services.hero_story_service import HeroStoryService
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -58,6 +64,16 @@ async def list_products(
 @router.get("/homepage", response_model=HomepageResponse, summary="Public catalog merchandising")
 async def homepage(db: AsyncSession = Depends(get_db)) -> dict:
     return await HomepageService(db).get_homepage()
+
+
+@router.get(
+    "/hero-shortlist",
+    response_model=HeroStoryResponse | None,
+    summary="Homepage guided shortlist",
+)
+async def hero_shortlist(db: AsyncSession = Depends(get_db)) -> HeroStoryResponse | None:
+    """Build the homepage story from active, in-stock products and published facts."""
+    return await HeroStoryService(db).get_story()
 
 
 @router.get("/{product_id}", response_model=ProductResponse, summary="Get product details")

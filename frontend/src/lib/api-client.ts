@@ -81,6 +81,16 @@ export interface ProductPage {
   total?: number;
 }
 
+export interface HeroStoryData {
+  query: string;
+  budget_minor: number;
+  candidates: Product[];
+  recommended_product_id: string;
+  recommendation: string;
+  evidence: { label: string; value: string }[];
+  savings_minor: number;
+}
+
 export interface HomepageData {
   categories: { value: string; label: string; count: number }[];
   featured: Product[];
@@ -123,6 +133,11 @@ export async function getProducts(
   });
   const response = await fetch(`/api/products?${query}`, { credentials: 'include' });
   return handleApiResponse<ProductPage>(response);
+}
+
+export async function getHeroStory(): Promise<HeroStoryData | null> {
+  const response = await fetch('/api/hero-shortlist', { credentials: 'include' });
+  return handleApiResponse<HeroStoryData | null>(response);
 }
 
 export async function getProduct(productId: string): Promise<Product> {

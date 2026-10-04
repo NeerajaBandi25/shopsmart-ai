@@ -1,12 +1,39 @@
-﻿import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { getHomepage, getProducts, type Product, type HomepageData } from '@/lib/api-client';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { ImgHTMLAttributes } from 'react';
+import {
+  getHeroStory,
+  getHomepage,
+  type HeroStoryData,
+  type HomepageData,
+  type Product,
+} from '@/lib/api-client';
+import { getCart, type Cart } from '@/lib/cart-api';
+import { useCommerceStore } from '@/lib/commerce-store';
 import { HomePageExperience } from './HomePageExperience';
 
-jest.mock('@/lib/api-client', () => ({ getHomepage: jest.fn(), getProducts: jest.fn() }));
+jest.mock('@/lib/api-client', () => ({ getHomepage: jest.fn(), getHeroStory: jest.fn() }));
+jest.mock('@/lib/cart-api', () => ({
+  getCart: jest.fn(),
+  addCartItem: jest.fn(),
+  applyCartCoupon: jest.fn(),
+}));
 jest.mock('./CatalogHero.module.css', () => ({}));
 jest.mock('./HomeMerchandise.module.css', () => ({}));
 jest.mock('@/components/AddToCartButton', () => ({
   AddToCartButton: () => <button type="button">Add to cart</button>,
+}));
+jest.mock('next/image', () => ({
+  __esModule: true,
+  default: ({
+    fill,
+    priority,
+    ...props
+  }: ImgHTMLAttributes<HTMLImageElement> & { fill?: boolean; priority?: boolean }) => {
+    void fill;
+    void priority;
+    // eslint-disable-next-line @next/next/no-img-element -- lightweight mock for Next Image.
+    return <img {...props} alt={props.alt ?? ''} />;
+  },
 }));
 
 const product: Product = {
@@ -25,6 +52,49 @@ const product: Product = {
   max_purchase_quantity: 3,
 };
 
+const candidates: Product[] = [
+  {
+    ...product,
+    id: 'laptop-1',
+    name: 'Studybook',
+    category: 'laptops',
+    brand: 'Vellune',
+    sku: 'LAPTOP-1',
+    price: 5_549_000,
+    image_url: '/images/products/portfolio/laptops/01.jpg',
+    image_alt: 'Studio laptop photograph',
+    specifications: { RAM: '16 GB RAM', Processor: '8-core processor', Storage: '512 GB SSD' },
+  },
+  {
+    ...product,
+    id: 'laptop-2',
+    name: 'Officebook',
+    category: 'laptops',
+    brand: 'Vellune',
+    sku: 'LAPTOP-2',
+    price: 5_849_000,
+    image_url: '/images/products/portfolio/laptops/02.jpg',
+    image_alt: 'Studio office laptop photograph',
+    specifications: {
+      RAM: '16 GB RAM',
+      Processor: '8-core processor',
+      Graphics: 'Integrated graphics',
+    },
+  },
+  {
+    ...product,
+    id: 'laptop-3',
+    name: 'Featherweight',
+    category: 'laptops',
+    brand: 'Merroway',
+    sku: 'LAPTOP-3',
+    price: 6_249_000,
+    image_url: '/images/products/portfolio/laptops/03.jpg',
+    image_alt: 'Studio travel laptop photograph',
+    specifications: { RAM: '16 GB RAM', Processor: '8-core processor', Storage: '1 TB SSD' },
+  },
+];
+
 function page(items: Product[]): HomepageData {
   return {
     categories: [
@@ -38,13 +108,52 @@ function page(items: Product[]): HomepageData {
   };
 }
 
+function heroStory(): HeroStoryData {
+  return {
+    query: 'Best laptop for React development and local AI under ₹70,000',
+    budget_minor: 7_000_000,
+    candidates,
+    recommended_product_id: 'laptop-1',
+    recommendation: 'Best fit in this shortlist: 16 GB RAM at the lowest listed price.',
+    evidence: [
+      { label: 'Memory', value: '16 GB RAM' },
+      { label: 'Processor', value: '8-core processor' },
+      { label: 'Price', value: '₹55,490' },
+      { label: 'Below budget', value: '₹14,510' },
+    ],
+    savings_minor: 1_451_000,
+  };
+}
+
 const mockedGetHomepage = jest.mocked(getHomepage);
-const mockedGetProducts = jest.mocked(getProducts);
+const mockedGetHeroStory = jest.mocked(getHeroStory);
+const mockedGetCart = jest.mocked(getCart);
+
+const emptyCart: Cart = {
+  items: [],
+  subtotal: 0,
+  currency: 'INR',
+  coupon_code: null,
+  coupon_evaluation: null,
+  applied_promotions: [],
+  discount_total_cents: 0,
+  total_cents: 0,
+};
 
 describe('homepage shopping experience', () => {
   beforeEach(() => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: jest.fn().mockReturnValue({
+        matches: false,
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      }),
+    });
     mockedGetHomepage.mockReset();
-    mockedGetProducts.mockReset().mockResolvedValue({ items: [], skip: 0, limit: 100, total: 0 });
+    mockedGetHeroStory.mockReset().mockResolvedValue(heroStory());
+    mockedGetCart.mockReset().mockResolvedValue(emptyCart);
+    useCommerceStore.getState().clearPrivateCommerce();
   });
 
   it('loads current catalog products and derives offer messaging from listed prices', async () => {
@@ -59,6 +168,7 @@ describe('homepage shopping experience', () => {
     render(<HomePageExperience />);
 
     expect(mockedGetHomepage).toHaveBeenCalledWith();
+    expect(mockedGetHeroStory).toHaveBeenCalledWith();
     expect(await screen.findAllByRole('heading', { name: 'Canvas Weekender' })).toHaveLength(2);
     expect(screen.getByText('Listed offers')).toBeInTheDocument();
     expect(screen.getAllByText('Save ₹3.00')).toHaveLength(2);
@@ -66,85 +176,96 @@ describe('homepage shopping experience', () => {
     expect(screen.queryByText('Save ₹0.00')).not.toBeInTheDocument();
   });
 
-  it('routes search and category links through supported product query parameters', async () => {
+  it('presents the backend shortlist, published evidence, and linked product identities', async () => {
+    mockedGetHomepage.mockResolvedValue(page([product]));
+    const { container } = render(<HomePageExperience />);
+
+    expect(await screen.findAllByRole('heading', { name: 'BUY WITH CLARITY.' })).toHaveLength(2);
+    expect(screen.getAllByText(/React development/)).toHaveLength(2);
+    expect(screen.getByText('16 GB+ memory')).toBeInTheDocument();
+    expect(screen.getByText(/SHOPSMART ANALYSIS/)).toBeInTheDocument();
+    expect(screen.getByText(heroStory().recommendation)).toBeInTheDocument();
+    expect(container.querySelector('a[href="/products/laptop-1"]')).toBeInTheDocument();
+    const imageSources = Array.from(
+      container.querySelectorAll<HTMLImageElement>(
+        'img[src^="/images/products/portfolio/laptops/"]'
+      )
+    ).map((image) => image.getAttribute('src'));
+    expect(new Set(imageSources).size).toBe(3);
+    expect(screen.getByRole('button', { name: 'Go to Ask scene' })).toHaveAttribute(
+      'aria-current',
+      'step'
+    );
+    await waitFor(() => expect(mockedGetHeroStory).toHaveBeenCalledTimes(1));
+  });
+
+  it('restores the signed-in cart and eligible coupon in the hero after reload', async () => {
+    const homepage = page([product]);
+    homepage.promotions = [
+      {
+        name: 'Laptop discovery offer',
+        description: null,
+        discount_type: 'percentage',
+        discount_value: 5,
+        ends_at: '2026-11-02T17:21:09.946877Z',
+        scope_category: 'laptops',
+      },
+    ];
+    mockedGetHomepage.mockResolvedValue(homepage);
+    mockedGetCart.mockResolvedValue({
+      ...emptyCart,
+      items: [
+        {
+          product_id: 'laptop-1',
+          name: 'Studybook',
+          sku: 'LAPTOP-1',
+          image_url: candidates[0].image_url,
+          image_alt: candidates[0].image_alt,
+          unit_price: candidates[0].price,
+          quantity: 2,
+          line_total: candidates[0].price * 2,
+          stock_quantity: 63,
+          max_purchase_quantity: 5,
+        },
+      ],
+      subtotal: candidates[0].price * 2,
+      coupon_code: 'SAVE20',
+      coupon_evaluation: {
+        promotion_id: 'promotion-1',
+        code: 'SAVE20',
+        name: 'Welcome savings',
+        eligible: true,
+        reason_code: 'eligible',
+        discount_cents: 2_219_600,
+        applied_scope: { type: 'all' },
+      },
+      discount_total_cents: 2_219_600,
+      total_cents: candidates[0].price * 2 - 2_219_600,
+    });
+    render(<HomePageExperience hasSession />);
+
+    const cartLink = await screen.findByRole('link', { name: 'View cart' });
+    expect(cartLink).toHaveTextContent('2');
+    expect(await screen.findByRole('button', { name: /ADDED TO CART/ })).toBeEnabled();
+    await waitFor(() => expect(document.querySelector('#hero-offer-code')).not.toBeNull());
+    expect(document.querySelector<HTMLInputElement>('#hero-offer-code')).toHaveValue('SAVE20');
+    expect(document.body).toHaveTextContent(/SAVE20 applied/);
+    expect(document.body).toHaveTextContent(/CART VERIFIED/);
+  });
+
+  it('keeps ordinary catalog category navigation available below the guided story', async () => {
     mockedGetHomepage.mockResolvedValue(page([product]));
     render(<HomePageExperience />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Scene 2: Your brief' }));
-    const search = screen.getByRole('searchbox', { name: 'What would you like to find?' });
-    const searchForm = search.closest('form');
-    expect(searchForm).toHaveAttribute('action', '/assistant');
-    expect(searchForm).toHaveAttribute('method', 'get');
-    expect(search).toHaveAttribute('name', 'q');
-    expect(search).toHaveValue('Find laptops under ₹70,000');
-    fireEvent.change(search, { target: { value: 'phone under 20k' } });
-    expect(screen.getAllByText('Smartphones').length).toBeGreaterThan(0);
-    expect(screen.getByRole('region', { name: 'Start with what matters.' })).toHaveTextContent(
-      /20,000/
-    );
-
-    expect(await screen.findByRole('link', { name: /Laptops/ })).toHaveAttribute(
-      'href',
-      '/products?category=laptops'
-    );
-    expect(screen.getByRole('link', { name: /Smartphones/ })).toHaveAttribute(
-      'href',
-      '/products?category=smartphones'
-    );
-    expect(screen.getByRole('link', { name: 'Explore this brief' })).toHaveAttribute(
-      'href',
-      '/assistant?q=phone%20under%2020k'
-    );
-    await waitFor(() => expect(mockedGetHomepage).toHaveBeenCalledTimes(1));
-  });
-
-  it('walks the hero from real laptop candidates into a published-data comparison', async () => {
-    mockedGetHomepage.mockResolvedValue(
-      page([
-        {
-          ...product,
-          id: 'laptop-1',
-          name: 'Studybook',
-          category: 'laptops',
-          price: 4_899_900,
-          specifications: { RAM: '16 GB RAM', Storage: '512 GB SSD' },
-        },
-        {
-          ...product,
-          id: 'laptop-2',
-          name: 'Travelbook',
-          category: 'laptops',
-          price: 5_599_900,
-          specifications: { RAM: '16 GB RAM', Storage: '1 TB SSD' },
-        },
-        {
-          ...product,
-          id: 'laptop-3',
-          name: 'Workbook',
-          category: 'laptops',
-          price: 5_199_900,
-          specifications: { RAM: '8 GB RAM', Storage: '512 GB SSD' },
-        },
-      ])
-    );
-    render(<HomePageExperience />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Scene 3: Explore' }));
-    expect(screen.getByText('SHORTLISTED FROM AVAILABLE PRODUCTS')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Studybook' })[0]).toHaveAttribute(
-      'href',
-      '/products/laptop-1'
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Scene 4: Compare' }));
-    expect(screen.getByRole('region', { name: 'Published product comparison' })).toHaveTextContent(
-      '8 GB RAM'
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Scene 5: Decide' }));
+    const categoryNavigation = await screen.findByRole('navigation', {
+      name: 'Product categories',
+    });
     expect(
-      screen.getByText('Lowest listed price among these in-stock options.')
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Scene 6: Purchase' }));
-    expect(screen.getAllByText('Studybook').length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'Add to cart' }).length).toBeGreaterThan(0);
+      await within(categoryNavigation).findByRole('link', { name: /Laptops/ })
+    ).toHaveAttribute('href', '/products?category=laptops');
+    expect(
+      await within(categoryNavigation).findByRole('link', { name: /Smartphones/ })
+    ).toHaveAttribute('href', '/products?category=smartphones');
   });
 
   it('shows catalog errors with a working retry action', async () => {

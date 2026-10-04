@@ -9,7 +9,7 @@ export default async function HomePage() {
   return (
     <>
       <Nav probeAuth={hasSessionCookie} />
-      <HomePageExperience />
+      <HomePageExperience hasSession={hasSessionCookie} />
     </>
   );
 }
