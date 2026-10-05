@@ -1,6 +1,6 @@
 """LoginAttempt entity model for audit and rate limiting."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -10,7 +10,6 @@ from sqlalchemy import (
     String,
     func,
 )
-from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import BaseModel
@@ -26,13 +25,13 @@ class LoginAttempt(BaseModel):
         nullable=False,
     )
     ip_address: Mapped[str] = mapped_column(
-        INET().with_variant(String(45), "sqlite"),
+        String(45),
         nullable=False,
     )
     attempted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
     )
     success: Mapped[bool] = mapped_column(

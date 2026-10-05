@@ -1,16 +1,20 @@
 """Session validation logic with inactivity timeout."""
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+import logging
 from typing import Optional
 from uuid import UUID
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.exc import SQLAlchemyError
 
 from src.core.config import settings
+from src.core.observability import request_id_context
 from src.models.session import Session
 from src.models.user import User
+
+_logger = logging.getLogger("shopsmart.session")
 
 
 async def validate_session(
@@ -39,9 +43,7 @@ async def validate_session(
         except ValueError:
             return None
 
-        result = await db_session.execute(
-            select(Session).where(Session.id == session_uuid)
-        )
+        result = await db_session.execute(select(Session).where(Session.id == session_uuid))
         session = result.scalar_one_or_none()
 
         if not session:
@@ -52,17 +54,19 @@ async def validate_session(
             return None
 
         # Verify that the user still exists by querying for the user
-        user_result = await db_session.execute(
-            select(User.id).where(User.id == session.user_id)
-        )
+        user_result = await db_session.execute(select(User.id).where(User.id == session.user_id))
         if not user_result.scalar_one_or_none():
             return None
 
         # Check inactivity timeout: NOW() - last_activity > 30 days
-        now = datetime.utcnow()
-        inactivity_threshold = now.timestamp() - settings.session_timeout_seconds
+        now = datetime.now(timezone.utc)
+        last_activity = session.last_activity
+        # SQLite strips timezone metadata, while PostgreSQL preserves it. Legacy
+        # naive values were written as UTC, so normalize them before comparison.
+        if last_activity.tzinfo is None:
+            last_activity = last_activity.replace(tzinfo=timezone.utc)
 
-        if session.last_activity.timestamp() < inactivity_threshold:
+        if last_activity < now - timedelta(seconds=settings.session_timeout_seconds):
             # Session expired due to inactivity
             return None
 
@@ -75,17 +79,31 @@ async def validate_session(
             "user_id": session.user_id,
             "refresh_cookie": True,  # Signal to refresh cookie in response
         }
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
         # Rollback transaction on database errors to release any locks
         await db_session.rollback()
-        # Log the error in a real application, but for now just return None
-        # to treat database errors as invalid sessions (secure fail-closed)
+        _logger.error(
+            "session_validation_database_error",
+            extra={
+                "event": "session_validation_database_error",
+                "exception_type": type(exc).__name__,
+                "request_id": request_id_context.get(),
+            },
+        )
+        # Treat database errors as invalid sessions (secure fail-closed).
         return None
-    except Exception:
+    except Exception as exc:
         # Rollback transaction on unexpected errors to release any locks
         await db_session.rollback()
-        # Unexpected errors - in a real app these would be logged and monitored
-        # For security, we fail closed but preserve the ability to diagnose
+        _logger.error(
+            "session_validation_unexpected_error",
+            extra={
+                "event": "session_validation_unexpected_error",
+                "exception_type": type(exc).__name__,
+                "request_id": request_id_context.get(),
+            },
+        )
+        # Preserve fail-closed behavior while exposing only safe diagnostics.
         return None
 
 
@@ -103,9 +121,7 @@ async def invalidate_session(
         bool: True if invalidated, False if not found
     """
     try:
-        result = await db_session.execute(
-            select(Session).where(Session.id == session_id)
-        )
+        result = await db_session.execute(select(Session).where(Session.id == session_id))
         session = result.scalar_one_or_none()
 
         if not session:
@@ -135,9 +151,7 @@ async def invalidate_user_sessions(
     """
     try:
         result = await db_session.execute(
-            select(Session)
-            .where(Session.user_id == user_id)
-            .where(Session.is_active == True)
+            select(Session).where(Session.user_id == user_id).where(Session.is_active.is_(True))
         )
         sessions = result.scalars().all()
 

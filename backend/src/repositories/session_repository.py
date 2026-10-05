@@ -1,5 +1,6 @@
 """Session repository for data access."""
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import and_, select
@@ -58,14 +59,13 @@ class SessionRepository:
             Session | None: Session object or None if not found
         """
         from uuid import UUID
+
         try:
             session_uuid = UUID(session_id)
         except ValueError:
             return None
 
-        result = await self.db.execute(
-            select(Session).where(Session.id == session_uuid)
-        )
+        result = await self.db.execute(select(Session).where(Session.id == session_uuid))
         return result.scalar_one_or_none()
 
     async def update_session_activity(self, session_id: str) -> bool:
@@ -78,21 +78,19 @@ class SessionRepository:
             bool: True if updated, False if not found
         """
         from uuid import UUID
+
         try:
             session_uuid = UUID(session_id)
         except ValueError:
             return False
 
-        result = await self.db.execute(
-            select(Session).where(Session.id == session_uuid)
-        )
+        result = await self.db.execute(select(Session).where(Session.id == session_uuid))
         session = result.scalar_one_or_none()
 
         if not session:
             return False
 
-        from datetime import datetime
-        session.last_activity = datetime.utcnow()
+        session.last_activity = datetime.now(timezone.utc)
         await self.db.flush()
         return True
 
@@ -106,14 +104,13 @@ class SessionRepository:
             bool: True if invalidated, False if not found
         """
         from uuid import UUID
+
         try:
             session_uuid = UUID(session_id)
         except ValueError:
             return False
 
-        result = await self.db.execute(
-            select(Session).where(Session.id == session_uuid)
-        )
+        result = await self.db.execute(select(Session).where(Session.id == session_uuid))
         session = result.scalar_one_or_none()
 
         if not session:
@@ -136,7 +133,7 @@ class SessionRepository:
             select(Session).where(
                 and_(
                     Session.user_id == user_id,
-                    Session.is_active == True,
+                    Session.is_active.is_(True),
                 )
             )
         )
@@ -161,7 +158,7 @@ class SessionRepository:
             select(Session).where(
                 and_(
                     Session.user_id == user_id,
-                    Session.is_active == True,
+                    Session.is_active.is_(True),
                 )
             )
         )

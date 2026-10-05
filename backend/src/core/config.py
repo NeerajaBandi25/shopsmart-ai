@@ -5,18 +5,24 @@ import re
 from typing import Optional
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     # Database
     database_url: str = os.getenv(
         "DATABASE_URL", "postgresql+asyncpg://user:password@localhost/shopsmart_ai"
     )
     database_echo: bool = os.getenv("DATABASE_ECHO", "False").lower() == "true"
-    auto_create_tables: bool = os.getenv("AUTO_CREATE_TABLES", "True").lower() == "true"
+    # Schema creation is an explicit local/test opt-in; production starts only
+    # after the release process has applied Alembic migrations.
+    # Let BaseSettings read this per instance; binding os.getenv at import time
+    # makes tests and command-local overrides stale after environment changes.
+    auto_create_tables: bool = False
 
     # Security
     secret_key: str
@@ -29,6 +35,16 @@ class Settings(BaseSettings):
     # Email
     email_provider: str = os.getenv("EMAIL_PROVIDER", "mock")  # mock | prod
     email_from: str = os.getenv("EMAIL_FROM", "noreply@shopsmart-ai.local")
+    public_app_url: str = "http://localhost:3000"
+
+    # Payments remain disabled unless Stripe test-mode credentials are supplied.
+    payment_provider: str = "stripe"
+    payment_mode: str = "test"
+    stripe_secret_key: Optional[str] = None
+    stripe_publishable_key: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    payment_success_url: str = "http://localhost:3000/checkout/complete"
+    payment_cancel_url: str = "http://localhost:3000/checkout/complete?payment=cancelled"
 
     # Redis (optional for rate limiting, session cache)
     redis_url: Optional[str] = os.getenv("REDIS_URL", None)
@@ -84,12 +100,6 @@ class Settings(BaseSettings):
         if not re.fullmatch(r"[A-Za-z0-9._~-]{32,}", token):
             raise ValueError("OBSERVABILITY_METRICS_TOKEN must be at least 32 URL-safe characters")
         return token
-
-    class Config:
-        """Pydantic config."""
-
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 settings = Settings()

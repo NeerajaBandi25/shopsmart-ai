@@ -1,0 +1,117 @@
+{
+  "syntheticAccount": "local-qa-1791121443340@example.test",
+  "productId": "c3e192fe-942c-59cb-bdd1-2d317598a1dc",
+  "orderClicks": 1,
+  "steps": [
+    {
+      "step": "login",
+      "status": 200
+    },
+    {
+      "step": "preorder cart",
+      "text": "Search & ask\nCtrl K\n\nYOUR SELECTION\n\nShopping cart\n\nYour cart is empty.\n\nBrowse products"
+    },
+    {
+      "step": "low-value product PDP",
+      "text": "NEW SEASON·THE AI EDIT·MEMBERS FIRST\n\nShopSmart AI\nTHE PREMIUM EDIT\nDashboard\nCart (0)\nOrders\nAccount\nLog Out\nBack to products\nImage by OpenAI built-in image_gen, commissioned for the ShopSmart portfolio · Repository-created AI-generated portfolio-family image\n\nSEREIN FORMULARY\n\nSerein Formulary Petalshine Nail Polish Essential, Single / Original\n\nSKU PORT-BEAUTY-05-01\n\nCompare\nAsk AI about this product\n\n₹399.00\n\n₹449.00\n\n11% off\n\nYou save ₹50.00\n\n73 in stock\n\nStandard portfolio delivery; timing confirmed at checkout\n\nPetalshine Nail Polish Essential features brush-applicator nail color in a glass bottle.\n\nChoose your configuration\nGift set / Original\n₹999.00 · In stock\nGift set / Travel packaging\n₹1,049.00 · In stock\nSingle / Original\n₹399.00 · In stock\nDuo / Travel packaging\n₹649.00 · In stock\nSingle / Travel packaging\n₹449.00 · In stock\nTrio / Original\n₹799.00 · In stock\nTrio / Travel"
+    },
+    {
+      "step": "add product",
+      "status": 200,
+      "body": "{\"items\":[{\"product_id\":\"c3e192fe-942c-59cb-bdd1-2d317598a1dc\",\"name\":\"Serein Formulary Petalshine Nail Polish Essential, Single / Original\",\"sku\":\"PORT-BEAUTY-05-01\",\"image_url\":\"/images/products/portfolio/beauty/05.jpg\",\"image_alt\":\"Studio product photograph illustrating the beauty product family\",\"unit_price\":39900,\"quantity\":1,\"line_total\":39900,\"stock_quantity\":73,\"max_purchase_quantity\":5}],\"subtotal\":39900,\"currency\":\"INR\",\"coupon_code\":null,\"coupon_evaluation\":null,\"applied_promotions\":[],\"discount_total_cents\":0,\"total_cents\":39900}"
+    },
+    {
+      "step": "checkout quote",
+      "text": "Search & ask\nCtrl K\n\nNEW SEASON·THE AI EDIT·MEMBERS FIRST\n\nShopSmart AI\nTHE PREMIUM EDIT\nDashboard\nCart (1)\nOrders\nAccount\nLog Out\n\nCHECKOUT\n\nReview your order\n\nFinal prices and availability are confirmed when you place the order.\n\nSerein Formulary Petalshine Nail Polish Essential, Single / Original\n\nSKU PORT-BEAUTY-05-01\n\nQuantity 1 · ₹399.00 each\n\n₹399.00\n\nDelivery address\nRecipient name\nPhone\nAddress line 1\nAddress line 2 (optional)\nCity\nState or region\nPostal code\n\nCountry: India\n\nSubtotal\n₹399.00\nCurrent total\n₹399.00\n\nThis server quote is checked again when the order is placed. No payment is collected.\n\nPlace demo order"
+    },
+    {
+      "step": "order response",
+      "status": 201,
+      "order": {
+        "id": "8e584e7f-f661-49cb-aa68-142498f92e4a",
+        "created_at": "2026-10-04T14:42:06.001781",
+        "status": "placed",
+        "subtotal_cents": 39900,
+        "discount_total_cents": 0,
+        "total_cents": 39900,
+        "delivery_address": {
+          "recipient_name": "Local QA Test",
+          "phone": "9990000000",
+          "address_line1": "1 Test Lane",
+          "address_line2": null,
+          "city": "Testville",
+          "region": "Test State",
+          "postal_code": "000000",
+          "country_code": "IN"
+        },
+        "promotion_snapshot": [],
+        "items": [
+          {
+            "product_id": "c3e192fe-942c-59cb-bdd1-2d317598a1dc",
+            "product_name": "Serein Formulary Petalshine Nail Polish Essential, Single / Original",
+            "product_sku": "PORT-BEAUTY-05-01",
+            "product_image_url": "/images/products/portfolio/beauty/05.jpg",
+            "product_image_alt": "Studio product photograph illustrating the beauty product family",
+            "unit_price_cents": 39900,
+            "quantity": 1,
+            "line_total_cents": 39900
+          }
+        ]
+      }
+    },
+    {
+      "step": "checkout success view",
+      "text": "Search & ask\nCtrl K\n\nNEW SEASON·THE AI EDIT·MEMBERS FIRST\n\nShopSmart AI\nTHE PREMIUM EDIT\nDashboard\nCart (0)\nOrders\nAccount\nLog Out\n\nCHECKOUT\n\nReview your order\n\nFinal prices and availability are confirmed when you place the order.\n\nDelivery details are recorded for this local demo. No payment is collected, and no delivery service or date is provided.\n\nOrder recorded\n\nPlaced · 4 Oct 2026, 2:42 pm\n\nSerein Formulary Petalshine Nail Polish Essential, Single / Original\n\nSKU PORT-BEAUTY-05-01\n\n1 × ₹399.00\n\n₹399.00\n\nDELIVERY ADDRESS\nLocal QA Test\n1 Test Lane\nTestville, Test State 000000\n9990000000\nSubtotal\n₹399.00\nOrder total\n₹399.00\nView order history\nBrowse products"
+    },
+    {
+      "step": "order history desktop",
+      "text": "Search & ask\nCtrl K\n\nNEW SEASON·THE AI EDIT·MEMBERS FIRST\n\nShopSmart AI\nTHE PREMIUM EDIT\nDashboard\nCart (0)\nOrders\nAccount\nLog Out\n\nACCOUNT\n\nOrder history\nOrder from 4 Oct 2026, 2:42 pm\n\nPlaced · 4 Oct 2026, 2:42 pm\n\nSerein Formulary Petalshine Nail Polish Essential, Single / Original\n\nSKU PORT-BEAUTY-05-01\n\n1 × ₹399.00\n\n₹399.00\n\nDELIVERY ADDRESS\nLocal QA Test\n1 Test Lane\nTestville, Test State 000000\n9990000000\nSubtotal\n₹399.00\nOrder total\n₹399.00",
+      "apiStatus": 200,
+      "ownerOrderCount": 1,
+      "orders": [
+        {
+          "id": "8e584e7f-f661-49cb-aa68-142498f92e4a",
+          "created_at": "2026-10-04T09:12:06.001781Z",
+          "status": "placed",
+          "subtotal_cents": 39900,
+          "discount_total_cents": 0,
+          "total_cents": 39900,
+          "delivery_address": {
+            "recipient_name": "Local QA Test",
+            "phone": "9990000000",
+            "address_line1": "1 Test Lane",
+            "address_line2": null,
+            "city": "Testville",
+            "region": "Test State",
+            "postal_code": "000000",
+            "country_code": "IN"
+          },
+          "promotion_snapshot": [],
+          "items": [
+            {
+              "product_id": "c3e192fe-942c-59cb-bdd1-2d317598a1dc",
+              "product_name": "Serein Formulary Petalshine Nail Polish Essential, Single / Original",
+              "product_sku": "PORT-BEAUTY-05-01",
+              "product_image_url": "/images/products/portfolio/beauty/05.jpg",
+              "product_image_alt": "Studio product photograph illustrating the beauty product family",
+              "unit_price_cents": 39900,
+              "quantity": 1,
+              "line_total_cents": 39900
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "step": "order history mobile",
+      "text": "NEW SEASON·THE AI EDIT·MEMBERS FIRST\n\nShopSmart AI\nSearch\nMenu\n\nACCOUNT\n\nOrder history\nOrder from 4 Oct 2026, 2:42 pm\n\nPlaced · 4 Oct 2026, 2:42 pm\n\nSerein Formulary Petalshine Nail Polish Essential, Single / Original\n\nSKU PORT-BEAUTY-05-01\n\n1 × ₹399.00\n\n₹399.00\n\nDELIVERY ADDRESS\nLocal QA Test\n1 Test Lane\nTestville, Test State 000000\n9990000000\nSubtotal\n₹399.00\nOrder total\n₹399.00",
+      "width": 390,
+      "scrollWidth": 390,
+      "overflow": false
+    }
+  ],
+  "orderId": "8e584e7f-f661-49cb-aa68-142498f92e4a",
+  "item": "Serein Formulary Petalshine Nail Polish Essential, Single / Original",
+  "total_cents": 39900,
+  "orderClicksCount": 1
+}

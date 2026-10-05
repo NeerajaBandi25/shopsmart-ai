@@ -9,8 +9,7 @@ import AuthenticatedLayout from '@/app/authenticated-layout';
 
 /**
  * Member dashboard — the authenticated continuation of the homepage design
- * language. Displays only data that exists (user_id, email, created_at) and
- * only data and actions available to the authenticated member.
+ * language, with customer-relevant profile data and available member actions.
  */
 export default function DashboardPage() {
   const [profile, setProfile] = useState<null | {
@@ -81,7 +80,7 @@ export default function DashboardPage() {
     return null;
   }
 
-  const memberName = profile.email.split('@')[0];
+  const memberName = profile.email.split('@')[0].split(/[.+_-]/, 1)[0] || 'member';
   const memberSince = new Date(profile.created_at).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'long',
@@ -96,7 +95,7 @@ export default function DashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-caps text-accent-600">
             Member Studio
           </p>
-          <h1 className="font-display text-display-md sm:text-display-lg font-bold tracking-display text-ink-900 text-balance">
+          <h1 className="max-w-full break-words font-display text-display-md sm:text-display-lg font-bold tracking-display text-ink-900 text-balance">
             Welcome back, <span className="text-accent-600">{memberName}</span>
           </h1>
           <p className="text-sm sm:text-base text-ink-500">
@@ -106,7 +105,7 @@ export default function DashboardPage() {
 
         {/* Account summary — existing profile data only */}
         <div className="rounded-tile border border-ink-100 bg-white shadow-tile p-6 sm:p-8">
-          <div className="grid gap-6 sm:grid-cols-3 sm:gap-8">
+          <div className="grid gap-6 sm:grid-cols-2 sm:gap-8">
             <div className="space-y-1.5">
               <p className="text-[11px] font-semibold uppercase tracking-caps text-ink-500">
                 Email
@@ -120,12 +119,6 @@ export default function DashboardPage() {
                 Member since
               </p>
               <p className="text-sm sm:text-base font-medium text-ink-900">{memberSince}</p>
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-caps text-ink-500">
-                Member ID
-              </p>
-              <p className="text-xs font-mono text-ink-500 break-all pt-0.5">{profile.user_id}</p>
             </div>
           </div>
         </div>

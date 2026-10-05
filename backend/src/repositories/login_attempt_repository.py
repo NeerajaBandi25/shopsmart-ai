@@ -1,10 +1,9 @@
 """LoginAttempt repository for audit and rate limiting."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.dialects import postgresql
 
 from src.models.login_attempt import LoginAttempt
 
@@ -41,7 +40,7 @@ class LoginAttemptRepository:
         attempt = LoginAttempt(
             email=email,
             ip_address=ip_address,
-            attempted_at=datetime.utcnow(),
+            attempted_at=datetime.now(timezone.utc),
             success=success,
             failure_reason=failure_reason,
         )
@@ -65,23 +64,14 @@ class LoginAttemptRepository:
         self, ip_address: str, minutes: int = 15
     ) -> list[datetime]:
         """Return timestamps for failed attempts within the active window."""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=minutes)
-
-        # Handle IP address comparison for different database dialects
-        # PostgreSQL uses INET type, SQLite uses String variant
-        if self.db.bind.dialect.name == "postgresql":
-            from sqlalchemy import cast
-            from sqlalchemy.dialects.postgresql import INET
-            ip_condition = LoginAttempt.ip_address == cast(ip_address, INET)
-        else:
-            ip_condition = LoginAttempt.ip_address == ip_address
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=minutes)
 
         result = await self.db.execute(
             select(LoginAttempt.attempted_at).where(
                 and_(
-                    ip_condition,
+                    LoginAttempt.ip_address == ip_address,
                     LoginAttempt.attempted_at >= cutoff_time,
-                    LoginAttempt.success == False,
+                    LoginAttempt.success.is_(False),
                 )
             )
         )

@@ -59,9 +59,7 @@ async def test_explicit_opt_in_inserts_fictional_products(
     async with session_factory() as session:
         products = (await session.execute(select(Product))).scalars().all()
 
-    assert {product.sku for product in products} == {
-        product.sku for product in DEMO_PRODUCTS
-    }
+    assert {product.sku for product in products} == {product.sku for product in DEMO_PRODUCTS}
     assert all(isinstance(product.price, int) and product.price > 0 for product in products)
     assert all(product.stock_quantity > 0 for product in products)
 

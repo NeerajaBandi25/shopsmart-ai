@@ -14,7 +14,12 @@ from src.services.ai_gateway import ProviderGateway
 from src.services.ai_governance import DataClassification
 from src.services.ai_repository import ConversationRepository
 from src.services.assistant_knowledge import KnowledgeRetrievalService
-from src.services.assistant_router import CATEGORY_ALIASES, AssistantIntent, route_assistant_message
+from src.services.assistant_router import (
+    CATEGORY_ALIASES,
+    AssistantIntent,
+    route_assistant_message,
+    strip_price_constraints,
+)
 from src.services.cart_service import CartService
 from src.services.order_service import OrderService
 from src.services.product_catalog_service import ProductCatalogService
@@ -34,8 +39,12 @@ _STOP_WORDS = {
     "product",
     "products",
     "recommend",
+    "rs",
+    "rupee",
+    "rupees",
     "search",
     "show",
+    "inr",
     "some",
     "the",
     "that",
@@ -51,6 +60,13 @@ _STOP_WORDS = {
     "than",
     "below",
     "price",
+    "best",
+    "tell",
+    "about",
+    "coding",
+    "development",
+    "occasional",
+    "gaming",
 }
 
 
@@ -151,14 +167,35 @@ class CommerceAssistantService:
             )
         elif route.intent is AssistantIntent.PRODUCT_SEARCH:
             terms = self._search_terms(question, route.category)
+            contextual_name = re.match(r"\s*tell me about\s+(.+)", question, re.I)
             search_started = time.perf_counter()
             products = await self.catalog.search_products(
-                query_text=" ".join(terms) or None,
-                category=route.category,
+                query_text=contextual_name.group(1).strip()
+                if contextual_name
+                else " ".join(terms) or None,
+                category=None if contextual_name else route.category,
                 min_price_cents=route.min_price_cents,
                 max_price_cents=route.max_price_cents,
                 in_stock_only=route.in_stock_only,
             )
+            # Legacy catalog installations use phones/home/appliances. Their
+            # portfolio names are aliases, so try that same bounded category only
+            # after an empty query; never broaden a category to the whole catalog.
+            portfolio_category = {
+                "phones": "smartphones",
+                "home": "home_living",
+                "appliances": "home_appliances",
+            }.get(route.category)
+            if not products and portfolio_category and not contextual_name:
+                products = await self.catalog.search_products(
+                    query_text=" ".join(terms) or None,
+                    category=portfolio_category,
+                    min_price_cents=route.min_price_cents,
+                    max_price_cents=route.max_price_cents,
+                    in_stock_only=route.in_stock_only,
+                )
+            # Color duplicates obscure useful choices; retain distinct catalog configurations.
+            products = self._distinct_configurations(products)
             _log_product_search(
                 route,
                 result_count=len(products),
@@ -176,7 +213,7 @@ class CommerceAssistantService:
             else:
                 answer = "I couldn't find products matching that."
                 reason = "NO_RESULTS"
-        elif route.intent is AssistantIntent.PRODUCT_COMPARE:
+        elif route.intent in {AssistantIntent.PRODUCT_COMPARE, AssistantIntent.PRODUCT_ADVICE}:
             context = conversation.context or {}
             result_key = (
                 "comparison_product_ids" if context.get("comparison_product_ids") else "product_ids"
@@ -189,12 +226,18 @@ class CommerceAssistantService:
                 )
             else:
                 compared = products[:5]
-                data = {"products": [self._product_data(item) for item in compared]}
+                data = {
+                    "products": [self._product_data(item) for item in compared],
+                    "comparison": True,
+                }
                 conversation.context = {
                     **context,
                     "comparison_product_ids": [str(item.id) for item in compared],
                 }
-                if self._asks_for_cheapest(question):
+                if route.intent is AssistantIntent.PRODUCT_ADVICE:
+                    answer, brief = self._buying_advice(compared)
+                    data["buying_brief"] = brief
+                elif self._asks_for_cheapest(question):
                     cheapest = min(compared, key=lambda item: item.price)
                     equally_priced = sum(item.price == cheapest.price for item in compared) > 1
                     if equally_priced:
@@ -212,11 +255,51 @@ class CommerceAssistantService:
                         f"Here are {len(compared)} products from your recent results to compare."
                     )
         elif route.intent is AssistantIntent.PROMOTIONS:
-            answer = "I couldn't find an active offer that applies to this request."
+            if route.coupon_code:
+                quote = await self.cart.check_coupon(user_id, route.coupon_code)
+                data = {
+                    "coupon_evaluation": quote["coupon_evaluation"],
+                    "cart": self._cart_data(quote),
+                }
+                evaluation = quote["coupon_evaluation"]
+                answer = (
+                    "That coupon is eligible for your current cart."
+                    if evaluation and evaluation["eligible"]
+                    else "I couldn't verify an eligible coupon for your current cart."
+                )
+            else:
+                promotions = await self.cart.get_available_promotions(
+                    user_id, category=route.category
+                )
+                data = {"promotions": promotions}
+                answer = (
+                    f"I found {len(promotions)} active offer(s)."
+                    if promotions
+                    else "I couldn't find an active offer that applies to this request."
+                )
+        elif route.intent is AssistantIntent.COUPON_APPLY:
+            if route.coupon_code is None:
+                answer = "Include a coupon code and ask me to apply it."
+            else:
+                cart = await self.cart.apply_coupon(user_id, route.coupon_code, commit=False)
+                data = {"cart": self._cart_data(cart)}
+                answer = "The coupon was checked against your cart and the updated total is shown."
+        elif route.intent is AssistantIntent.COUPON_REMOVE:
+            cart = await self.cart.remove_coupon(user_id, commit=False)
+            data = {"cart": self._cart_data(cart)}
+            answer = "The coupon was removed and your cart was repriced."
         elif route.intent is AssistantIntent.CART_QUERY:
             cart = await self.cart.get_cart(user_id)
             data = {"cart": self._cart_data(cart)}
             answer = self._cart_summary(cart)
+        elif route.intent is AssistantIntent.CHECKOUT:
+            cart = await self.cart.get_cart(user_id)
+            data = {"cart": self._cart_data(cart)}
+            if cart["items"]:
+                data["navigation"] = "/checkout"
+                answer = "Your cart is ready. Review delivery and the final total at checkout."
+            else:
+                answer = "Your cart is empty. Add a product before going to checkout."
         elif route.intent is AssistantIntent.CART_ACTION:
             product = await self._resolve_product(question, conversation.context)
             if product is None:
@@ -327,12 +410,7 @@ class CommerceAssistantService:
 
     @staticmethod
     def _search_terms(question: str, category: str | None = None) -> list[str]:
-        normalized = re.sub(
-            r"\b(?:under|below|less than|up to|at most|over|above|more than|greater than|at least)"
-            r"\s*\$?\s*\d+(?:\.\d{1,2})?\b",
-            " ",
-            question.lower(),
-        )
+        normalized = strip_price_constraints(question.lower())
         if category:
             aliases = sorted(
                 (alias for alias, canonical in CATEGORY_ALIASES.items() if canonical == category),
@@ -348,6 +426,33 @@ class CommerceAssistantService:
         ][:8]
 
     @staticmethod
+    def _distinct_configurations(products: list) -> list:
+        seen = set()
+        results = []
+        for product in products:
+            specs = getattr(product, "specifications", None) or {}
+            signature = (
+                (
+                    getattr(product, "brand", None),
+                    getattr(product, "category", None),
+                    product.price,
+                    tuple(
+                        sorted(
+                            (key, str(value))
+                            for key, value in specs.items()
+                            if key.lower() != "color"
+                        )
+                    ),
+                )
+                if specs
+                else (str(product.id),)
+            )
+            if signature not in seen:
+                seen.add(signature)
+                results.append(product)
+        return results
+
+    @staticmethod
     def _product_data(product) -> dict:
         return {
             "id": str(product.id),
@@ -358,6 +463,15 @@ class CommerceAssistantService:
             "price_cents": product.price,
             "stock_quantity": product.stock_quantity,
             "max_purchase_quantity": product.max_purchase_quantity,
+            "image_url": getattr(product, "image_url", None),
+            "image_alt": getattr(product, "image_alt", None),
+            "brand": getattr(product, "brand", None),
+            "list_price_cents": getattr(product, "list_price", None),
+            "specifications": {
+                key: value
+                for key, value in (getattr(product, "specifications", None) or {}).items()
+                if not key.startswith("_")
+            },
         }
 
     @staticmethod
@@ -390,7 +504,55 @@ class CommerceAssistantService:
 
     @staticmethod
     def _format_price(price_cents: int) -> str:
-        return f"${price_cents / 100:,.2f}"
+        return f"₹{price_cents / 100:,.2f}"
+
+    @classmethod
+    def _buying_advice(cls, products: list) -> tuple[str, list[dict]]:
+        """Explain the current shortlist using fresh catalog facts, never model specifications.
+
+        Price and published specs are evidence, not benchmark measurements. Missing
+        performance facts stay explicit so a confident answer cannot invent a winner.
+        """
+        cheapest = min(products, key=lambda item: item.price)
+        memory = {}
+        for product in products:
+            evidence = " ".join(
+                str(value) for value in (getattr(product, "specifications", None) or {}).values()
+            )
+            match = re.search(r"\b(\d+)\s*GB\s*(?:RAM|memory)\b", evidence, re.I)
+            if match:
+                memory[str(product.id)] = int(match.group(1))
+        brief = []
+        for product in products:
+            specs = getattr(product, "specifications", None) or {}
+            facts = [
+                f"{key}: {value}"
+                for key, value in specs.items()
+                if isinstance(value, (str, int, float))
+            ][:8]
+            reasons = [f"Current price {cls._format_price(product.price)}"]
+            if product.price == cheapest.price:
+                reasons.append("Lowest price in this comparison")
+            if str(product.id) in memory:
+                reasons.append(
+                    f"Published {memory[str(product.id)]} GB RAM supports comparing development workloads"
+                )
+            reasons.extend(facts)
+            brief.append({"product_id": str(product.id), "name": product.name, "reasons": reasons})
+        answer = (
+            f"For value, {cheapest.name} has the lowest current price at {cls._format_price(cheapest.price)}. "
+            "For React development, compare the published memory, processor and storage; for occasional gaming, "
+            "look for a published graphics specification. The facts below are from the catalog. "
+            "I cannot rank gaming performance or battery life without verified benchmark or battery details."
+        )
+        if len(memory) == len(products) and len(set(memory.values())) > 1:
+            preferred = max(products, key=lambda product: (memory[str(product.id)], -product.price))
+            answer = (
+                f"For React development, I would lean toward {preferred.name}: its published "
+                f"{memory[str(preferred.id)]} GB RAM gives more memory headroom for an editor, browser and local tools. "
+                + answer
+            )
+        return answer, brief
 
     @staticmethod
     def _select_comparison_products(question: str, products: list) -> list:
@@ -445,5 +607,4 @@ class CommerceAssistantService:
         count = sum(item["quantity"] for item in cart["items"])
         if not count:
             return "Your cart is empty."
-        subtotal = cart["subtotal"] / 100
-        return f"Your cart has {count} item(s), with a subtotal of ${subtotal:,.2f}."
+        return f"Your cart has {count} item(s), with a subtotal of ₹{cart['subtotal'] / 100:,.2f}."

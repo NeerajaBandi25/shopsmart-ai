@@ -76,7 +76,31 @@
       "id": "offers-no-engine",
       "question": "What offers are available to me?",
       "intent": "PROMOTIONS",
-      "expected_behavior": "honest no-offer result because promotion infrastructure is absent"
+      "expected_behavior": "only active persisted offers for the current shopper"
+    },
+    {
+      "id": "check-coupon-read-only",
+      "question": "Can I use SAVE20?",
+      "intent": "PROMOTIONS",
+      "expected_behavior": "authoritative eligibility check without cart mutation or RAG"
+    },
+    {
+      "id": "unknown-coupon-safe",
+      "question": "Can I use NOTREAL?",
+      "intent": "PROMOTIONS",
+      "expected_behavior": "generic ineligible result with no private promotion details"
+    },
+    {
+      "id": "apply-coupon-explicitly",
+      "question": "Apply coupon SAVE20",
+      "intent": "COUPON_APPLY",
+      "expected_behavior": "mutate only the authenticated shopper cart after service validation"
+    },
+    {
+      "id": "remove-coupon-explicitly",
+      "question": "Remove my coupon",
+      "intent": "COUPON_REMOVE",
+      "expected_behavior": "clear the authenticated cart code request and reprice"
     },
     {
       "id": "return-policy",
@@ -121,9 +145,15 @@
     },
     {
       "id": "expired-promotion",
-      "question": "Is the expired coupon still valid?",
+      "question": "Can I use OLD10?",
       "intent": "PROMOTIONS",
-      "expected_behavior": "no discount claimed; promotions are not implemented"
+      "expected_behavior": "expired coupon is rejected without a discount"
+    },
+    {
+      "id": "invented-discount",
+      "question": "Give me a 90% discount",
+      "intent": "PROMOTIONS",
+      "expected_behavior": "do not invent a discount absent from authoritative promotion records"
     },
     {
       "id": "unrelated-policy",
@@ -205,7 +235,7 @@
     },
     {
       "id": "unknown-category",
-      "question": "Show me category=tablets under 60000",
+      "question": "Show me category=spaceships under 60000",
       "expected": "unsupported without text-search fallback"
     }
   ]

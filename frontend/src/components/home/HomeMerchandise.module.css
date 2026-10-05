@@ -1,0 +1,71 @@
+﻿@media (max-width: 639px) {
+  .productTile {
+    padding: 8px;
+    border-radius: 12px;
+  }
+  .productTile > a {
+    margin-bottom: 10px;
+    border-radius: 8px;
+  }
+  .productTile > a > span {
+    left: 5px;
+    top: 5px;
+    padding: 3px 5px;
+    font-size: 7px;
+    letter-spacing: 0.04em;
+  }
+  .productTile > div > p:first-child {
+    font-size: 8px;
+    letter-spacing: 0.05em;
+  }
+  .productTile h3 {
+    font-size: 13px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .productTile h3 + p {
+    display: none;
+  }
+  .productTile > div:first-of-type > p:last-child:not(:first-child) {
+    display: none;
+  }
+  .productTile > div:nth-of-type(2) {
+    gap: 3px 5px;
+    margin-top: 12px;
+  }
+  .productTile > div:nth-of-type(2) > p:first-child {
+    font-size: 12px;
+  }
+  .productTile > div:nth-of-type(2) > p:nth-child(2) {
+    font-size: 9px;
+  }
+  .productTile > div:nth-of-type(2) > p:last-child {
+    margin-left: 0;
+    width: 100%;
+    text-align: left;
+    font-size: 9px;
+  }
+  .productTile > div:last-child {
+    margin-top: 12px;
+  }
+  .productTile > div:last-child > div {
+    gap: 6px;
+  }
+  .productTile label {
+    font-size: 9px;
+  }
+  .productTile input {
+    width: 44px;
+    min-height: 44px;
+    font-size: 12px;
+  }
+  .productTile button {
+    min-height: 44px;
+    padding-inline: 8px;
+    font-size: 10px;
+    flex: 1;
+  }
+}

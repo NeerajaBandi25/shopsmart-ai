@@ -1,25 +1,17 @@
 """Pytest configuration and shared fixtures."""
 
 import asyncio
-from typing import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator, Generator
 
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import event, CheckConstraint
+from sqlalchemy import CheckConstraint, event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Import all models to register them with Base before creating fixtures
-from src.models.base import Base
-from src.models.user import User
-from src.models.session import Session
-from src.models.login_attempt import LoginAttempt
-from src.models.product import Product  # noqa: F401
-from src.models.cart import Cart, CartItem  # noqa: F401
-from src.models.order import Order, OrderItem  # noqa: F401
 from src.models.ai import (  # noqa: F401
     ChatMessage,
     Conversation,
@@ -28,6 +20,18 @@ from src.models.ai import (  # noqa: F401
     DocumentVersion,
 )
 
+# Import all models to register them with Base before creating fixtures
+from src.models.base import Base
+from src.emails.model import NotificationOutbox  # noqa: F401
+from src.models.cart import Cart, CartItem  # noqa: F401
+from src.models.login_attempt import LoginAttempt  # noqa: F401
+from src.models.order import Order, OrderItem  # noqa: F401
+from src.models.payment import Payment, PaymentWebhookEvent  # noqa: F401
+from src.models.product import Product  # noqa: F401
+from src.models.promotion import Promotion  # noqa: F401
+from src.models.session import Session  # noqa: F401
+from src.models.user import User  # noqa: F401
+
 
 @pytest.fixture(autouse=True)
 def isolate_process_rate_limiter(monkeypatch):
@@ -35,6 +39,7 @@ def isolate_process_rate_limiter(monkeypatch):
     from src.core import rate_limiter as rate_limiter_module
 
     monkeypatch.setattr(rate_limiter_module.settings, "redis_url", None)
+    monkeypatch.setattr(rate_limiter_module.settings, "app_env", "test")
     monkeypatch.setattr(rate_limiter_module, "rate_limiter", rate_limiter_module.RateLimiter())
 
 
@@ -120,8 +125,8 @@ def test_user_data() -> dict:
 @pytest_asyncio.fixture
 async def test_user_data_in_db(test_db: AsyncSession, test_user_data: dict):
     """Create a test user in the database."""
-    from src.repositories.user_repository import UserRepository
     from src.core.security import hash_password
+    from src.repositories.user_repository import UserRepository
 
     user_repo = UserRepository(db=test_db)
     await user_repo.create_user(
@@ -167,11 +172,13 @@ def mock_email_provider(monkeypatch):
     class MockEmailProvider:
         @staticmethod
         def send_notification(recipient: str, subject: str, body: str) -> bool:
-            sent_emails.append({
-                "recipient": recipient,
-                "subject": subject,
-                "body": body,
-            })
+            sent_emails.append(
+                {
+                    "recipient": recipient,
+                    "subject": subject,
+                    "body": body,
+                }
+            )
             return True
 
         @staticmethod

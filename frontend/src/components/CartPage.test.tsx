@@ -4,20 +4,38 @@ import { CartPage } from './CartPage';
 import { useCommerceStore } from '@/lib/commerce-store';
 
 jest.mock('@/lib/cart-api', () => ({
+  applyCartCoupon: jest.fn(),
   getCart: jest.fn(),
+  removeCartCoupon: jest.fn(),
   removeCartItem: jest.fn(),
   setCartItemQuantity: jest.fn(),
 }));
 
-import { getCart, removeCartItem, setCartItemQuantity } from '@/lib/cart-api';
+import {
+  applyCartCoupon,
+  getCart,
+  removeCartCoupon,
+  removeCartItem,
+  setCartItemQuantity,
+} from '@/lib/cart-api';
 
-const emptyCart = { items: [], subtotal: 0, currency: 'USD' };
+const quoteFields = {
+  coupon_code: null,
+  coupon_evaluation: null,
+  applied_promotions: [],
+  discount_total_cents: 0,
+  total_cents: 0,
+};
+const emptyCart = { ...quoteFields, items: [], subtotal: 0, currency: 'INR' };
 const filledCart = {
+  ...quoteFields,
   items: [
     {
       product_id: 'lamp-1',
       name: 'Desk Lamp',
       sku: 'LAMP-1',
+      image_url: '/images/products/portfolio/cart-lamp.png',
+      image_alt: 'Desk lamp illustration',
       unit_price: 1299,
       quantity: 1,
       line_total: 1299,
@@ -26,7 +44,8 @@ const filledCart = {
     },
   ],
   subtotal: 1299,
-  currency: 'USD',
+  currency: 'INR',
+  total_cents: 1299,
 };
 
 describe('CartPage', () => {
@@ -57,12 +76,26 @@ describe('CartPage', () => {
     expect(getCart).toHaveBeenCalledTimes(2);
   });
 
+  it('shows the server quote guidance and integer stock-limited quantity control', async () => {
+    (getCart as jest.Mock).mockResolvedValue(filledCart);
+    render(<CartPage />);
+
+    const quantity = await screen.findByRole('spinbutton', { name: /quantity for desk lamp/i });
+    expect(quantity).toHaveAttribute('step', '1');
+    expect(quantity).toHaveAttribute('max', '3');
+    expect(screen.getByRole('img', { name: 'Desk lamp illustration' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/prices and promotions are calculated by shopsmart/i)
+    ).toBeInTheDocument();
+  });
+
   it('updates a quantity and displays the server total', async () => {
     (getCart as jest.Mock).mockResolvedValue(filledCart);
     (setCartItemQuantity as jest.Mock).mockResolvedValue({
       ...filledCart,
       items: [{ ...filledCart.items[0], quantity: 2, line_total: 2598 }],
       subtotal: 2598,
+      total_cents: 2598,
     });
     render(<CartPage />);
 
@@ -71,7 +104,7 @@ describe('CartPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /update/i }));
 
     await waitFor(() => expect(setCartItemQuantity).toHaveBeenCalledWith('lamp-1', 2));
-    expect(await screen.findAllByText('$25.98')).toHaveLength(2);
+    expect(await screen.findAllByText('₹25.98')).toHaveLength(3);
     expect(useCommerceStore.getState().cartItemCount).toBe(2);
   });
 
@@ -99,5 +132,50 @@ describe('CartPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Update failed.');
     expect(useCommerceStore.getState().cartItemCount).toBe(1);
+  });
+
+  it('applies and removes a coupon using the server quote', async () => {
+    const discountedCart = {
+      ...filledCart,
+      coupon_code: 'SAVE10',
+      coupon_evaluation: {
+        promotion_id: 'promo-1',
+        code: 'SAVE10',
+        name: 'Ten percent',
+        eligible: true,
+        reason_code: 'eligible',
+        discount_cents: 130,
+        applied_scope: { type: 'all' },
+      },
+      applied_promotions: [
+        {
+          promotion_id: 'promo-1',
+          code: 'SAVE10',
+          name: 'Ten percent',
+          promotion_type: 'percentage',
+          value: 10,
+          discount_cents: 130,
+          applied_scope: { type: 'all' },
+        },
+      ],
+      discount_total_cents: 130,
+      total_cents: 1169,
+    };
+    (getCart as jest.Mock).mockResolvedValue(filledCart);
+    (applyCartCoupon as jest.Mock).mockResolvedValue(discountedCart);
+    (removeCartCoupon as jest.Mock).mockResolvedValue(filledCart);
+    render(<CartPage />);
+
+    fireEvent.change(await screen.findByLabelText(/coupon code/i), {
+      target: { value: 'save10' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(await screen.findByText('Ten percent')).toBeInTheDocument();
+    expect(screen.getByText('₹11.69')).toBeInTheDocument();
+    expect(applyCartCoupon).toHaveBeenCalledWith('save10');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove coupon' }));
+    await waitFor(() => expect(removeCartCoupon).toHaveBeenCalledTimes(1));
+    expect(await screen.findAllByText('₹12.99')).toHaveLength(3);
   });
 });

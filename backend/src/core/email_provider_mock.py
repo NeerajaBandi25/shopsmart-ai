@@ -31,7 +31,8 @@ class MockEmailProvider(EmailProvider):
             "body": body,
         }
         self._sent_emails.append(email)
-        logger.info(f"Mock email sent to {recipient}: {subject}")
+        # Tests can inspect the in-memory message; exported logs contain no recipient or content.
+        logger.info("mock_email_notification_recorded")
         return True
 
     def get_sent_emails(self) -> list[dict]:

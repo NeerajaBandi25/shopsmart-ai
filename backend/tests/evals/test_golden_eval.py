@@ -1,8 +1,6 @@
-import json
 from pathlib import Path
 
 from src.evals.runner import aggregate, load_dataset, score_case
-
 
 DATASET = Path(__file__).parents[2] / "evals" / "datasets" / "golden_v1.json"
 

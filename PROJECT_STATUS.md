@@ -1,8 +1,9 @@
 ﻿# ShopSmart AI — Project Status
 
-## Current Phase
+## Historical Phase
 
-ShopSmart AI — Agent Harness Phase 1C completed.
+The Agent Harness Phase 1C work below is a completed historical increment.
+Current application verification is tracked in `.factory/status.md`.
 
 ## Project Rule
 
@@ -93,28 +94,25 @@ The launcher/provider does not define project state.
 
 ## Current Application Work
 
-As of 2026-10-03, `origin/main` contains the authentication, catalog, shopping,
-commerce BFF, Redis cache, frontend state, observability, CI/CD foundation,
-AI/RAG, provider gateway, AI governance/security, and commerce-assistant work.
+The active application checkout is `feature/promotions-discount-engine`; the current
+local product combines the storefront, commerce services, and AI assistant. Current
+production-completion status is **VERIFYING**, not ready for production. Use
+`.factory/status.md` as the active workstream checkpoint for verified product claims,
+validation evidence, and remaining gates. Do not use the dated baseline in
+`docs/product-audit.md` as a current blocker list.
 
-PR #44, `feat: add production commerce assistant and structured search`, is
-merged into `main` at `24c82e984f6d6658fc0676eb1223948a03d9eb46`. The merged
-increment includes structured category search and migration 012, production-like
-seed/evaluator data, cart/order assistant behavior, backend-owned policy RAG,
-and bounded assistant/search logging. Post-merge CI run [37112240926](https://github.com/NeerajaBandi25/shopsmart-ai/actions/runs/37112240926)
-passed all four required checks: backend tests, backend security gates, frontend
-tests/lint/Prettier, and Docker Compose smoke test.
+## Historical Verification Snapshot (2026-10-03)
 
-The current product contract is in `specs/008-ai-rag/spec.md`; the root
-`plan.md` is a historical authentication assessment, not the current plan.
+The previously recorded database revision, product count, and backend/frontend test
+counts are a historical snapshot only. They do not establish the current state or
+satisfy current production-completion gates; consult `.factory/status.md` for the
+latest recorded verification.
 
 ## Next Engineering Work
 
-Specify the next product increment before implementation. Promotions/discounts,
-richer category hierarchy, and brand/variant modeling remain product gaps;
-live external-provider quality/cost validation also remains outstanding.
-Preserve the existing authentication, BFF, provider-governance, and harness
-boundaries.
+Continue the active work from `.factory/status.md` and the user's current task. Keep
+changes on the existing branch and Draft PR. Do not merge or deploy unless explicitly
+requested.
 
 ## Important Constraints
 

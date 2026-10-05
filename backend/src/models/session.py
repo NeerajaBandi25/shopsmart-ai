@@ -1,6 +1,7 @@
 """Session entity model."""
 
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import (
@@ -11,10 +12,12 @@ from sqlalchemy import (
     String,
     func,
 )
-from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import BaseModel
+
+if TYPE_CHECKING:
+    from src.models.user import User
 
 
 class Session(BaseModel):
@@ -29,11 +32,11 @@ class Session(BaseModel):
     last_activity: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
     )
     ip_address: Mapped[str] = mapped_column(
-        INET().with_variant(String(45), "sqlite"),
+        String(45),
         nullable=False,
     )
     user_agent: Mapped[str] = mapped_column(

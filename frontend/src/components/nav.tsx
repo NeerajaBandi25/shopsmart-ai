@@ -23,6 +23,7 @@ export default function Nav({ probeAuth = true }: NavProps) {
   const cartItemCount = useCommerceStore((state) => state.cartItemCount);
   const [isLoading, setIsLoading] = useState(probeAuth);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!probeAuth) {
@@ -94,16 +95,18 @@ export default function Nav({ probeAuth = true }: NavProps) {
   // Signed-out CTA pair (existing public routes only). Reused in both the
   // loading and settled branches so the header is complete in either state.
   const signedOutCtas = (
-    <div className="hidden items-center gap-5 md:flex">
+    <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:gap-5">
       <Link
         href="/auth/login"
         className="rounded-sm text-sm font-medium text-ink-500 transition-colors duration-200 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+        onClick={() => setIsMobileMenuOpen(false)}
       >
         Sign In
       </Link>
       <Link
         href="/auth/register"
         className="rounded-full bg-accent-600 px-4 py-1.5 text-sm font-semibold text-white shadow-tile transition-colors duration-200 hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
+        onClick={() => setIsMobileMenuOpen(false)}
       >
         Create Account
       </Link>
@@ -138,32 +141,68 @@ export default function Nav({ probeAuth = true }: NavProps) {
         aria-hidden="true"
         className="h-0.5 w-full bg-gradient-to-r from-accent-600 via-accent-300 to-accent-600"
       />
-      <div className="max-w-7xl mx-auto flex min-h-[3.75rem] items-center justify-between gap-4 sm:min-h-[4rem] px-4 sm:px-6 lg:px-8">
+      <div className="relative max-w-7xl mx-auto flex min-h-[3.75rem] items-center justify-between gap-4 sm:min-h-[4rem] px-4 sm:px-6 lg:px-8">
         <div className="flex items-center">{wordmark}</div>
-        <div className="flex flex-col items-start sm:flex-row sm:items-center sm:space-x-5 space-y-1.5 sm:space-y-0">
-          {isAuthenticated ? (
-            <>
-              <Link href="/dashboard" className={navLinkClasses}>
-                Dashboard
-              </Link>
-              <Link
-                href="/cart"
-                className={navLinkClasses}
-                aria-label={`Cart, ${cartItemCount} ${cartItemCount === 1 ? 'item' : 'items'}`}
-              >
-                Cart <span aria-hidden="true">({cartItemCount})</span>
-              </Link>
-              <Link href="/orders" className={navLinkClasses}>
-                Orders
-              </Link>
-              <Link href="/account" className={navLinkClasses}>
-                Account
-              </Link>
-              <LogoutButton className="sm:ml-1 sm:w-auto" />
-            </>
-          ) : (
-            signedOutCtas
-          )}
+        <div className="flex items-center">
+          <button
+            type="button"
+            aria-label="Open shopping commands"
+            onClick={() => window.dispatchEvent(new Event('shopsmart-commands'))}
+            className="min-h-11 rounded-sm px-3 text-sm font-semibold text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-500 sm:hidden"
+          >
+            Search
+          </button>
+          <button
+            type="button"
+            aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="primary-navigation"
+            onClick={() => setIsMobileMenuOpen((open) => !open)}
+            className="rounded-sm px-2 py-1.5 text-sm font-semibold text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 md:hidden"
+          >
+            {isMobileMenuOpen ? 'Close' : 'Menu'}
+          </button>
+          <div
+            id="primary-navigation"
+            className={`${isMobileMenuOpen ? 'flex' : 'hidden'} absolute left-0 right-0 top-full z-50 flex-col items-stretch gap-3 border-b border-gray-200 bg-white px-4 py-4 shadow-tile md:static md:z-auto md:flex md:flex-row md:items-center md:gap-5 md:border-0 md:bg-transparent md:px-0 md:py-0 md:shadow-none`}
+          >
+            {isAuthenticated ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  className={navLinkClasses}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  href="/cart"
+                  className={navLinkClasses}
+                  aria-label={`Cart, ${cartItemCount} ${cartItemCount === 1 ? 'item' : 'items'}`}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Cart <span aria-hidden="true">({cartItemCount})</span>
+                </Link>
+                <Link
+                  href="/orders"
+                  className={navLinkClasses}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Orders
+                </Link>
+                <Link
+                  href="/account"
+                  className={navLinkClasses}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Account
+                </Link>
+                <LogoutButton className="sm:ml-1 sm:w-auto" />
+              </>
+            ) : (
+              signedOutCtas
+            )}
+          </div>
         </div>
       </div>
     </nav>

@@ -106,6 +106,25 @@ class TestRegistrationErrorCases:
         assert isinstance(data["error_code"], str)
 
 
+@pytest.mark.parametrize("password", ["A" * 73, "é" * 37])
+async def test_register_and_login_reject_passwords_over_bcrypt_byte_limit(
+    test_client: AsyncClient, password: str
+):
+    registration = await test_client.post(
+        "/api/v1/auth/register",
+        json={"email": "oversized@example.com", "password": password},
+    )
+    login = await test_client.post(
+        "/api/v1/auth/login",
+        json={"email": "oversized@example.com", "password": password},
+    )
+
+    assert registration.status_code == 422
+    assert login.status_code == 422
+    assert "password" in registration.text
+    assert "password" in login.text
+
+
 class TestImmediateLoginAfterRegistration:
     """T034: Test immediate login after registration."""
 
@@ -204,6 +223,9 @@ class TestSingleSessionConcurrency:
         from src.models.session import Session
         from src.repositories.session_repository import SessionRepository
         from src.repositories.user_repository import UserRepository
+
+        if settings.database_url.startswith("sqlite"):
+            pytest.skip("SQLite does not support the row locking this test verifies")
 
         email = test_user_data_in_db["email"]
         password = test_user_data_in_db["password"]
@@ -774,7 +796,7 @@ class TestRollingSessionTimeout:
             activity = await test_client.get("/api/v1/auth/me", cookies={"session_id": session_id})
             assert activity.status_code == 200
             self._assert_refreshed_cookie(activity, session_id)
-            assert session.last_activity == clock()
+            assert session.last_activity.replace(tzinfo=None) == clock()
             latest_activity = session.last_activity
 
             # More than 30 days after login, but only 29 days after activity.
@@ -785,7 +807,7 @@ class TestRollingSessionTimeout:
 
             assert still_active.status_code == 200
             self._assert_refreshed_cookie(still_active, session_id)
-            assert session.last_activity == clock()
+            assert session.last_activity.replace(tzinfo=None) == clock()
             assert session.last_activity > latest_activity
 
     async def test_t099_continuous_activity_has_no_absolute_expiration_cap(
@@ -818,7 +840,7 @@ class TestRollingSessionTimeout:
 
                 assert response.status_code == 200
                 self._assert_refreshed_cookie(response, session_id)
-                assert session.last_activity == clock()
+                assert session.last_activity.replace(tzinfo=None) == clock()
 
             # At the exact inactivity boundary the session is still valid;
             # only exceeding the boundary expires it.

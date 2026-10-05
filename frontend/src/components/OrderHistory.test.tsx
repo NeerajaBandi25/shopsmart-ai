@@ -15,7 +15,10 @@ describe('OrderHistory', () => {
         id: 'order-42',
         created_at: '2026-09-26T10:00:00Z',
         status: 'placed',
+        subtotal_cents: 2598,
+        discount_total_cents: 0,
         total_cents: 2598,
+        promotion_snapshot: [],
         items: [
           {
             product_id: 'product-1',
@@ -31,10 +34,11 @@ describe('OrderHistory', () => {
 
     render(<OrderHistory />);
 
-    expect(await screen.findByRole('heading', { name: 'Order #order-42' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^Order from/ })).toBeInTheDocument();
+    expect(screen.queryByText(/order-42/i)).not.toBeInTheDocument();
     expect(screen.getByText('Canvas Weekender')).toBeInTheDocument();
-    expect(screen.getByText('× 2')).toBeInTheDocument();
-    expect(screen.getAllByText('$25.98')).toHaveLength(2);
+    expect(screen.getByText('2 × ₹12.99')).toBeInTheDocument();
+    expect(screen.getAllByText('₹25.98')).toHaveLength(3);
   });
 
   it('shows empty and error states', async () => {

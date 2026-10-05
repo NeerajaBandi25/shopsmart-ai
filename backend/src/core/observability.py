@@ -1,5 +1,7 @@
 """Lightweight request logging, request IDs, metrics, and security audit events."""
 
+import hashlib
+import hmac
 import json
 import logging
 import re
@@ -13,6 +15,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from src.core.config import settings
 
 request_id_context: ContextVar[str | None] = ContextVar("request_id", default=None)
 
@@ -32,6 +36,18 @@ _SECURITY_EVENTS = frozenset(
         "password_change_failure",
         "authentication_failure",
         "authorization_denied",
+    }
+)
+_COMMERCE_AUDIT_EVENTS = frozenset(
+    {
+        "ORDER_CREATED",
+        "PAYMENT_CONFIRMED",
+        "PAYMENT_SUCCEEDED",
+        "PAYMENT_FAILED",
+        "PAYMENT_CANCELLED",
+        "ORDER_CANCELLED",
+        "PAYMENT_REFUNDED",
+        "REFUND_CREATED",
     }
 )
 _AI_EVENTS = frozenset(
@@ -55,6 +71,10 @@ _LOG_CONTEXT_FIELDS = frozenset(
         "route",
         "intent",
         "operation",
+        "promotion_id",
+        "coupon_hash",
+        "eligible",
+        "discount_cents",
         "category",
         "min_price_cents",
         "max_price_cents",
@@ -64,9 +84,8 @@ _LOG_CONTEXT_FIELDS = frozenset(
         "duration_ms",
         "error_type",
         "error_code",
-        "user_id",
-        "client_ip",
-        "user_agent",
+        "user_ref",
+        "client_ref",
         "reason",
         "exception_type",
         "provider",
@@ -75,6 +94,15 @@ _LOG_CONTEXT_FIELDS = frozenset(
         "fallback_used",
         "latency_ms",
         "routing_policy",
+        "order_id",
+        "payment_id",
+        "amount_cents",
+        "currency",
+        "status",
+        "event_type",
+        "template",
+        "recipient_domain",
+        "attempt",
     }
 )
 
@@ -183,7 +211,11 @@ def security_audit_event(
     user_agent: str | None = None,
     reason: str | None = None,
 ) -> None:
-    """Emit an allowlisted security event without credentials or token values."""
+    """Audit outcomes with keyed references, without raw identities or browser metadata.
+
+    References correlate events under the current server key; they are pseudonyms,
+    not anonymous data. User-agent text is accepted for caller compatibility but omitted.
+    """
     if event not in _SECURITY_EVENTS:
         return
 
@@ -193,11 +225,9 @@ def security_audit_event(
         "request_id": request_id_context.get(),
     }
     if user_id:
-        context["user_id"] = user_id[:64]
+        context["user_ref"] = _audit_reference("user", user_id)
     if client_ip:
-        context["client_ip"] = client_ip[:64]
-    if user_agent:
-        context["user_agent"] = user_agent[:256]
+        context["client_ref"] = _audit_reference("client", client_ip)
     if reason:
         context["reason"] = reason[:64]
 
@@ -207,6 +237,47 @@ def security_audit_event(
         "security_event",
         extra=context,
     )
+
+
+def commerce_audit_event(
+    event: str,
+    *,
+    request_id: str | None = None,
+    order_id: str | None = None,
+    payment_id: str | None = None,
+    provider: str | None = None,
+    amount_cents: int | None = None,
+    currency: str | None = None,
+    status: str | None = None,
+    error_code: str | None = None,
+) -> None:
+    """Emit allowlisted commerce changes without payment credentials or customer PII."""
+    if event not in _COMMERCE_AUDIT_EVENTS:
+        return
+    context: dict[str, object] = {"event": event}
+    for key, value in (
+        ("request_id", request_id),
+        ("order_id", order_id),
+        ("payment_id", payment_id),
+        ("provider", provider),
+        ("currency", currency),
+        ("status", status),
+        ("error_code", error_code),
+    ):
+        if value is not None:
+            context[key] = value[:128] if isinstance(value, str) else value
+    if amount_cents is not None:
+        context["amount_cents"] = amount_cents
+    logging.getLogger("shopsmart.commerce.audit").info("commerce_audit_event", extra=context)
+
+
+def _audit_reference(kind: str, value: str) -> str:
+    # Keying prevents offline IP enumeration; domains prevent cross-field correlation.
+    return hmac.new(
+        settings.secret_key.encode("utf-8"),
+        f"security-audit:v1:{kind}:{value}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 class RequestObservabilityMiddleware:

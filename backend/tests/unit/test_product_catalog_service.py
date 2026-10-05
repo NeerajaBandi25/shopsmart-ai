@@ -58,6 +58,11 @@ class FakeRedis:
         return value
 
 
+class Repository:
+    async def count_active_products(self):
+        return 0
+
+
 def _page(sku: str, skip: int = 0, limit: int = 24) -> ProductPageResponse:
     return ProductPageResponse(
         items=[
@@ -65,14 +70,26 @@ def _page(sku: str, skip: int = 0, limit: int = 24) -> ProductPageResponse:
                 "id": UUID("00000000-0000-0000-0000-000000000001"),
                 "name": f"Product {sku}",
                 "description": None,
+                "category": None,
+                "brand": "Test brand",
                 "sku": sku,
                 "price": 1299,
+                "list_price": None,
+                "image_url": None,
+                "image_alt": None,
+                "image_source_url": None,
+                "image_creator": None,
+                "image_license": None,
+                "image_license_url": None,
+                "image_sha256": None,
+                "specifications": {},
                 "stock_quantity": 8,
                 "max_purchase_quantity": 3,
             }
         ],
         skip=skip,
         limit=limit,
+        total=1,
     )
 
 
@@ -97,7 +114,7 @@ def test_product_catalog_cache_keys_include_namespace_generation_and_pagination(
 
 
 async def test_cache_miss_reads_database_and_hit_skips_repository(fake_redis, monkeypatch):
-    repository = type("Repository", (), {})()
+    repository = Repository()
     calls = []
 
     async def get_products(*, skip, limit):
@@ -107,14 +124,30 @@ async def test_cache_miss_reads_database_and_hit_skips_repository(fake_redis, mo
                 "id": UUID("00000000-0000-0000-0000-000000000001"),
                 "name": "Product CACHED-1",
                 "description": None,
+                "category": None,
+                "brand": "Test brand",
                 "sku": "CACHED-1",
                 "price": 1299,
+                "list_price": None,
+                "image_url": None,
+                "image_alt": None,
+                "image_source_url": None,
+                "image_creator": None,
+                "image_license": None,
+                "image_license_url": None,
+                "image_sha256": None,
+                "specifications": {},
                 "stock_quantity": 8,
                 "max_purchase_quantity": 3,
             }
         ]
 
     repository.get_products = get_products
+
+    async def count_active_products():
+        return 1
+
+    repository.count_active_products = count_active_products
     monkeypatch.setattr(service_module, "ProductRepository", lambda _db: repository)
     service = ProductCatalogService(db=None)
 
@@ -138,7 +171,7 @@ async def test_cache_miss_reads_database_and_hit_skips_repository(fake_redis, mo
 
 
 async def test_distinct_pagination_parameters_populate_distinct_entries(fake_redis, monkeypatch):
-    repository = type("Repository", (), {})()
+    repository = Repository()
     calls = []
 
     async def get_products(*, skip, limit):
@@ -158,7 +191,7 @@ async def test_distinct_pagination_parameters_populate_distinct_entries(fake_red
 
 
 async def test_cache_entries_expire_and_are_refilled(fake_redis, monkeypatch):
-    repository = type("Repository", (), {})()
+    repository = Repository()
     calls = 0
 
     async def get_products(*, skip, limit):
@@ -181,7 +214,7 @@ async def test_cache_entries_expire_and_are_refilled(fake_redis, monkeypatch):
 
 async def test_redis_read_failure_falls_back_to_database_without_a_write(fake_redis, monkeypatch):
     fake_redis.fail_get = True
-    repository = type("Repository", (), {})()
+    repository = Repository()
     repository.get_products = lambda **_kwargs: None
 
     async def get_products(**_kwargs):
@@ -197,7 +230,7 @@ async def test_redis_read_failure_falls_back_to_database_without_a_write(fake_re
 
 async def test_redis_timeout_falls_back_to_database_without_a_write(fake_redis, monkeypatch):
     fake_redis.get_error = RedisTimeoutError("Redis read timed out")
-    repository = type("Repository", (), {})()
+    repository = Repository()
 
     async def get_products(**_kwargs):
         return []
@@ -213,7 +246,7 @@ async def test_redis_timeout_falls_back_to_database_without_a_write(fake_redis, 
 
 async def test_redis_write_failure_does_not_fail_catalog_request(fake_redis, monkeypatch):
     fake_redis.fail_set = True
-    repository = type("Repository", (), {})()
+    repository = Repository()
 
     async def get_products(*, skip, limit):
         return []
@@ -229,7 +262,7 @@ async def test_redis_write_failure_does_not_fail_catalog_request(fake_redis, mon
 async def test_invalid_cached_payload_falls_back_and_replaces_it(fake_redis, monkeypatch):
     key = product_catalog_cache_key(skip=0, limit=24)
     fake_redis.values[key] = "not-json"
-    repository = type("Repository", (), {})()
+    repository = Repository()
 
     async def get_products(*, skip, limit):
         return []
@@ -244,7 +277,7 @@ async def test_invalid_cached_payload_falls_back_and_replaces_it(fake_redis, mon
 
 
 async def test_repository_error_is_not_cached(fake_redis, monkeypatch):
-    repository = type("Repository", (), {})()
+    repository = Repository()
 
     async def fail_database_read(**_kwargs):
         raise RuntimeError("database read failed")
@@ -299,4 +332,4 @@ async def test_async_redis_client_is_shared_and_closed(monkeypatch):
 
 
 def _page_for_empty() -> ProductPageResponse:
-    return ProductPageResponse(items=[], skip=0, limit=24)
+    return ProductPageResponse(items=[], skip=0, limit=24, total=0)

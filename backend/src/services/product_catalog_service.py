@@ -17,20 +17,64 @@ class ProductCatalogService:
         self.repository = ProductRepository(db)
         self.cache = cache or ProductCatalogCache()
 
-    async def list_products(self, skip: int, limit: int) -> ProductPageResponse:
-        lookup = await self.cache.get_page(skip, limit)
-        if lookup.page is not None:
+    async def list_products(
+        self,
+        skip: int,
+        limit: int,
+        query_text: str | None = None,
+        category: str | None = None,
+        brand: str | None = None,
+        subcategory: str | None = None,
+        min_price_cents: int | None = None,
+        max_price_cents: int | None = None,
+        in_stock_only: bool = False,
+        sort: str = "newest",
+    ) -> ProductPageResponse:
+        is_default_query = (
+            not any(
+                (
+                    query_text,
+                    category,
+                    brand,
+                    subcategory,
+                    min_price_cents,
+                    max_price_cents,
+                    in_stock_only,
+                )
+            )
+            and sort == "newest"
+        )
+        lookup = await self.cache.get_page(skip, limit) if is_default_query else None
+        if lookup and lookup.page is not None:
             return lookup.page
 
-        products = await self.repository.get_products(skip=skip, limit=limit)
-        page = ProductPageResponse(items=products, skip=skip, limit=limit)
-        await self.cache.set_page(skip, limit, lookup.generation, page)
+        if is_default_query:
+            products = await self.repository.get_products(skip=skip, limit=limit)
+            total = await self.repository.count_active_products()
+        else:
+            products, total = await self.repository.search_active_products_page(
+                query_text=query_text,
+                category=category,
+                brand=brand,
+                subcategory=subcategory,
+                min_price_cents=min_price_cents,
+                max_price_cents=max_price_cents,
+                in_stock_only=in_stock_only,
+                skip=skip,
+                limit=limit,
+                sort=sort,
+            )
+        page = ProductPageResponse(items=products, skip=skip, limit=limit, total=total)
+        if is_default_query and lookup:
+            await self.cache.set_page(skip, limit, lookup.generation, page)
         return page
 
     async def search_products(
         self,
         query_text: str | None = None,
         category: str | None = None,
+        brand: str | None = None,
+        subcategory: str | None = None,
         min_price_cents: int | None = None,
         max_price_cents: int | None = None,
         in_stock_only: bool = False,
@@ -40,6 +84,8 @@ class ProductCatalogService:
         return await self.repository.search_active_products(
             query_text=query_text,
             category=category,
+            brand=brand,
+            subcategory=subcategory,
             min_price_cents=min_price_cents,
             max_price_cents=max_price_cents,
             in_stock_only=in_stock_only,
@@ -47,4 +93,5 @@ class ProductCatalogService:
         )
 
     async def get_product(self, product_id: UUID) -> Product | None:
-        return await self.repository.get_product_by_id(product_id)
+        product = await self.repository.get_product_by_id(product_id)
+        return product if product and product.is_active else None

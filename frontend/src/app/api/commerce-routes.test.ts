@@ -1,6 +1,7 @@
 /** @jest-environment node */
 
 import { GET as getProducts } from './products/route';
+import { GET as getProduct } from './products/[productId]/route';
 import { GET as getCart } from './cart/route';
 import { POST as addCartItem } from './cart/items/route';
 import {
@@ -9,6 +10,8 @@ import {
 } from './cart/items/[productId]/route';
 import { POST as checkout } from './orders/checkout/route';
 import { GET as getOrders } from './orders/route';
+import { GET as getOrder } from './orders/[orderId]/route';
+import { POST as retryPayment } from './orders/[orderId]/payment/retry/route';
 
 const mockedFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 global.fetch = mockedFetch;
@@ -59,12 +62,26 @@ describe('commerce BFF routes', () => {
     expect(response.status).toBe(200);
   });
 
+  it('forwards product detail reads through the server-only backend URL', async () => {
+    mockedFetch.mockResolvedValueOnce(upstreamResponse('{"id":"p1","name":"Product one"}'));
+
+    const response = await getProduct(request('/api/products/p1', 'GET'), {
+      params: { productId: 'p1' },
+    });
+
+    expect(mockedFetch).toHaveBeenCalledWith(
+      'http://backend:8000/api/v1/products/p1',
+      expect.objectContaining({ method: 'GET', cache: 'no-store' })
+    );
+    expect(response.status).toBe(200);
+  });
+
   it('forwards the authenticated session cookie to cart and order reads and relays refreshed cookies', async () => {
     const headers = new Headers({ 'Content-Type': 'application/json' });
     headers.append('Set-Cookie', 'session_id=rotated; Path=/; HttpOnly; Secure; SameSite=Strict');
     mockedFetch
       .mockResolvedValueOnce(
-        upstreamResponse('{"items":[],"subtotal":0,"currency":"USD"}', 200, headers)
+        upstreamResponse('{"items":[],"subtotal":0,"currency":"INR"}', 200, headers)
       )
       .mockResolvedValueOnce(upstreamResponse('[]', 200, headers));
 
@@ -99,7 +116,7 @@ describe('commerce BFF routes', () => {
     'forwards cart %s cookie, CSRF token and request body where present',
     async (_method, handler, path, endpoint, body) => {
       mockedFetch.mockResolvedValueOnce(
-        upstreamResponse('{"items":[],"subtotal":0,"currency":"USD"}')
+        upstreamResponse('{"items":[],"subtotal":0,"currency":"INR"}')
       );
       const method = _method as string;
       const response = await handler(
@@ -137,6 +154,54 @@ describe('commerce BFF routes', () => {
     expect(forwardedHeaders().get('x-csrf-token')).toBe('checkout-csrf');
     expect(forwardedHeaders().get('idempotency-key')).toBe('checkout-key-1');
     expect(response.status).toBe(201);
+  });
+
+  it('forwards an owner-scoped order-state read through the server-only backend URL', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      upstreamResponse('{"id":"00000000-0000-4000-8000-000000000001"}')
+    );
+
+    const response = await getOrder(
+      request('/api/orders/00000000-0000-4000-8000-000000000001', 'GET', undefined, {
+        Cookie: 'session_id=active',
+      }),
+      { params: { orderId: '00000000-0000-4000-8000-000000000001' } }
+    );
+
+    expect(mockedFetch.mock.calls[0][0]).toBe(
+      'http://backend:8000/api/v1/orders/00000000-0000-4000-8000-000000000001'
+    );
+    expect(forwardedHeaders().get('cookie')).toBe('session_id=active');
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects malformed order IDs before contacting the backend', async () => {
+    const response = await getOrder(request('/api/orders/not-an-id', 'GET'), {
+      params: { orderId: 'not-an-id' },
+    });
+
+    expect(response.status).toBe(404);
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
+  it('forwards an owner-scoped payment retry with the session and CSRF token', async () => {
+    const orderId = '00000000-0000-4000-8000-000000000001';
+    mockedFetch.mockResolvedValueOnce(upstreamResponse('{"id":"' + orderId + '"}'));
+    const response = await retryPayment(
+      request(`/api/orders/${orderId}/payment/retry`, 'POST', undefined, {
+        Cookie: 'session_id=active',
+        'X-CSRF-Token': 'retry-csrf',
+      }),
+      { params: { orderId } }
+    );
+
+    expect(mockedFetch.mock.calls[0][0]).toBe(
+      `http://backend:8000/api/v1/orders/${orderId}/payment/retry`
+    );
+    expect(mockedFetch.mock.calls[0][1]).toEqual(expect.objectContaining({ method: 'POST' }));
+    expect(forwardedHeaders().get('cookie')).toBe('session_id=active');
+    expect(forwardedHeaders().get('x-csrf-token')).toBe('retry-csrf');
+    expect(response.status).toBe(200);
   });
 
   it.each([401, 403, 404, 409, 422, 429, 500, 503])(

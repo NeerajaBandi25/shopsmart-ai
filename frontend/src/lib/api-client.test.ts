@@ -1,6 +1,7 @@
 import {
   changePassword,
   getCsrfToken,
+  getProduct,
   getProducts,
   getProfile,
   login,
@@ -86,15 +87,48 @@ describe('same-origin authentication API routes', () => {
   });
 
   it('loads the product catalog through the same-origin BFF', async () => {
-    mockedFetch.mockResolvedValueOnce(jsonResponse({ items: [], skip: 24, limit: 24 }, 200));
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ items: [], skip: 24, limit: 24, total: 0 }, 200)
+    );
 
-    await expect(getProducts(24, 24)).resolves.toEqual({ items: [], skip: 24, limit: 24 });
+    await expect(getProducts(24, 24)).resolves.toEqual({
+      items: [],
+      skip: 24,
+      limit: 24,
+      total: 0,
+    });
 
     expect(mockedFetch).toHaveBeenCalledWith(
       '/api/products?skip=24&limit=24',
       expect.objectContaining({ credentials: 'include' })
     );
     expect(mockedFetch.mock.calls[0][0]).not.toContain('backend.example.test');
+  });
+
+  it('serializes catalog filters and fetches product details through the same-origin BFF', async () => {
+    mockedFetch
+      .mockResolvedValueOnce(jsonResponse({ items: [], skip: 0, limit: 24, total: 0 }, 200))
+      .mockResolvedValueOnce(jsonResponse({ id: 'product-1', name: 'Northstar 14' }, 200));
+
+    await getProducts(0, 24, {
+      q: 'laptop',
+      category: 'laptops',
+      max_price_minor: 6000000,
+      in_stock_only: true,
+      sort: 'price_asc',
+    });
+    await getProduct('product-1');
+
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/products?skip=0&limit=24&q=laptop&category=laptops&max_price_minor=6000000&in_stock_only=true&sort=price_asc',
+      expect.objectContaining({ credentials: 'include' })
+    );
+    expect(mockedFetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/products/product-1',
+      expect.objectContaining({ credentials: 'include' })
+    );
   });
 
   afterAll(() => {

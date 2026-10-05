@@ -14,6 +14,17 @@ from src.repositories.user_repository import UserRepository
 
 app.include_router(cart_router, prefix="/api/v1")
 
+EMPTY_CART_RESPONSE = {
+    "items": [],
+    "subtotal": 0,
+    "currency": "INR",
+    "coupon_code": None,
+    "coupon_evaluation": None,
+    "applied_promotions": [],
+    "discount_total_cents": 0,
+    "total_cents": 0,
+}
+
 
 async def _login(client: AsyncClient, email: str, password: str = "Secure123!") -> str:
     response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
@@ -32,6 +43,8 @@ async def _create_product(test_db, *, active: bool = True) -> Product:
         stock_quantity=8,
         max_purchase_quantity=3,
         is_active=active,
+        image_url="/images/products/portfolio/cart-lamp.png",
+        image_alt="Desk lamp illustration",
     )
     test_db.add(product)
     await test_db.flush()
@@ -87,11 +100,13 @@ class TestAuthenticatedCartApi:
         deleted = await test_client.delete(f"/api/v1/cart/items/{product.id}", headers=headers)
 
         assert added.status_code == 200
+        assert added.json()["items"][0]["image_url"] == "/images/products/portfolio/cart-lamp.png"
+        assert added.json()["items"][0]["image_alt"] == "Desk lamp illustration"
         assert incremented.json()["items"][0]["quantity"] == 2
         assert updated.json()["items"][0]["unit_price"] == 1299
         assert updated.json()["items"][0]["line_total"] == 3897
         assert updated.json()["subtotal"] == 3897
-        assert deleted.json() == {"items": [], "subtotal": 0, "currency": "USD"}
+        assert deleted.json() == EMPTY_CART_RESPONSE
 
     async def test_invalid_or_missing_csrf_is_rejected(self, test_client: AsyncClient, test_db):
         product = await _create_product(test_db)
@@ -161,7 +176,7 @@ class TestAuthenticatedCartApi:
             await second_client.aclose()
 
         assert response.status_code == 200
-        assert response.json() == {"items": [], "subtotal": 0, "currency": "USD"}
+        assert response.json() == EMPTY_CART_RESPONSE
 
     async def test_zero_quantity_is_rejected_by_request_validation(
         self, test_client: AsyncClient, test_db, test_user_data_in_db
@@ -196,6 +211,6 @@ class TestAuthenticatedCartApi:
         carts = (await test_db.execute(select(Cart))).scalars().all()
         items = (await test_db.execute(select(CartItem))).scalars().all()
 
-        assert response.json() == {"items": [], "subtotal": 0, "currency": "USD"}
+        assert response.json() == EMPTY_CART_RESPONSE
         assert carts == []
         assert items == []

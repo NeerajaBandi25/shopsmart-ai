@@ -1,9 +1,6 @@
-from uuid import uuid4
-
 import pytest
 
 from src.models.ai import Document, DocumentChunk
-from src.services.ai_provider import EmbeddingProvider
 from src.services.ai_retrieval import cosine
 
 

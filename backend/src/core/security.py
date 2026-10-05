@@ -5,6 +5,20 @@ from uuid import uuid4
 
 import bcrypt
 
+BCRYPT_MAX_PASSWORD_BYTES = 72
+
+
+def password_fits_bcrypt(password: str) -> bool:
+    """Return whether a password has an unambiguous UTF-8 representation for bcrypt."""
+    # UTF-8 encodes every Unicode code point to at least one byte. This cheap
+    # guard bounds the work before encoding the small remainder for byte count.
+    if len(password) > BCRYPT_MAX_PASSWORD_BYTES:
+        return False
+    try:
+        return len(password.encode("utf-8")) <= BCRYPT_MAX_PASSWORD_BYTES
+    except UnicodeEncodeError:
+        return False
+
 
 def hash_password(password: str) -> str:
     """Hash password using bcrypt with 12 salt rounds.
@@ -15,6 +29,8 @@ def hash_password(password: str) -> str:
     Returns:
         str: Hashed password (bcrypt format)
     """
+    if not password_fits_bcrypt(password):
+        raise ValueError("Password must not exceed 72 UTF-8 bytes")
     salt = bcrypt.gensalt(rounds=12)
     return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
@@ -29,6 +45,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         bool: True if password matches, False otherwise
     """
+    if not password_fits_bcrypt(plain_password):
+        return False
     return bcrypt.checkpw(
         plain_password.encode("utf-8"),
         hashed_password.encode("utf-8"),

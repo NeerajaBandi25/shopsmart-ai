@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.product import PRODUCT_CATEGORIES, Product
@@ -100,47 +100,111 @@ class ProductRepository:
         """
         query = select(Product)
         if active_only:
-            query = query.where(Product.is_active == True)
+            query = query.where(Product.is_active.is_(True))
         query = query.order_by(Product.created_at.desc(), Product.id.desc())
         query = query.offset(skip).limit(limit)
 
         result = await self.db.execute(query)
         return result.scalars().all()
 
+    async def count_active_products(self) -> int:
+        result = await self.db.execute(
+            select(func.count(Product.id)).where(Product.is_active.is_(True))
+        )
+        return int(result.scalar_one())
+
     async def search_active_products(
         self,
         query_text: str | None = None,
         category: str | None = None,
+        brand: str | None = None,
+        subcategory: str | None = None,
         min_price_cents: int | None = None,
         max_price_cents: int | None = None,
         in_stock_only: bool = False,
         limit: int = 20,
     ) -> list[Product]:
+        products, _ = await self.search_active_products_page(
+            query_text=query_text,
+            category=category,
+            brand=brand,
+            subcategory=subcategory,
+            min_price_cents=min_price_cents,
+            max_price_cents=max_price_cents,
+            in_stock_only=in_stock_only,
+            limit=limit,
+        )
+        return products
+
+    async def search_active_products_page(
+        self,
+        query_text: str | None = None,
+        category: str | None = None,
+        brand: str | None = None,
+        subcategory: str | None = None,
+        min_price_cents: int | None = None,
+        max_price_cents: int | None = None,
+        in_stock_only: bool = False,
+        skip: int = 0,
+        limit: int = 24,
+        sort: str = "newest",
+    ) -> tuple[list[Product], int]:
         if category is not None and category not in PRODUCT_CATEGORIES:
-            return []
-        query = select(Product).where(Product.is_active.is_(True))
+            return [], 0
+        conditions = [Product.is_active.is_(True)]
         if category is not None:
-            query = query.where(Product.category == category)
+            conditions.append(Product.category == category)
+        if brand and brand.strip():
+            conditions.append(func.lower(Product.brand) == brand.strip().lower())
+        if subcategory and subcategory.strip():
+            conditions.append(
+                func.lower(Product.specifications["Subcategory"].as_string())
+                == subcategory.strip().lower()
+            )
         if min_price_cents is not None:
-            query = query.where(Product.price >= min_price_cents)
+            conditions.append(Product.price >= min_price_cents)
         if max_price_cents is not None:
-            query = query.where(Product.price <= max_price_cents)
+            conditions.append(Product.price <= max_price_cents)
         if in_stock_only:
-            query = query.where(Product.stock_quantity > 0)
+            conditions.append(Product.stock_quantity > 0)
         safe_query = query_text.strip()[:160] if query_text and query_text.strip() else None
+        if safe_query and safe_query.lower() in {
+            "coding",
+            "programming",
+            "react",
+            "react development",
+        }:
+            # A transparent development preset uses published RAM, not an LLM
+            # performance claim. Existing category, budget and stock constraints stay intact.
+            memory = Product.specifications["RAM"].as_string()
+            conditions.append(Product.category == "laptops")
+            conditions.append(or_(memory.like("16 GB%"), memory.like("32 GB%")))
+            safe_query = None
         if safe_query:
-            query = query.where(
+            conditions.append(
                 or_(
                     Product.name.ilike(f"%{safe_query}%"),
                     Product.description.ilike(f"%{safe_query}%"),
+                    Product.brand.ilike(f"%{safe_query}%"),
                 )
             )
-        result = await self.db.execute(
-            query.order_by(Product.created_at.desc(), Product.id.desc()).limit(
-                min(max(limit, 1), 20)
-            )
+        ordering = {
+            "newest": (Product.created_at.desc(), Product.id.desc()),
+            "price_asc": (Product.price.asc(), Product.id.asc()),
+            "price_desc": (Product.price.desc(), Product.id.asc()),
+            "name_asc": (func.lower(Product.name).asc(), Product.id.asc()),
+        }.get(sort, (Product.created_at.desc(), Product.id.desc()))
+        count_result = await self.db.execute(
+            select(func.count()).select_from(Product).where(*conditions)
         )
-        return list(result.scalars().all())
+        result = await self.db.execute(
+            select(Product)
+            .where(*conditions)
+            .order_by(*ordering)
+            .offset(skip)
+            .limit(min(max(limit, 1), 100))
+        )
+        return list(result.scalars().all()), int(count_result.scalar_one())
 
     async def update_product(
         self,

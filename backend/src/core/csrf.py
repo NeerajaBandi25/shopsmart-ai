@@ -2,7 +2,6 @@
 
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional
 
 
 class CSRFTokenManager:
@@ -70,11 +69,7 @@ class CSRFTokenManager:
     def cleanup_expired_tokens(self) -> None:
         """Remove expired tokens from store."""
         now = datetime.utcnow()
-        expired = [
-            token
-            for token, data in self._tokens.items()
-            if now > data["expires_at"]
-        ]
+        expired = [token for token, data in self._tokens.items() if now > data["expires_at"]]
         for token in expired:
             del self._tokens[token]
 

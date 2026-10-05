@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Nav from './nav';
 import { useCommerceStore } from '@/lib/commerce-store';
@@ -57,6 +57,60 @@ describe('Nav', () => {
       '/cart'
     );
     expect(screen.getByText('(3)')).toBeInTheDocument();
+  });
+
+  it('opens authenticated mobile navigation with the current cart count', async () => {
+    useCommerceStore.getState().syncCartCount({ items: [{ quantity: 2 }] });
+    (getProfile as jest.Mock).mockResolvedValue({
+      user_id: 'user-1',
+      email: 'test@example.com',
+      created_at: '2026-01-01T00:00:00Z',
+    });
+
+    render(<Nav />);
+
+    const openButton = await screen.findByRole('button', { name: 'Open navigation menu' });
+    const navigation = screen.getByRole('navigation').querySelector('#primary-navigation');
+    expect(openButton).toHaveAttribute('aria-expanded', 'false');
+    expect(openButton).toHaveAttribute('aria-controls', 'primary-navigation');
+    expect(navigation).toHaveClass('hidden');
+
+    fireEvent.click(openButton);
+
+    expect(screen.getByRole('button', { name: 'Close navigation menu' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(navigation).not.toHaveClass('hidden');
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard');
+    expect(screen.getByRole('link', { name: 'Cart, 2 items' })).toHaveAttribute('href', '/cart');
+    expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute('href', '/orders');
+    expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute('href', '/account');
+  });
+
+  it('shows signed-out mobile CTAs and closes the menu after navigation', () => {
+    render(<Nav probeAuth={false} />);
+
+    const openButton = screen.getByRole('button', { name: 'Open navigation menu' });
+    const navigation = screen.getByRole('navigation').querySelector('#primary-navigation');
+    expect(navigation).toHaveClass('hidden');
+
+    fireEvent.click(openButton);
+
+    expect(screen.getByRole('link', { name: 'Sign In' })).toHaveAttribute('href', '/auth/login');
+    expect(screen.getByRole('link', { name: 'Create Account' })).toHaveAttribute(
+      'href',
+      '/auth/register'
+    );
+    const signInLink = screen.getByRole('link', { name: 'Sign In' });
+    signInLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    fireEvent.click(signInLink);
+
+    expect(screen.getByRole('button', { name: 'Open navigation menu' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(navigation).toHaveClass('hidden');
   });
 
   it('hides logout button when not authenticated', async () => {

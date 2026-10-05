@@ -50,3 +50,12 @@ htmlcov/
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# Disposable product-factory tooling and logs
+.factory/venv/
+.factory/python-packages/
+.factory/uv-cache/
+.factory/browser/
+.factory/runtime/
+.harness/uv-cache/
+*.tsbuildinfo

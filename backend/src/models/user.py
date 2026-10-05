@@ -1,9 +1,14 @@
 """User entity model."""
 
-from sqlalchemy import String, UniqueConstraint, CheckConstraint, Index
+from typing import TYPE_CHECKING
+
+from sqlalchemy import CheckConstraint, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import BaseModel
+
+if TYPE_CHECKING:
+    from src.models.session import Session
 
 
 class User(BaseModel):
@@ -14,7 +19,6 @@ class User(BaseModel):
     email: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
-        unique=True,
         index=True,
     )
     password_hash: Mapped[str] = mapped_column(

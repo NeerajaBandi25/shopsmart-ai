@@ -4,7 +4,13 @@ from uuid import UUID
 
 import pytest
 
-from src.core.exceptions import AuthenticationError, ConflictError, RateLimitError, ValidationError
+from src.core.exceptions import (
+    AppException,
+    AuthenticationError,
+    ConflictError,
+    RateLimitError,
+    ValidationError,
+)
 from src.repositories.session_repository import SessionRepository
 from src.repositories.user_repository import UserRepository
 from src.services.auth_service import AuthService
@@ -81,6 +87,11 @@ class TestPasswordStrengthEnforcement:
         result = await auth_service.register_user(email="test@example.com", password="Secure123!")
         assert "user_id" in result
         assert result["email"] == "test@example.com"
+
+    async def test_registration_rejects_passwords_over_72_utf8_bytes(self, auth_service):
+        with pytest.raises(ValidationError) as error:
+            await auth_service.register_user("byte-limit@example.com", "é" * 37)
+        assert error.value.error_code == "password_too_long"
 
 
 class TestDuplicateEmailPrevention:
@@ -225,6 +236,16 @@ class TestPasswordChange:
 
 class TestLoginValidation:
     """T042: Test login validation."""
+
+    async def test_login_rejects_passwords_over_72_utf8_bytes(self, auth_service):
+        with pytest.raises(ValidationError) as error:
+            await auth_service.login_user(
+                email="byte-limit@example.com",
+                password="é" * 37,
+                ip_address="127.0.0.1",
+                user_agent="test-agent",
+            )
+        assert error.value.error_code == "password_too_long"
 
     async def test_login_with_correct_credentials(
         self, auth_service: AuthService, test_user_data_in_db: dict, test_db
@@ -398,6 +419,32 @@ class TestRateLimitingLogic:
                 )
             assert exc_info.value.status_code == 401
             assert exc_info.value.error_code == "invalid_credentials"
+
+    async def test_redis_reset_failure_after_commit_keeps_login_successful(
+        self, auth_service: AuthService, test_user_data_in_db: dict, test_db, monkeypatch, caplog
+    ):
+        from src.repositories.session_repository import SessionRepository
+        from src.services import auth_service as auth_service_module
+
+        logger = auth_service_module.logger
+        # Alembic's fileConfig disables existing module loggers during the full suite.
+        monkeypatch.setattr(logger, "disabled", False)
+        monkeypatch.setattr(logger, "propagate", True)
+
+        def fail_reset(_ip_address):
+            raise AppException("unavailable", 503, "rate_limiter_unavailable")
+
+        monkeypatch.setattr(auth_service_module, "record_successful_login", fail_reset)
+        result = await auth_service.login_user(
+            email=test_user_data_in_db["email"],
+            password=test_user_data_in_db["password"],
+            ip_address="192.0.2.21",
+            user_agent="test-agent",
+        )
+
+        session = await SessionRepository(db=test_db).get_session(result["session_id"])
+        assert session is not None and session.is_active
+        assert "login_rate_limit_reset_failed" in caplog.text
 
     async def test_sixth_failed_attempt_rate_limited(self, auth_service: AuthService):
         """6th failed login attempt from same IP should raise RateLimitError (429)."""

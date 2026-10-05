@@ -6,10 +6,13 @@ import re
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
 from httpx import AsyncClient
 from starlette.requests import Request
 
 from src.core.config import settings
+from src.core.email_provider_mock import MockEmailProvider
+from src.core.email_provider_prod import ProductionEmailProvider
 from src.core.observability import JsonLogFormatter, metrics, security_audit_event
 from src.main import general_exception_handler
 
@@ -133,7 +136,8 @@ async def test_auth_audit_events_exclude_credentials_and_tokens(
     )
     successful_login_json = json.loads(JsonLogFormatter().format(successful_login))
     assert successful_login_json["request_id"] == "login-audit-request"
-    assert successful_login.user_id
+    assert re.fullmatch(r"[a-f0-9]{64}", successful_login.user_ref)
+    assert not hasattr(successful_login, "user_id")
 
     serialized_logs = "\n".join(JsonLogFormatter().format(record) for record in caplog.records)
     assert password not in serialized_logs
@@ -141,6 +145,77 @@ async def test_auth_audit_events_exclude_credentials_and_tokens(
     assert session_id not in serialized_logs
     assert csrf_token not in serialized_logs
     assert test_user_data_in_db["email"] not in serialized_logs
+    assert login.json()["user_id"] not in serialized_logs
+
+
+def test_security_audit_references_correlate_without_raw_identity_or_browser_metadata(
+    caplog, monkeypatch
+):
+    caplog.set_level(logging.INFO)
+    monkeypatch.setattr(settings, "secret_key", "audit-key-one")
+    identity = "private-user-17"
+    ip_address = "203.0.113.42"
+    agent = "Custom Browser; email=private-person@example.com; token=private-token"
+    for event in ("login_success", "logout_success"):
+        security_audit_event(
+            event, success=True, user_id=identity, client_ip=ip_address, user_agent=agent
+        )
+    records = [record for record in caplog.records if record.name == "shopsmart.security"]
+    assert len(records) == 2
+    assert records[0].user_ref == records[1].user_ref
+    assert records[0].client_ref == records[1].client_ref
+    for record in records:
+        assert re.fullmatch(r"[a-f0-9]{64}", record.user_ref)
+        assert re.fullmatch(r"[a-f0-9]{64}", record.client_ref)
+        assert not any(hasattr(record, field) for field in ("user_id", "client_ip", "user_agent"))
+        serialized = JsonLogFormatter().format(record)
+        assert all(raw not in serialized for raw in (identity, ip_address, agent))
+
+    # The same input in a different field must not produce a joinable pseudonym.
+    security_audit_event("login_success", success=True, user_id=identity, client_ip=identity)
+    assert caplog.records[-1].user_ref != caplog.records[-1].client_ref
+    monkeypatch.setattr(settings, "secret_key", "audit-key-two")
+    security_audit_event("login_success", success=True, user_id=identity)
+    assert caplog.records[-1].user_ref != records[0].user_ref
+
+
+def test_log_formatter_excludes_raw_identity_fields_even_from_other_callers():
+    record = logging.LogRecord("shopsmart.other", logging.INFO, __file__, 0, "event", (), None)
+    record.__dict__.update(
+        user_id="raw-user", cart_id="raw-cart", client_ip="203.0.113.42", user_agent="raw-agent"
+    )
+    assert json.loads(JsonLogFormatter().format(record))["context"] == {}
+
+
+@pytest.mark.parametrize("provider_class", [MockEmailProvider, ProductionEmailProvider])
+def test_email_provider_logs_exclude_recipient_subject_and_body(
+    provider_class, caplog, monkeypatch
+):
+    provider_logger = logging.getLogger(provider_class.__module__)
+    # Alembic fileConfig disables existing module loggers during full-suite setup.
+    # Isolate capture state so privacy is tested whether or not migrations ran first.
+    monkeypatch.setattr(provider_logger, "disabled", False)
+    monkeypatch.setattr(provider_logger, "propagate", True)
+    caplog.set_level(logging.INFO, logger=provider_class.__module__)
+    private_values = (
+        "private-recipient@example.com",
+        "Order confirmation for private-cart-17",
+        "Private address and one-time token: never-export-this",
+    )
+    provider = provider_class()
+
+    assert provider.send_notification(*private_values) is True
+
+    records = [record for record in caplog.records if record.name == provider_class.__module__]
+    assert len(records) == 1
+    for private_value in private_values:
+        assert private_value not in records[0].getMessage()
+        assert private_value not in JsonLogFormatter().format(records[0])
+    if isinstance(provider, MockEmailProvider):
+        # In-memory test inspection remains available without exporting the private payload.
+        assert provider.get_sent_emails() == [
+            dict(zip(("recipient", "subject", "body"), private_values))
+        ]
 
 
 async def test_registration_and_password_change_audit_events_are_secret_safe(
