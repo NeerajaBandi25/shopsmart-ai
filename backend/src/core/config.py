@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     # Email
     email_provider: str = os.getenv("EMAIL_PROVIDER", "mock")  # mock | prod
     email_from: str = os.getenv("EMAIL_FROM", "noreply@shopsmart-ai.local")
+    public_app_url: str = "http://localhost:3000"
+
+    # Payments remain disabled unless Stripe test-mode credentials are supplied.
+    payment_provider: str = "stripe"
+    payment_mode: str = "test"
+    stripe_secret_key: Optional[str] = None
+    stripe_publishable_key: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    payment_success_url: str = "http://localhost:3000/checkout/complete"
+    payment_cancel_url: str = "http://localhost:3000/checkout/complete?payment=cancelled"
 
     # Redis (optional for rate limiting, session cache)
     redis_url: Optional[str] = os.getenv("REDIS_URL", None)

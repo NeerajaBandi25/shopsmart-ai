@@ -54,17 +54,22 @@ const placedOrder = {
     },
   ],
 };
+const checkoutOrderResponse = {
+  ...placedOrder,
+  payment_status: 'requires_action' as const,
+  checkout_url: 'https://checkout.stripe.com/c/pay/cs_test_example',
+};
 
 describe('CheckoutForm', () => {
   beforeEach(() => mockedCheckoutOrder.mockReset());
 
-  it('submits only selected product ids and quantities, then reports success', async () => {
-    mockedCheckoutOrder.mockResolvedValue(placedOrder);
-    const onSuccess = jest.fn();
-    render(<CheckoutForm items={[item]} onSuccess={onSuccess} />);
+  it('submits selected product ids and redirects to the verified hosted Checkout URL', async () => {
+    mockedCheckoutOrder.mockResolvedValue(checkoutOrderResponse);
+    const onRedirect = jest.fn();
+    render(<CheckoutForm items={[item]} onRedirect={onRedirect} />);
 
     fillDeliveryAddress();
-    fireEvent.click(screen.getByRole('button', { name: /place demo order/i }));
+    fireEvent.click(screen.getByRole('button', { name: /continue to secure checkout/i }));
 
     await waitFor(() => expect(mockedCheckoutOrder).toHaveBeenCalledTimes(1));
     expect(mockedCheckoutOrder.mock.calls[0][0]).toEqual([
@@ -72,25 +77,22 @@ describe('CheckoutForm', () => {
     ]);
     expect(mockedCheckoutOrder.mock.calls[0][1]).toEqual(expect.any(String));
     expect(mockedCheckoutOrder.mock.calls[0][3]).toEqual(deliveryAddress);
-    expect(onSuccess).toHaveBeenCalledWith(placedOrder);
-    expect(await screen.findByRole('status')).toHaveTextContent(/no payment is collected/i);
-    expect(screen.getByRole('heading', { name: 'Order recorded' })).toBeInTheDocument();
-    expect(screen.getByText(/SKU BAG-001/)).toBeInTheDocument();
-    expect(screen.queryByText(/order-1/i)).not.toBeInTheDocument();
+    expect(onRedirect).toHaveBeenCalledWith(checkoutOrderResponse.checkout_url);
+    expect(screen.getByText(/no live payment is processed/i)).toBeInTheDocument();
   });
 
   it('keeps checkout disabled when there are no selected items', () => {
     render(<CheckoutForm items={[]} />);
-    expect(screen.getByRole('button', { name: /place demo order/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /continue to secure checkout/i })).toBeDisabled();
     expect(screen.getByRole('status')).toHaveTextContent('no items');
   });
 
   it('forwards only the server-returned coupon code', async () => {
-    mockedCheckoutOrder.mockResolvedValue(placedOrder);
-    render(<CheckoutForm items={[item]} couponCode="SAVE10" />);
+    mockedCheckoutOrder.mockResolvedValue(checkoutOrderResponse);
+    render(<CheckoutForm items={[item]} couponCode="SAVE10" onRedirect={jest.fn()} />);
 
     fillDeliveryAddress();
-    fireEvent.click(screen.getByRole('button', { name: /place demo order/i }));
+    fireEvent.click(screen.getByRole('button', { name: /continue to secure checkout/i }));
 
     await waitFor(() => expect(mockedCheckoutOrder).toHaveBeenCalledTimes(1));
     expect(mockedCheckoutOrder.mock.calls[0][2]).toBe('SAVE10');
@@ -101,9 +103,26 @@ describe('CheckoutForm', () => {
     render(<CheckoutForm items={[item]} />);
 
     fillDeliveryAddress();
-    fireEvent.click(screen.getByRole('button', { name: /place demo order/i }));
+    fireEvent.click(screen.getByRole('button', { name: /continue to secure checkout/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Insufficient stock');
-    expect(screen.getByRole('button', { name: /place demo order/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /continue to secure checkout/i })).toBeEnabled();
+  });
+
+  it('rejects an unverified redirect destination and does not claim an order was paid', async () => {
+    mockedCheckoutOrder.mockResolvedValue({
+      ...checkoutOrderResponse,
+      checkout_url: 'https://attacker.example/collect',
+    });
+    const onRedirect = jest.fn();
+    render(<CheckoutForm items={[item]} onRedirect={onRedirect} />);
+    fillDeliveryAddress();
+    fireEvent.click(screen.getByRole('button', { name: /continue to secure checkout/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /destination could not be verified/i
+    );
+    expect(onRedirect).not.toHaveBeenCalled();
+    expect(screen.queryByText(/paid|order confirmed/i)).not.toBeInTheDocument();
   });
 });

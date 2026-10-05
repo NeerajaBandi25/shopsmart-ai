@@ -2,16 +2,21 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getCart, removeCartItem, type Cart } from '@/lib/cart-api';
+import { getCart, type Cart } from '@/lib/cart-api';
 import { CheckoutForm } from '@/components/CheckoutForm';
 import { useCommerceStore } from '@/lib/commerce-store';
 
-export function CheckoutFlow() {
+export function CheckoutFlow({ onRedirect }: { onRedirect?: (url: string) => void } = {}) {
   const syncCartCount = useCommerceStore((state) => state.syncCartCount);
-  const clearPrivateCommerce = useCommerceStore((state) => state.clearPrivateCommerce);
   const [cart, setCart] = useState<Cart | null>(null);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
+  const [paymentCancelled, setPaymentCancelled] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setPaymentCancelled(params.get('payment') === 'cancelled');
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -32,34 +37,6 @@ export function CheckoutFlow() {
       active = false;
     };
   }, [retry, syncCartCount]);
-
-  async function clearPurchasedItems() {
-    if (!cart) return true;
-    const results = await Promise.allSettled(
-      cart.items.map((item) => removeCartItem(item.product_id))
-    );
-    const failed = results.some((result) => result.status === 'rejected');
-    if (!failed) {
-      clearPrivateCommerce();
-      setCart({
-        ...cart,
-        items: [],
-        subtotal: 0,
-        coupon_code: null,
-        coupon_evaluation: null,
-        applied_promotions: [],
-        discount_total_cents: 0,
-        total_cents: 0,
-      });
-    } else {
-      try {
-        syncCartCount(await getCart());
-      } catch {
-        // Preserve the existing order-success cleanup warning if refresh fails.
-      }
-    }
-    return failed;
-  }
 
   if (error) {
     return (
@@ -85,6 +62,15 @@ export function CheckoutFlow() {
 
   return (
     <section className="rounded-tile border border-ink-100 bg-white p-5 shadow-tile sm:p-7">
+      {paymentCancelled && (
+        <p
+          className="mb-5 border-l-2 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-ink-800"
+          role="status"
+        >
+          Checkout was cancelled. Your cart is unchanged; payment status is confirmed only by the
+          secure payment provider.
+        </p>
+      )}
       <CheckoutForm
         items={cart.items.map((item) => ({
           product_id: item.product_id,
@@ -106,7 +92,7 @@ export function CheckoutFlow() {
             discount_cents,
           })),
         }}
-        onSuccess={clearPurchasedItems}
+        onRedirect={onRedirect}
       />
       {cart.items.length === 0 && (
         <Link

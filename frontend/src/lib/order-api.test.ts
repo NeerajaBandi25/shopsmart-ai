@@ -1,4 +1,4 @@
-import { checkoutOrder, getOrders } from './order-api';
+import { checkoutOrder, getOrder, getOrders, retryPayment } from './order-api';
 import { useCommerceStore } from './commerce-store';
 
 const mockedFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
@@ -67,6 +67,38 @@ describe('same-origin order API routes', () => {
     expect(mockedFetch).toHaveBeenCalledWith(
       '/api/orders',
       expect.objectContaining({ credentials: 'include', cache: 'no-store' })
+    );
+  });
+
+  it('loads one normalized payment state through the same-origin order route', async () => {
+    const order = { id: '00000000-0000-4000-8000-000000000001', payment_status: 'succeeded' };
+    mockedFetch.mockResolvedValueOnce(jsonResponse(order));
+
+    await expect(getOrder(order.id)).resolves.toEqual(order);
+
+    expect(mockedFetch).toHaveBeenCalledWith(
+      `/api/orders/${order.id}`,
+      expect.objectContaining({ credentials: 'include', cache: 'no-store' })
+    );
+  });
+
+  it('retries payment on the existing order through the same-origin CSRF protected route', async () => {
+    const orderId = '00000000-0000-4000-8000-000000000001';
+    const order = { id: orderId, payment_status: 'requires_action' };
+    mockedFetch
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'retry-csrf' }))
+      .mockResolvedValueOnce(jsonResponse(order));
+
+    await expect(retryPayment(orderId)).resolves.toEqual(order);
+
+    expect(mockedFetch.mock.calls[0][0]).toBe('/api/auth/csrf');
+    expect(mockedFetch.mock.calls[1][0]).toBe(`/api/orders/${orderId}/payment/retry`);
+    expect(mockedFetch.mock.calls[1][1]).toEqual(
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-CSRF-Token': 'retry-csrf' },
+      })
     );
   });
 

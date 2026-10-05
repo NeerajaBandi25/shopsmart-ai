@@ -9,12 +9,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from scripts.seed_demo_products import seed_missing_products
 from src.models.product import Product
+from src.services.payment_provider import CheckoutSession, get_payment_provider
+
+
+class JourneyPaymentProvider:
+    name = "fake-test"
+
+    def is_configured(self):
+        return True
+
+    def validate_checkout_configuration(self):
+        return None
+
+    async def create_checkout_session(self, **kwargs):
+        return CheckoutSession("cs_journey_test", "https://checkout.test/journey")
+
+    def verify_webhook(self, raw_body, signature):
+        raise NotImplementedError
+
+    async def refund(self, payment_id, amount_cents, idempotency_key):
+        raise NotImplementedError
 
 
 @pytest.mark.asyncio
 async def test_shopper_browses_updates_cart_checks_out_and_views_order(
     test_client: AsyncClient, test_db: AsyncSession
 ):
+    from src.main import app
+
+    app.dependency_overrides[get_payment_provider] = lambda: JourneyPaymentProvider()
     await seed_missing_products(test_db)
     await test_db.commit()
 
@@ -103,6 +126,9 @@ async def test_shopper_browses_updates_cart_checks_out_and_views_order(
     )
     assert order_response.status_code == 201
     order = order_response.json()
+    assert order["status"] == "pending_payment"
+    assert order["payment_status"] == "requires_action"
+    assert order["checkout_url"] == "https://checkout.test/journey"
     assert order["total_cents"] == first_product["price"] * 3
     assert order["items"][0]["product_sku"] == first_product["sku"]
 
@@ -116,6 +142,8 @@ async def test_shopper_browses_updates_cart_checks_out_and_views_order(
     assert replay.json()["id"] == order["id"]
     await test_db.refresh(product_before)
     assert product_before.stock_quantity == stock_before - 3
+    cart_during_payment = await test_client.get("/api/v1/cart", cookies=cookies)
+    assert cart_during_payment.json()["items"][0]["quantity"] == 3
 
     history = await test_client.get("/api/v1/orders", cookies=cookies)
     assert history.status_code == 200

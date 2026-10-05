@@ -1,15 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import Image from 'next/image';
 import { useRef, useState } from 'react';
-import {
-  checkoutOrder,
-  type CheckoutItem,
-  type DeliveryAddress,
-  type Order,
-} from '@/lib/order-api';
-import { OrderSnapshot } from '@/components/commerce/OrderSnapshot';
+import { checkoutOrder, type CheckoutItem, type DeliveryAddress } from '@/lib/order-api';
 import { formatInr } from '@/lib/currency';
 
 export interface CheckoutLine extends CheckoutItem {
@@ -32,7 +25,7 @@ interface CheckoutFormProps {
   items: CheckoutLine[];
   couponCode?: string | null;
   quote?: CheckoutQuote;
-  onSuccess?: (order: Order) => void | Promise<boolean | void>;
+  onRedirect?: (url: string) => void;
 }
 
 function createIdempotencyKey(): string {
@@ -44,11 +37,32 @@ function createIdempotencyKey(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export function CheckoutForm({ items, couponCode, quote, onSuccess }: CheckoutFormProps) {
+const CHECKOUT_KEY_STORAGE = 'shopsmart.checkout.idempotency.v1';
+
+function getCheckoutIdempotencyKey(items: CheckoutLine[], couponCode?: string | null): string {
+  const fingerprint = JSON.stringify({
+    items: items
+      .map(({ product_id, quantity }) => ({ product_id, quantity }))
+      .sort((left, right) => left.product_id.localeCompare(right.product_id)),
+    couponCode: couponCode || null,
+  });
+  try {
+    const saved = sessionStorage.getItem(CHECKOUT_KEY_STORAGE);
+    if (saved) {
+      const parsed = JSON.parse(saved) as { fingerprint?: unknown; key?: unknown };
+      if (parsed.fingerprint === fingerprint && typeof parsed.key === 'string') return parsed.key;
+    }
+    const key = createIdempotencyKey();
+    sessionStorage.setItem(CHECKOUT_KEY_STORAGE, JSON.stringify({ fingerprint, key }));
+    return key;
+  } catch {
+    return createIdempotencyKey();
+  }
+}
+
+export function CheckoutForm({ items, couponCode, quote, onRedirect }: CheckoutFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
-  const [cartCleanupWarning, setCartCleanupWarning] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress>({
     recipient_name: '',
     phone: '',
@@ -66,7 +80,7 @@ export function CheckoutForm({ items, couponCode, quote, onSuccess }: CheckoutFo
     if (!items.length || submitting) return;
     setSubmitting(true);
     setError(null);
-    idempotencyKey.current ??= createIdempotencyKey();
+    idempotencyKey.current ??= getCheckoutIdempotencyKey(items, couponCode);
     try {
       const order = await checkoutOrder(
         items.map(({ product_id, quantity }) => ({ product_id, quantity })),
@@ -74,8 +88,14 @@ export function CheckoutForm({ items, couponCode, quote, onSuccess }: CheckoutFo
         couponCode,
         { ...deliveryAddress, address_line2: deliveryAddress.address_line2 || null }
       );
-      setPlacedOrder(order);
-      setCartCleanupWarning((await onSuccess?.(order)) === true);
+      if (!order.checkout_url) {
+        throw new Error('Secure payment checkout is unavailable. Your order was not completed.');
+      }
+      const checkoutUrl = new URL(order.checkout_url);
+      if (checkoutUrl.protocol !== 'https:' || checkoutUrl.hostname !== 'checkout.stripe.com') {
+        throw new Error('The secure payment destination could not be verified.');
+      }
+      (onRedirect || ((url: string) => window.location.assign(url)))(checkoutUrl.toString());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Checkout could not be completed.');
     } finally {
@@ -83,31 +103,12 @@ export function CheckoutForm({ items, couponCode, quote, onSuccess }: CheckoutFo
     }
   };
 
-  if (placedOrder) {
-    return (
-      <section className="space-y-4" aria-live="polite">
-        <p
-          className="border-l-2 border-leaf-600 bg-leaf-50 px-4 py-3 text-sm leading-relaxed text-leaf-800"
-          role="status"
-        >
-          Delivery details are recorded for this local demo. No payment is collected, and no
-          delivery service or date is provided.
-        </p>
-        {cartCleanupWarning && (
-          <p role="alert" className="text-sm text-status-error">
-            Your order was placed, but the cart could not be fully cleared. Review your cart.
-          </p>
-        )}
-        <OrderSnapshot order={placedOrder} title="Order recorded" />
-        <Link href="/orders" className="font-medium text-accent-700 underline underline-offset-4">
-          View order history
-        </Link>
-      </section>
-    );
-  }
-
   return (
     <form onSubmit={submit} className="space-y-6">
+      <p className="border-l-2 border-accent-500 bg-sand-50 px-4 py-3 text-sm leading-relaxed text-ink-700">
+        You will continue to Stripe-hosted test checkout. ShopSmart never receives your card
+        details; no live payment is processed.
+      </p>
       {error && (
         <p className="text-sm text-red-700" role="alert">
           {error}
@@ -305,8 +306,8 @@ export function CheckoutForm({ items, couponCode, quote, onSuccess }: CheckoutFo
                 </div>
               </dl>
               <p className="mt-3 text-xs leading-relaxed text-ink-500">
-                This server quote is checked again when the order is placed. No payment is
-                collected.
+                The server rechecks current prices, stock and promotions before creating a payment
+                session.
               </p>
             </div>
           )}
@@ -317,7 +318,7 @@ export function CheckoutForm({ items, couponCode, quote, onSuccess }: CheckoutFo
         disabled={!items.length || submitting}
         className="rounded-md bg-accent-700 px-5 py-3 font-semibold text-white transition-colors hover:bg-accent-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {submitting ? 'Recording order...' : 'Place demo order'}
+        {submitting ? 'Preparing secure checkout...' : 'Continue to secure checkout'}
       </button>
     </form>
   );

@@ -36,6 +36,8 @@ from src.models.base import Base  # noqa: E402
 from src.models.cart import Cart, CartItem  # noqa: E402, F401
 from src.models.login_attempt import LoginAttempt  # noqa: E402, F401
 from src.models.order import Order, OrderItem  # noqa: E402, F401
+from src.models.payment import Payment, PaymentWebhookEvent  # noqa: E402, F401
+from src.emails.model import NotificationOutbox  # noqa: E402, F401
 from src.models.product import Product  # noqa: E402, F401
 from src.models.promotion import Promotion  # noqa: E402, F401
 from src.models.session import Session  # noqa: E402, F401

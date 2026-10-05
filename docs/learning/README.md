@@ -17,5 +17,7 @@ These short notes explain implemented behavior and point to its source. Use `.fa
 13. [Security model](13_SECURITY_MODEL.md)
 14. [How to debug](14_HOW_TO_DEBUG.md)
 15. [Interview explanation](15_HOW_TO_EXPLAIN_IN_INTERVIEW.md)
+16. [Sandbox payment flow](16_PAYMENT_FLOW.md)
+17. [Transactional email flow](17_EMAIL_NOTIFICATION_FLOW.md)
 
 Supplemental notes cover [homepage discovery](16_HOME_DISCOVERY_FLOW.md), [trust boundaries](17_TRUST_BOUNDARIES.md), and [local operations](18_LOCAL_OPERATIONS.md).

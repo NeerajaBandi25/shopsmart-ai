@@ -22,9 +22,11 @@ from src.models.ai import (  # noqa: F401
 
 # Import all models to register them with Base before creating fixtures
 from src.models.base import Base
+from src.emails.model import NotificationOutbox  # noqa: F401
 from src.models.cart import Cart, CartItem  # noqa: F401
 from src.models.login_attempt import LoginAttempt  # noqa: F401
 from src.models.order import Order, OrderItem  # noqa: F401
+from src.models.payment import Payment, PaymentWebhookEvent  # noqa: F401
 from src.models.product import Product  # noqa: F401
 from src.models.promotion import Promotion  # noqa: F401
 from src.models.session import Session  # noqa: F401

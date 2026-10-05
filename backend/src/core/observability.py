@@ -38,6 +38,18 @@ _SECURITY_EVENTS = frozenset(
         "authorization_denied",
     }
 )
+_COMMERCE_AUDIT_EVENTS = frozenset(
+    {
+        "ORDER_CREATED",
+        "PAYMENT_CONFIRMED",
+        "PAYMENT_SUCCEEDED",
+        "PAYMENT_FAILED",
+        "PAYMENT_CANCELLED",
+        "ORDER_CANCELLED",
+        "PAYMENT_REFUNDED",
+        "REFUND_CREATED",
+    }
+)
 _AI_EVENTS = frozenset(
     {
         "ai_retrieval",
@@ -82,6 +94,15 @@ _LOG_CONTEXT_FIELDS = frozenset(
         "fallback_used",
         "latency_ms",
         "routing_policy",
+        "order_id",
+        "payment_id",
+        "amount_cents",
+        "currency",
+        "status",
+        "event_type",
+        "template",
+        "recipient_domain",
+        "attempt",
     }
 )
 
@@ -216,6 +237,38 @@ def security_audit_event(
         "security_event",
         extra=context,
     )
+
+
+def commerce_audit_event(
+    event: str,
+    *,
+    request_id: str | None = None,
+    order_id: str | None = None,
+    payment_id: str | None = None,
+    provider: str | None = None,
+    amount_cents: int | None = None,
+    currency: str | None = None,
+    status: str | None = None,
+    error_code: str | None = None,
+) -> None:
+    """Emit allowlisted commerce changes without payment credentials or customer PII."""
+    if event not in _COMMERCE_AUDIT_EVENTS:
+        return
+    context: dict[str, object] = {"event": event}
+    for key, value in (
+        ("request_id", request_id),
+        ("order_id", order_id),
+        ("payment_id", payment_id),
+        ("provider", provider),
+        ("currency", currency),
+        ("status", status),
+        ("error_code", error_code),
+    ):
+        if value is not None:
+            context[key] = value[:128] if isinstance(value, str) else value
+    if amount_cents is not None:
+        context["amount_cents"] = amount_cents
+    logging.getLogger("shopsmart.commerce.audit").info("commerce_audit_event", extra=context)
 
 
 def _audit_reference(kind: str, value: str) -> str:

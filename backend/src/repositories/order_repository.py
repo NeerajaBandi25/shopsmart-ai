@@ -58,3 +58,11 @@ class OrderRepository:
             .order_by(Order.created_at.desc(), Order.id.desc())
         )
         return list(result.scalars().all())
+
+    async def get_user_order(self, user_id: UUID, order_id: UUID) -> Order | None:
+        result = await self.db.execute(
+            select(Order)
+            .options(selectinload(Order.items))
+            .where(Order.id == order_id, Order.user_id == user_id)
+        )
+        return result.scalar_one_or_none()

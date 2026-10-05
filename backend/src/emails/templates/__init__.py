@@ -1,0 +1,1 @@
+"""Semantic transactional email templates."""

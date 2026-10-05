@@ -1,5 +1,6 @@
 """FastAPI application initialization."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -34,6 +35,7 @@ from src.core.observability import (
 from src.core.redis_client import close_redis_client
 from src.database import close_db, engine, init_db
 from src.middleware.session_refresh import SessionRefreshMiddleware
+from src.services.payment_reservation_worker import run_payment_reservation_sweeper
 
 logger = logging.getLogger(__name__)
 configure_structured_logging(settings.log_level)
@@ -47,11 +49,19 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up application...")
     if settings.auto_create_tables:
         await init_db()
-    yield
-    # Shutdown
-    logger.info("Shutting down application...")
-    await close_redis_client()
-    await close_db()
+    reservation_sweeper = asyncio.create_task(run_payment_reservation_sweeper())
+    try:
+        yield
+    finally:
+        # Shutdown
+        logger.info("Shutting down application...")
+        reservation_sweeper.cancel()
+        try:
+            await reservation_sweeper
+        except asyncio.CancelledError:
+            pass
+        await close_redis_client()
+        await close_db()
 
 
 # Create FastAPI app

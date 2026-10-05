@@ -32,6 +32,10 @@ export interface Order {
   id: string;
   created_at: string;
   status: string;
+  payment_status?:
+    'pending' | 'requires_action' | 'succeeded' | 'failed' | 'cancelled' | 'refunded' | null;
+  payment_method_label?: string | null;
+  checkout_url?: string | null;
   subtotal_cents: number;
   discount_total_cents: number;
   total_cents: number;
@@ -92,4 +96,24 @@ export async function getOrders(): Promise<Order[]> {
   });
   if (!response.ok) throw new Error(await responseError(response));
   return (await response.json()) as Order[];
+}
+
+export async function getOrder(orderId: string): Promise<Order> {
+  const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return (await response.json()) as Order;
+}
+
+export async function retryPayment(orderId: string): Promise<Order> {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/payment/retry`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'X-CSRF-Token': csrfToken },
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return (await response.json()) as Order;
 }

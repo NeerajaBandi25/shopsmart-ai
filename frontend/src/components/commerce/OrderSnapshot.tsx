@@ -19,6 +19,24 @@ function formatStatus(value: string): string {
     .join(' ');
 }
 
+function formatPaymentStatus(value?: Order['payment_status']): string {
+  switch (value) {
+    case 'succeeded':
+      return 'Paid';
+    case 'pending':
+    case 'requires_action':
+      return 'Payment pending';
+    case 'failed':
+      return 'Payment failed';
+    case 'cancelled':
+      return 'Payment cancelled';
+    case 'refunded':
+      return 'Refunded';
+    default:
+      return 'Payment details unavailable';
+  }
+}
+
 export function OrderSnapshot({ order, title }: { order: Order; title: string }) {
   return (
     <article className="border-y border-ink-100 py-5" aria-label={title}>
@@ -30,8 +48,29 @@ export function OrderSnapshot({ order, title }: { order: Order; title: string })
             <span aria-hidden="true"> · </span>
             <time dateTime={order.created_at}>{formatOrderDate(order.created_at)}</time>
           </p>
+          <p className="mt-1 text-sm text-ink-600">
+            Payment:{' '}
+            <span className="font-medium">{formatPaymentStatus(order.payment_status)}</span>
+            {order.payment_method_label && <> · {order.payment_method_label}</>}
+          </p>
         </div>
       </header>
+
+      <ol
+        className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-ink-600"
+        aria-label="Order progress"
+      >
+        <li>Order placed</li>
+        {order.payment_status === 'succeeded' || order.payment_status === 'refunded' ? (
+          <li aria-current="step">Payment confirmed</li>
+        ) : order.payment_status === 'cancelled' ? (
+          <li aria-current="step">Order cancelled</li>
+        ) : order.payment_status === 'failed' ? (
+          <li aria-current="step">Payment needs attention</li>
+        ) : (
+          <li aria-current="step">Awaiting payment</li>
+        )}
+      </ol>
 
       {order.items.length > 0 ? (
         <ul className="mt-4 divide-y divide-ink-100 border-y border-ink-100">
