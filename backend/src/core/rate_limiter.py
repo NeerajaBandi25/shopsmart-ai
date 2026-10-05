@@ -15,7 +15,6 @@ from src.core.config import settings
 from src.core.exceptions import AppException
 from src.core.observability import request_id_context
 
-
 _SHARED_LIMITER_ENVIRONMENTS = {"prod", "production", "stage", "staging"}
 _logger = logging.getLogger("shopsmart.rate_limiter")
 
