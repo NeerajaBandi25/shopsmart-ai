@@ -96,7 +96,12 @@ class ProviderPolicyRegistry:
 
     @classmethod
     def from_settings(cls) -> "ProviderPolicyRegistry":
-        selected_external = settings.ai_provider.lower() in {"openrouter", "groq", "gemini"}
+        selected_external = settings.ai_provider.lower() in {
+            "openai_compatible",
+            "openrouter",
+            "groq",
+            "gemini",
+        }
         policies = {
             "deterministic": ProviderPolicy(
                 "deterministic",
@@ -109,6 +114,7 @@ class ProviderPolicyRegistry:
             ),
         }
         configured = {
+            "openai_compatible": (settings.openai_api_key, settings.openai_model),
             "openrouter": (settings.openrouter_api_key, settings.openrouter_model),
             "groq": (settings.groq_api_key, settings.groq_model),
             "gemini": (settings.gemini_api_key, settings.gemini_model),
@@ -118,7 +124,11 @@ class ProviderPolicyRegistry:
                 priority = 0 if settings.ai_provider.lower() == provider else 50
                 policies[provider] = ProviderPolicy(
                     provider,
-                    frozenset({DataClassification.PUBLIC}),
+                    frozenset(
+                        {DataClassification.PUBLIC, DataClassification.PRIVATE}
+                        if settings.ai_external_private_data_enabled
+                        else {DataClassification.PUBLIC}
+                    ),
                     frozenset({model}),
                     priority=priority,
                     quota_per_day=1000,

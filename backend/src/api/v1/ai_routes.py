@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.v1.deps import get_current_user, get_db, require_csrf_token
 from src.core.config import settings
 from src.core.exceptions import AuthorizationError, NotFoundError, ValidationError
-from src.models.ai import Document, DocumentChunk
+from src.models.ai import ChatMessage, Conversation, Document, DocumentChunk
 from src.schemas.ai import (
     ChatRequest,
     ChatResponse,
@@ -140,6 +140,56 @@ async def chat(
             user_id, request.question, request.conversation_id
         )
     )
+
+
+@router.get("/usage")
+async def assistant_usage(
+    user_id: UUID = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Return an owner-scoped aggregate over the most recent 2,000 chat messages."""
+    rows = (
+        await db.scalars(
+            select(ChatMessage)
+            .join(Conversation, Conversation.id == ChatMessage.conversation_id)
+            .where(Conversation.owner_id == user_id)
+            .order_by(ChatMessage.created_at.desc())
+            .limit(2000)
+        )
+    ).all()
+    input_tokens = sum(item.token_count for item in rows if item.role == "user")
+    output_tokens = sum(item.token_count for item in rows if item.role == "assistant")
+    providers: dict[str, dict] = {}
+    estimated_cost_usd = 0.0
+    has_cost = False
+    request_count = 0
+    tool_calls = 0
+    for item in rows:
+        usage = ((item.result_data or {}).get("usage") or {}) if item.role == "assistant" else {}
+        if not usage:
+            continue
+        request_count += 1
+        tool_calls += int(usage.get("tool_calls", 0) or 0)
+        provider = str(usage.get("provider", "unknown"))
+        model = str(usage.get("model", "unknown"))
+        key = f"{provider}:{model}"
+        current = providers.setdefault(key, {"requests": 0, "input_tokens": 0, "output_tokens": 0})
+        current["requests"] += 1
+        current["input_tokens"] += int(usage.get("input_tokens", 0) or 0)
+        current["output_tokens"] += int(usage.get("output_tokens", 0) or 0)
+        cost = usage.get("estimated_cost_usd")
+        if cost is not None:
+            estimated_cost_usd += float(cost)
+            has_cost = True
+    return {
+        "message_window": len(rows),
+        "requests": request_count,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
+        "tool_calls": tool_calls,
+        "estimated_cost_usd": round(estimated_cost_usd, 8) if has_cost else None,
+        "by_provider_model": providers,
+    }
 
 
 @router.get("/conversations", response_model=list[ConversationResponse])

@@ -43,3 +43,23 @@ async def test_policy_retrieval_returns_no_evidence_when_corpus_is_empty(test_db
     matches = await KnowledgeRetrievalService(test_db).retrieve("warranty terms")
 
     assert matches == []
+
+
+@pytest.mark.asyncio
+async def test_public_provider_retrieval_requires_explicit_source_key_allowlist(test_db):
+    service = KnowledgeIngestionService(test_db)
+    approved = await service.publish(
+        "approved-policy", "Approved policy", "returns", "Approved return policy terms."
+    )
+    await service.publish(
+        "local-eval-only", "Synthetic local evaluation", "returns", "Synthetic policy terms."
+    )
+
+    matches = await KnowledgeRetrievalService(test_db).retrieve(
+        "policy terms", source_keys={"approved-policy"}
+    )
+    blocked = await KnowledgeRetrievalService(test_db).retrieve("policy terms", source_keys=set())
+
+    assert matches
+    assert all(item.source_id == approved for item in matches)
+    assert blocked == []

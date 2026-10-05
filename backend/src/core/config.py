@@ -65,10 +65,17 @@ class Settings(BaseSettings):
     ai_user_documents_enabled: bool = False
     openrouter_api_key: Optional[str] = None
     openrouter_model: str = "openai/gpt-4o-mini"
+    openai_api_key: Optional[str] = None
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str = "gpt-4o-mini"
     groq_api_key: Optional[str] = None
     groq_model: str = "llama-3.1-8b-instant"
     gemini_api_key: Optional[str] = None
     gemini_model: str = "gemini-2.0-flash"
+    ai_model_pricing_json: str = "{}"
+    ai_external_private_data_enabled: bool = False
+    # Only named, reviewed server knowledge sources may be supplied to external LLMs.
+    ai_external_public_knowledge_source_keys: str = ""
 
     # CORS
     cors_origins: list[str] = []

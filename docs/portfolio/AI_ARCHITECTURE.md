@@ -1,27 +1,37 @@
-# AI architecture
+# ShopSmart AI architecture
 
-The router recognizes portfolio categories, compound aliases and budget shorthand. Legacy phones/home/appliances names may retry their mapped portfolio category after an empty result; the retry preserves price and stock constraints and never broadens to the entire catalog. Distinct configurations reduce color-only duplication.
+## Runtime
 
-Buying advice derives price, published memory and scalar specifications from the current comparison shortlist. `buying_brief` carries per-product reasons for structured rendering. Advice qualifies missing gaming benchmarks and battery measurements. Cheapest-value explanation is implemented; comprehensive benchmark-based best-performance/best-battery scoring is not.
+The Shopping Assistant flows from the Next.js page through the same-origin AI BFF to the authenticated FastAPI `/api/v1/ai/chat` endpoint. `CommerceAssistantService` selects an external-provider tool loop only when `AI_PROVIDER` explicitly names a configured provider; otherwise it runs the deterministic offline path.
 
-Cheaper-item follow-ups resolve current shortlist facts before calling CartService. Checkout intent returns a current cart and `/checkout` navigation only for a nonempty cart. PDP questions seed assistant search with the full product name; the command palette carries queries into catalog or assistant.
+`ProviderGateway` supports OpenRouter, Groq, Gemini, and a generic OpenAI-compatible API through server-side `httpx` calls. The gateway owns provider selection, data-classification policy, timeout/retry behavior, fallback, and provider/model logging. `OPENAI_BASE_URL` supports an OpenAI-compatible endpoint; it is not a provider name by itself.
 
-The effective provider classification is the highest of the declared request and all supplied evidence. Public policy snippets cannot downgrade private questions. Regression tests cover this in `backend/tests/unit/test_ai_gateway.py`.
+## Tool authority
 
-Commerce intent is routed in `backend/src/services/assistant_router.py`. `CommerceAssistantService` checks conversation ownership, executes catalog/cart/promotion/order services, and returns typed structured data. Follow-up references resolve through stored product IDs and rehydrate current records.
+The external model receives JSON schemas generated from strict Pydantic tool-argument models. The allowlist is in `backend/src/services/assistant_tools.py`; it calls the existing catalog, cart, promotion, order, and knowledge services. The server supplies the authenticated user identity. Product IDs are limited to conversation search results and reloaded from the active catalog before use. Order reads are owner-scoped. Arbitrary SQL, HTTP, filesystem, and code execution are not available.
 
-The AI authority boundary is deliberate: live commerce facts come from services, not retrieved prose or provider-generated product objects. Shopping operations can run without an external LLM.
+Tool results are sent back to the model using provider-native function-result messages, with a five-call request limit. Raw user and history text is not sent; the external request contains a locally built route summary and reviewed intent vocabulary. Structured `result_data` remains authoritative for product cards, price, stock, comparisons, promotion evaluation, and cart totals. The backend composes the user-facing factual response from tool results instead of displaying free-form model claims. Private account/cart/order calls stay local unless `AI_EXTERNAL_PRIVATE_DATA_ENABLED=true`; configuring that flag deliberately permits those private results to be sent to the selected provider.
 
-Policy/support questions retrieve active curated knowledge through `assistant_knowledge.py`. User-document retrieval in `ai_retrieval.py` filters owner and ready state; document routes require a separate internal capability and are hidden from the public API schema. The provider receives evidence as untrusted context. Returned evidence IDs determine citations; insufficient evidence produces a no-answer result.
+## Grounding, history, and RAG
 
-`ai_governance.py` allowlists providers, models and data classifications. Configured external providers accept PUBLIC content; deterministic generation can handle the configured internal classifications. `ai_gateway.py` applies policy-first selection, timeouts, retries and fallback.
+Free-form conversation history is stored for the signed-in user but is never sent to an external provider. The provider receives a server-generated route summary plus rehydrated public product context. Product references in context are IDs only and are revalidated from the current database. Private cart/order/promotion tool results are sent only when the explicit private-data opt-in is enabled.
 
-Limitations to explain:
+Policy/support RAG searches active server-owned knowledge. External retrieval is disabled unless `AI_EXTERNAL_PUBLIC_KNOWLEDGE_SOURCE_KEYS` explicitly allowlists reviewed source keys; locally seeded synthetic evaluation sources are not exposed by default. It is not a source for price, stock, promotions, carts, or order status. Retrieved content is passed as untrusted function-result data. Policy answers require citation markers that resolve to retrieved sources; absent or uncited evidence returns a no-answer response. The current embedding implementation is deterministic token hashing with local cosine ranking. Obvious PII/payment identifiers in a shopping request remain on the local path.
 
-- A deterministic parser has bounded language coverage; test the actual intended phrases.
-- Conversation context is not unrestricted model memory.
-- Embeddings/retrieval have a local implementation; ranking currently scans accessible chunks.
-- Provider counters are process-local, and the quota implementation is not a distributed daily budget.
-- Provider retention/training policy fields describe required configuration, not a verified contractual guarantee.
+## Failure and observability
 
-Trace a structured product result through `frontend/src/components/assistant/CommerceResults.tsx` to show why an attractive card is still grounded in commerce records.
+Provider timeouts, rate limits, and server failures get bounded provider-only retries and eligible-provider fallback. Tool mutations are not retried; at most one cart/promotion mutation may run in an assistant request, and the final confirmation is created from ShopSmart's mutation result. Provider failures without mutation use the deterministic path and set `degraded_mode`.
+
+Structured logs include request correlation, provider/model, classification, latency, fallback, token usage, tool names/status, and configured cost estimate. They exclude prompts and credentials. Per-message usage is stored with the conversation, and `/api/v1/ai/usage` provides a user-scoped aggregate over the latest 2,000 messages. Cost remains unavailable until `AI_MODEL_PRICING_JSON` is configured with current pricing metadata.
+
+The chat response is buffered JSON; there is currently no SSE or token streaming. The tool loop must finish before the backend can produce a verified response. Provider streaming support is a follow-up capability, not a verified feature of this implementation.
+
+## Current constraints
+
+- `AI_PROVIDER` defaults to `deterministic`; set it to `openai_compatible`, `openrouter`, `groq`, or `gemini` for external calls.
+- External provider policy allows PUBLIC data by default. Private cart/order/promotion workflows use local deterministic orchestration unless explicitly opted in.
+- The deterministic tool fallback handles common fixed intent patterns; it does not provide general LLM reasoning.
+- Provider/model counters are process-local, while message usage is persisted. No provider billing API or exact cost reconciliation is implemented.
+- External provider quality and latency require opt-in tests using a non-production key; network access is not part of ordinary CI.
+
+For the learner-oriented request trace and debugging steps, see [`docs/learning/08_AI_ASSISTANT_FLOW.md`](../learning/08_AI_ASSISTANT_FLOW.md).

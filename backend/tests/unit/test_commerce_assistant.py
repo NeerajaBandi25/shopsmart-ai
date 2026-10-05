@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -8,6 +9,7 @@ import pytest
 from src.core.exceptions import AppException, NotFoundError
 from src.core.observability import JsonLogFormatter
 from src.services import commerce_assistant as assistant_module
+from src.services.ai_gateway import FunctionCall, ToolTurn
 from src.services.ai_provider import Evidence, ProviderAnswer
 from src.services.commerce_assistant import CommerceAssistantService
 
@@ -26,6 +28,9 @@ class FakeConversations:
     async def add_message(self, *args, **kwargs):
         self.messages.append((args, kwargs))
         return SimpleNamespace(id=uuid4())
+
+    async def history(self, *_args, **_kwargs):
+        return []
 
 
 class FakeProducts:
@@ -119,6 +124,151 @@ async def test_greeting_is_deterministic_and_does_not_call_tools(assistant):
     service.cart.get_cart.assert_not_awaited()
     service.orders.get_user_orders.assert_not_awaited()
     db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_external_provider_tool_result_is_returned_for_grounded_synthesis(
+    assistant, monkeypatch
+):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    class FakeToolExecutor:
+        def __init__(self):
+            self.events = []
+            self.citations = []
+            self.result_data = {}
+            self.mutation_count = 0
+
+        async def execute(self, name, arguments):
+            assert name == "search_products"
+            assert arguments == '{"category":"laptops"}'
+            product = {"id": "catalog-1", "name": "Catalog Laptop", "price_cents": 6499000}
+            self.result_data["products"] = [product]
+            self.events.append({"tool": name, "status": "completed"})
+            return {"total": 1, "products": [product]}
+
+    executor = FakeToolExecutor()
+    monkeypatch.setattr(assistant_module, "CommerceToolExecutor", lambda *_args: executor)
+    monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
+    monkeypatch.setattr(settings, "ai_external_private_data_enabled", False)
+    gateway.tool_turn = AsyncMock(
+        side_effect=[
+            (
+                ToolTurn(
+                    "",
+                    (FunctionCall("call-1", "search_products", '{"category":"laptops"}'),),
+                    20,
+                    3,
+                ),
+                "openai_compatible",
+                "test-model",
+            ),
+            (
+                ToolTurn("Catalog Laptop is ₹1. I recommend it as the best.", (), 30, 9),
+                "openai_compatible",
+                "test-model",
+            ),
+        ]
+    )
+
+    result = await service.answer(uuid4(), "Find laptops for React development and local AI")
+
+    assert result["answer"] == (
+        "I found Catalog Laptop. Its current price, availability, and specifications are "
+        "shown in the verified catalog details below."
+    )
+    assert "₹1" not in result["answer"]
+    assert "best" not in result["answer"].lower()
+    assert result["result_data"]["products"][0]["id"] == "catalog-1"
+    assert result["usage"]["input_tokens"] == 50
+    assert result["usage"]["output_tokens"] == 12
+    assert gateway.tool_turn.await_count == 2
+    second_turn_messages = gateway.tool_turn.await_args_list[1].args[0]
+    assert "Find laptops" not in json.dumps(second_turn_messages)
+    route_message = next(
+        message
+        for message in second_turn_messages
+        if message["content"].startswith("Validated ShopSmart route: ")
+    )
+    route_payload = json.loads(route_message["content"].split(": ", 1)[1])
+    assert route_payload["safe_product_terms"] == ["react", "development", "local", "ai"]
+    tool_result = next(message for message in second_turn_messages if message["role"] == "tool")
+    assert '"name": "Catalog Laptop"' in tool_result["content"]
+
+
+@pytest.mark.asyncio
+async def test_personal_identifiers_in_a_public_shopping_query_stay_on_local_path(
+    assistant, monkeypatch
+):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
+    gateway.tool_turn = AsyncMock()
+    result = await service.answer(uuid4(), "Find laptops for alice@example.com")
+
+    assert result["intent"] == "PRODUCT_SEARCH"
+    assert result["degraded_mode"] is False
+    gateway.tool_turn.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_freeform_user_context_is_not_sent_to_external_provider(assistant, monkeypatch):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
+    gateway.tool_turn = AsyncMock(
+        return_value=(
+            ToolTurn("No verified catalog tool call.", ()),
+            "openai_compatible",
+            "test-model",
+        )
+    )
+
+    await service.answer(uuid4(), "Find laptops for someone recovering from surgery")
+
+    sent_messages = gateway.tool_turn.await_args.args[0]
+    encoded_messages = json.dumps(sent_messages)
+    assert "recovering from surgery" not in encoded_messages
+    assert "surgery" not in encoded_messages
+    assert "laptops" in encoded_messages
+
+
+@pytest.mark.asyncio
+async def test_saved_product_context_is_rehydrated_without_freeform_history(assistant, monkeypatch):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    product_id = uuid4()
+    product = SimpleNamespace(
+        id=product_id,
+        name="Verified Saved Laptop",
+        description="Catalog description",
+        category="laptops",
+        sku="SAVED-LAPTOP",
+        price=6499000,
+        stock_quantity=2,
+        max_purchase_quantity=2,
+        image_url=None,
+        image_alt=None,
+        brand="ShopSmart",
+        list_price=None,
+        specifications={},
+        is_active=True,
+    )
+    service.conversations.conversation.context = {"product_ids": [str(product_id)]}
+    service.catalog.get.return_value = product
+    monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
+    gateway.tool_turn = AsyncMock(
+        return_value=(ToolTurn("No tool call", ()), "openai_compatible", "test-model")
+    )
+
+    await service.answer(uuid4(), "Compare the saved laptop")
+
+    messages = gateway.tool_turn.await_args.args[0]
+    assert "Verified Saved Laptop" in json.dumps(messages)
 
 
 @pytest.mark.asyncio

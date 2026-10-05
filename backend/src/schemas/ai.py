@@ -45,6 +45,9 @@ class ChatResponse(BaseModel):
     citations: list[Citation]
     intent: str = "UNSUPPORTED"
     result_data: dict | None = None
+    tool_events: list[dict[str, str]] = Field(default_factory=list)
+    usage: dict | None = None
+    degraded_mode: bool = False
 
 
 class ConversationResponse(BaseModel):

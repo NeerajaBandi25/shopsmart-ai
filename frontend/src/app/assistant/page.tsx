@@ -17,6 +17,14 @@ type Citation = {
   page_number: number | null;
   chunk_index: number;
 };
+type AIUsage = {
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number | null;
+};
 type ChatResult = {
   conversation_id: string;
   message_id: string;
@@ -25,7 +33,11 @@ type ChatResult = {
   reason: string | null;
   intent: string;
   citations: Citation[];
+  tool_events?: { tool: string; status: string }[];
+  usage?: AIUsage | null;
+  degraded_mode?: boolean;
   result_data: {
+    usage?: AIUsage;
     comparison?: boolean;
     navigation?: string;
     buying_brief?: { product_id: string; name: string; reasons: string[] }[];
@@ -237,6 +249,9 @@ export default function AssistantPage() {
                 intent: 'HISTORY',
                 citations: message.citations,
                 result_data: message.result_data,
+                tool_events: [],
+                usage: message.result_data.usage ?? null,
+                degraded_mode: false,
               }
             : undefined,
         }))
@@ -428,6 +443,11 @@ export default function AssistantPage() {
                 {message.result && !message.result.answerable && (
                   <p role="status" className="max-w-3xl text-sm text-ink-600">
                     I couldn’t verify an answer from the available ShopSmart information.
+                  </p>
+                )}
+                {message.result?.degraded_mode && (
+                  <p role="status" className="max-w-3xl text-xs text-amber-800">
+                    ShopSmart used its verified local response path for this reply.
                   </p>
                 )}
               </article>
