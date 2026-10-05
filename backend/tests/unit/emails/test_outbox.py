@@ -138,6 +138,36 @@ async def test_permanent_failure_is_terminal(session_factory) -> None:
 
 
 @pytest.mark.asyncio
+async def test_failed_payment_email_can_be_explicitly_rebuilt_from_order_snapshot(
+    session_factory,
+) -> None:
+    aggregate_id = uuid4()
+    async with session_factory() as session:
+        row = await EmailOutboxService(session).queue_order_email(
+            recipient="shopper@example.test",
+            template="payment_success",
+            data=sample_email(),
+            aggregate_id=aggregate_id,
+            dedupe_key=f"order:{aggregate_id}:payment_success",
+            request_id="req-email-retry",
+        )
+        await session.commit()
+        await EmailOutboxService(session).deliver_due(PermanentFailureProvider())
+        assert row.status == "failed" and row.payload == {}
+
+        restored = await EmailOutboxService(session).requeue_failed_payment_emails(
+            request_id="req-email-retry",
+            aggregate_id=aggregate_id,
+            recipient="shopper@example.test",
+            data=sample_email(),
+        )
+        assert restored == 1
+        assert row.status == "pending" and row.destination == "shopper@example.test"
+        assert row.attempts == 0 and row.payload["lines"][0]["name"] == "Phone"
+        assert await EmailOutboxService(session).deliver_due(CaptureEmailProvider()) == 1
+
+
+@pytest.mark.asyncio
 async def test_invalid_recipient_and_oversized_batch_are_rejected(session_factory) -> None:
     async with session_factory() as session:
         service = EmailOutboxService(session)

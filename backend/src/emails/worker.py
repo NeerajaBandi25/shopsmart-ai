@@ -5,24 +5,52 @@ import logging
 import os
 
 from src.database import AsyncSessionLocal
-from src.emails.providers import create_email_provider
+from src.emails.providers import EmailProvider, create_email_provider
 from src.emails.service import EmailOutboxService
+from src.notifications.payment_events import requeue_failed_payment_emails
 
 logger = logging.getLogger(__name__)
 
 
-async def run_worker() -> None:
-    """Poll committed outbox rows; run as a private worker process, never an HTTP endpoint."""
+def create_worker_provider() -> EmailProvider:
+    """Build a delivery provider and reject local sinks that discard queued messages."""
     provider_name = os.getenv("EMAIL_PROVIDER", "console")
-    app_env = os.getenv("APP_ENV", "development")
     provider = create_email_provider(
         provider_name,
-        app_env=app_env,
+        app_env=os.getenv("APP_ENV", "development"),
         resend_api_key=os.getenv("RESEND_API_KEY"),
-        mailtrap_api_token=os.getenv("MAILTRAP_API_TOKEN"),
-        smtp_url=os.getenv("SMTP_URL"),
+        from_address=os.getenv("EMAIL_FROM_ADDRESS"),
+        smtp_host=os.getenv("SMTP_HOST"),
+        smtp_port=os.getenv("SMTP_PORT", "587"),
+        smtp_username=os.getenv("SMTP_USERNAME"),
+        smtp_password=os.getenv("SMTP_PASSWORD"),
+        smtp_use_ssl=os.getenv("SMTP_USE_SSL", "false"),
     )
+    if provider.name not in {"resend", "smtp"}:
+        raise RuntimeError(
+            "Email worker requires Resend or SMTP; console/capture are test sinks"
+        )
+    return provider
+
+
+async def run_worker() -> None:
+    """Poll committed outbox rows; run as a private worker process, never an HTTP endpoint."""
+    provider = create_worker_provider()
     poll_seconds = max(1, min(int(os.getenv("EMAIL_WORKER_POLL_SECONDS", "10")), 300))
+    retry_request_id = os.getenv("EMAIL_REQUEUE_REQUEST_ID", "").strip()
+    if retry_request_id:
+        try:
+            async with AsyncSessionLocal() as session:
+                restored = await requeue_failed_payment_emails(session, retry_request_id)
+            logger.info(
+                "EMAIL_REQUEUE_COMPLETED",
+                extra={"request_id": retry_request_id, "template_count": restored},
+            )
+        except Exception as exc:  # noqa: BLE001 - leave normal delivery worker available.
+            logger.error(
+                "EMAIL_REQUEUE_FAILED",
+                extra={"request_id": retry_request_id, "error_type": type(exc).__name__},
+            )
     logger.info("email_outbox_worker_started", extra={"provider": provider.name})
     while True:
         try:

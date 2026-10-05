@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -34,6 +35,7 @@ from src.core.observability import (
 )
 from src.core.redis_client import close_redis_client
 from src.database import close_db, engine, init_db
+from src.emails.worker import run_worker as run_email_worker
 from src.middleware.session_refresh import SessionRefreshMiddleware
 from src.services.payment_reservation_worker import run_payment_reservation_sweeper
 
@@ -50,16 +52,30 @@ async def lifespan(app: FastAPI):
     if settings.auto_create_tables:
         await init_db()
     reservation_sweeper = asyncio.create_task(run_payment_reservation_sweeper())
+    email_worker = None
+    email_worker_enabled = os.getenv("EMAIL_WORKER_ENABLED", "false").strip().lower()
+    if (
+        settings.app_env.strip().lower() in {"local", "dev", "development"}
+        and email_worker_enabled in {"1", "true", "yes", "on"}
+    ):
+        email_worker = asyncio.create_task(run_email_worker(), name="email-outbox-worker")
     try:
         yield
     finally:
         # Shutdown
         logger.info("Shutting down application...")
         reservation_sweeper.cancel()
+        if email_worker is not None:
+            email_worker.cancel()
         try:
             await reservation_sweeper
         except asyncio.CancelledError:
             pass
+        if email_worker is not None:
+            try:
+                await email_worker
+            except asyncio.CancelledError:
+                pass
         await close_redis_client()
         await close_db()
 

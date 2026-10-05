@@ -165,6 +165,47 @@ class EmailOutboxService:
         )
         return row
 
+    async def requeue_failed_payment_emails(
+        self,
+        *,
+        request_id: str,
+        aggregate_id: UUID,
+        recipient: str,
+        data: OrderEmail,
+    ) -> int:
+        """Rebuild explicitly requested failed paid-order messages from durable order data."""
+        if not _EMAIL_RE.fullmatch(recipient) or len(recipient) > 320:
+            raise ValueError("A valid email destination is required")
+        safe_data = _payload_from_order(data)
+        if len(json.dumps(safe_data, ensure_ascii=False).encode("utf-8")) > MAX_PAYLOAD_BYTES:
+            raise ValueError("Email payload exceeds the outbox size limit")
+        templates = ("order_confirmation", "payment_success")
+        rows = list(
+            (
+                await self.db.scalars(
+                    select(NotificationOutbox).where(
+                        NotificationOutbox.request_id == request_id,
+                        NotificationOutbox.aggregate_id == aggregate_id,
+                        NotificationOutbox.template.in_(templates),
+                        NotificationOutbox.status == "failed",
+                    )
+                )
+            ).all()
+        )
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            render_order_email(row.template, data)
+            row.destination = recipient
+            row.payload = safe_data
+            row.status = "pending"
+            row.attempts = 0
+            row.last_error_code = None
+            row.next_attempt_at = now
+            row.updated_at = now
+        if rows:
+            await self.db.commit()
+        return len(rows)
+
     async def deliver_due(self, provider: EmailProvider, *, limit: int = 20) -> int:
         """Claim and attempt a bounded batch; each email has a finite retry budget."""
         if not 1 <= limit <= 100:
