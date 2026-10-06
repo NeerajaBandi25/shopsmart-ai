@@ -7,7 +7,7 @@
       "messages": [
         {
           "role": "system",
-          "content": "Use ShopSmart tools for catalog facts. Do not invent products, prices, or stock."
+          "content": "Use ShopSmart tools for catalog facts. Do not invent products, prices, or stock. For 60000 INR, max_price_cents uses paise and must be 6000000; use the canonical category laptops."
         },
         {
           "role": "user",
@@ -64,11 +64,34 @@
       "messages": [
         {
           "role": "system",
-          "content": "Rank only the verified candidate list with the ShopSmart ranking tool."
+          "content": "A validated development mission and authoritative search results are present in this conversation. Rank only those verified candidates with rank_recommendations. The tool takes an empty JSON object because the server owns mission and catalog state. Do not rank from memory."
         },
         {
           "role": "user",
-          "content": "Rank these verified laptops for development work and explain the top fit."
+          "content": "Find laptops for software development, then rank the verified results and explain the top fit."
+        },
+        {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "benchmark-search-call",
+              "type": "function",
+              "function": {
+                "name": "search_products",
+                "arguments": "{\"category\":\"laptops\",\"in_stock_only\":true}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "benchmark-search-call",
+          "name": "search_products",
+          "content": "{\"total\":2,\"products\":[{\"id\":\"8bd0d2d4-52ca-4bc6-8b85-674d0ed1bfee\",\"name\":\"Benchmark Atlas Pro\",\"price_cents\":7990000,\"stock_quantity\":3,\"specifications\":{\"ram_gb\":32,\"processor\":\"8-core processor\"}},{\"id\":\"c32e1a0b-93f4-4f55-a9ab-4c95a7fb37e1\",\"name\":\"Benchmark Cedar Air\",\"price_cents\":6990000,\"stock_quantity\":5,\"specifications\":{\"ram_gb\":16,\"processor\":\"6-core processor\"}}]}"
+        },
+        {
+          "role": "user",
+          "content": "Call rank_recommendations now using the validated mission and catalog results."
         }
       ],
       "expected_tool": "rank_recommendations",
@@ -84,7 +107,7 @@
           {
             "name": "Benchmark Atlas Pro",
             "rank": 1,
-            "reasons": ["32 GB RAM", "verified catalog match"]
+            "reasons": ["32 GB RAM", "8-core processor", "verified catalog match"]
           },
           {
             "name": "Benchmark Cedar Air",

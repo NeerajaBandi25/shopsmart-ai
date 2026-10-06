@@ -4,12 +4,49 @@ from uuid import UUID, uuid4
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.v1 import ai_routes
 from src.core.security import hash_password
 from src.models.product import Product
 from src.repositories.user_repository import UserRepository
 from src.services.assistant_knowledge import KnowledgeIngestionService
 from src.services.cart_service import CartService
 from src.services.order_service import OrderService
+
+
+async def test_chat_response_preserves_numeric_tool_durations(
+    test_client: AsyncClient,
+    test_user_data_in_db: dict,
+    monkeypatch,
+):
+    async def answer_with_tool_event(*args, **kwargs):
+        return {
+            "conversation_id": str(uuid4()),
+            "message_id": str(uuid4()),
+            "answer": "Found a grounded catalog result.",
+            "answerable": True,
+            "citations": [],
+            "intent": "PRODUCT_SEARCH",
+            "tool_events": [
+                {"tool": "search_products", "status": "completed", "duration_ms": 0.45}
+            ],
+            "fallback_used": True,
+        }
+
+    monkeypatch.setattr(ai_routes, "_answer_idempotently", answer_with_tool_event)
+    login = await test_client.post("/api/v1/auth/login", json=test_user_data_in_db)
+    csrf = await test_client.get("/api/v1/auth/csrf", cookies=login.cookies)
+    response = await test_client.post(
+        "/api/v1/ai/chat",
+        cookies=login.cookies,
+        headers={"X-CSRF-Token": csrf.json()["csrf_token"]},
+        json={"question": "Show me laptops."},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tool_events"] == [
+        {"tool": "search_products", "status": "completed", "duration_ms": 0.45}
+    ]
+    assert response.json()["fallback_used"] is True
 
 
 async def test_replayed_assistant_cart_mutation_returns_original_result_once(

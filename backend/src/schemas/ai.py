@@ -46,10 +46,12 @@ class ChatResponse(BaseModel):
     citations: list[Citation]
     intent: str = "UNSUPPORTED"
     result_data: dict | None = None
-    tool_events: list[dict[str, str]] = Field(default_factory=list)
+    # Tool events include numeric duration_ms values as well as string labels/statuses.
+    tool_events: list[dict[str, str | int | float]] = Field(default_factory=list)
     usage: dict | None = None
     degraded_mode: bool = False
     trace: dict | None = None
+    fallback_used: bool = False
 
 
 class ConversationResponse(BaseModel):

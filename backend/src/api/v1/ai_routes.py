@@ -73,6 +73,7 @@ async def _answer_idempotently(
             "usage": result_data.get("usage"),
             "degraded_mode": False,
             "trace": result_data.get("trace"),
+            "fallback_used": bool(result_data.get("fallback_used", False)),
         }
     return await CommerceAssistantService(db).answer(
         user_id,

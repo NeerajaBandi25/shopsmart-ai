@@ -514,6 +514,26 @@ async def test_openrouter_auth_rejection_does_not_fan_out_to_other_models(
 
 
 @pytest.mark.asyncio
+async def test_provider_unavailable_marks_deterministic_response_as_fallback(
+    assistant, monkeypatch
+):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    gateway.select_model.return_value = ModelSelection(
+        "ADAPTIVE_FREE", "PRODUCT_SEARCH", False, ("model-a:free",), ()
+    )
+    gateway.tool_turn.side_effect = ProviderUnavailable("temporary provider failure")
+
+    result = await service.answer(uuid4(), "Show me laptops")
+
+    assert result["degraded_mode"] is True
+    assert result["fallback_used"] is True
+    assert result["trace"]["fallback"] is True
+
+
+@pytest.mark.asyncio
 async def test_openrouter_free_alias_resolves_once_and_pins_concrete_model_for_synthesis(
     assistant, monkeypatch
 ):

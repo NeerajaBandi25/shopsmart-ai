@@ -114,6 +114,51 @@ async def test_runtime_state_tracks_failure_latency_429_and_opens_circuit(monkey
 
 
 @pytest.mark.asyncio
+async def test_redis_timeout_is_probed_once_per_request_state(monkeypatch):
+    class UnavailableRedis:
+        def __init__(self):
+            self.mget_calls = 0
+
+        async def mget(self, *_keys):
+            self.mget_calls += 1
+            raise TimeoutError("isolated test Redis is unavailable")
+
+        def pipeline(self, **_kwargs):
+            raise AssertionError("writes are skipped after Redis is marked unavailable")
+
+    client = UnavailableRedis()
+    monkeypatch.setattr(router_module, "get_redis_client", lambda: client)
+    state = ModelRuntimeState()
+
+    first = await state.snapshot("redis-down/first:free", "PRODUCT_ADVICE")
+    second = await state.snapshot("redis-down/second:free", "PRODUCT_ADVICE")
+    await state.record("redis-down/first:free", success=True, latency_ms=10)
+
+    assert first["health"] == second["health"] == "healthy"
+    assert client.mget_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_eval_quality_gate_rejects_model_from_adaptive_candidates(monkeypatch):
+    monkeypatch.setattr(router_module, "get_redis_client", lambda: None)
+    monkeypatch.setattr(settings, "ai_model_routing_mode", "ADAPTIVE_FREE")
+    state = ModelRuntimeState()
+    await state.record_eval("failed/model:free", "PRODUCT_ADVICE", 0)
+    router = AdaptiveFreeModelRouter(state=state)
+    router._catalog = (
+        router_module.ModelCandidate("failed/model:free", frozenset({"tools"})),
+        router_module.ModelCandidate("eligible/model:free", frozenset({"tools"})),
+    )
+    router._catalog_expires_at = 9999999999
+
+    selection = await router.select("PRODUCT_ADVICE", streaming_required=False)
+
+    assert selection.selected_model == "eligible/model:free"
+    assert "failed/model:free" not in selection.candidates
+    assert ("failed/model:free", "eval_quality_gate_failed") in selection.rejections
+
+
+@pytest.mark.asyncio
 async def test_fixed_requires_concrete_model_and_benchmark_is_eval_only(monkeypatch):
     monkeypatch.setattr(settings, "ai_model_routing_mode", "FIXED")
     monkeypatch.setattr(settings, "ai_fixed_model", "openrouter/free")

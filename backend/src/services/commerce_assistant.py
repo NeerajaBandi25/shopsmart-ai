@@ -919,11 +919,15 @@ class CommerceAssistantService:
                     answer += self._weight_evidence_disclaimer(
                         mission, executor.result_data["products"]
                     )
+        fallback_used = fallback_index > 0 or bool(
+            model_selection and model_selection.candidates[0] == "openrouter/free"
+        )
         stored_data = {
             **executor.result_data,
             "usage": usage,
             "mission": mission.model_dump(mode="json"),
             "mission_cache": cache_status,
+            "fallback_used": fallback_used,
             "routing": (
                 {
                     "mode": model_selection.mode,
@@ -965,8 +969,7 @@ class CommerceAssistantService:
                 "event": "ASSISTANT_RESPONSE_COMPLETED",
                 "request_id": request_id_context.get(),
                 "tool_calls": len(executor.events),
-                "fallback": fallback_index > 0
-                or bool(model_selection and model_selection.candidates[0] == "openrouter/free"),
+                "fallback": fallback_used,
             },
         )
         return {
@@ -981,8 +984,7 @@ class CommerceAssistantService:
             "tool_events": executor.events,
             "usage": usage,
             "degraded_mode": False,
-            "fallback_used": fallback_index > 0
-            or bool(model_selection and model_selection.candidates[0] == "openrouter/free"),
+            "fallback_used": fallback_used,
         }
 
     async def _lock_request_owner(self, user_id: UUID) -> None:
@@ -1617,6 +1619,7 @@ class CommerceAssistantService:
             "tool_events": [],
             "usage": None,
             "degraded_mode": degraded_mode,
+            "fallback_used": degraded_mode,
         }
 
     async def _mission_for(self, user_id, question, conversation):

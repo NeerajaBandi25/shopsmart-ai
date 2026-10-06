@@ -123,6 +123,8 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
             started = time.perf_counter()
             sample = {
                 "task_type": case["task_type"],
+                "expected_tool": case["expected_tool"],
+                "called_tools": [],
                 "success": False,
                 "latency_ms": 0.0,
                 "tool_call_correctness": 0.0,
@@ -141,6 +143,7 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
                 first = await provider.complete(
                     case["messages"], tools, model_id, timeout_seconds=30
                 )
+                sample["called_tools"] = [item.name for item in first.tool_calls]
                 sample["input_tokens"] += first.input_tokens
                 sample["output_tokens"] += first.output_tokens
                 call = next(
@@ -160,8 +163,17 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
                         parsed_arguments = None
                 tool_ok = call is not None and parsed_arguments is not None
                 sample["tool_call_correctness"] = float(tool_ok)
+                sample["argument_validation_passed"] = parsed_arguments is not None
                 constraint_expectations = case.get("constraint_expectations", {})
                 if tool_ok and constraint_expectations:
+                    sample["constraint_checks"] = {
+                        name: {
+                            "expected": expected,
+                            "actual": getattr(parsed_arguments, name, None),
+                            "matched": getattr(parsed_arguments, name, object()) == expected,
+                        }
+                        for name, expected in constraint_expectations.items()
+                    }
                     sample["constraint_accuracy"] = float(
                         all(
                             getattr(parsed_arguments, name, object()) == expected
@@ -175,7 +187,9 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
                 recommended = False
                 if tool_ok and case.get("mission_expectations"):
                     expected = set(case["mission_expectations"])
-                    mission_ok = expected.issubset(set(parsed_arguments.desired_use_cases))
+                    actual = set(parsed_arguments.desired_use_cases)
+                    mission_ok = expected.issubset(actual)
+                    sample["mission_missing"] = sorted(expected - actual)
                     sample["mission_extraction"] = float(mission_ok)
                 synthesis_ok = True
                 if tool_ok and case.get("tool_result"):
@@ -217,6 +231,16 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
                     recommended = all(
                         term.casefold() in final for term in case.get("recommendation_terms", [])
                     )
+                    sample["missing_grounding_terms"] = [
+                        term
+                        for term in case.get("grounding_terms", [])
+                        if term.casefold() not in final
+                    ]
+                    sample["missing_recommendation_terms"] = [
+                        term
+                        for term in case.get("recommendation_terms", [])
+                        if term.casefold() not in final
+                    ]
                     sample["grounding"] = float(grounded)
                     sample["recommendation_quality"] = float(recommended)
                     synthesis_ok = bool(response_turn.text.strip()) and grounded

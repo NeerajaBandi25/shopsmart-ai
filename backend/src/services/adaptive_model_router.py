@@ -55,10 +55,15 @@ class ModelSelection:
 class ModelRuntimeState:
     """Short-lived model health, latency, reliability, 429, and circuit metrics."""
 
+    def __init__(self) -> None:
+        # Probe Redis once per request-scoped state object. A Redis outage must not
+        # add one socket timeout for every free-model candidate and tool round.
+        self._redis_unavailable = False
+
     async def snapshot(self, model_id: str, task_type: str) -> dict[str, float | str]:
         key = self._key(model_id)
         client = get_redis_client()
-        if client:
+        if client and not self._redis_unavailable:
             try:
                 values = await client.mget(
                     key + ":health",
@@ -80,7 +85,8 @@ class ModelRuntimeState:
                     }
                 )
                 return result
-            except (RedisError, TypeError, ValueError) as exc:
+            except (RedisError, TimeoutError, TypeError, ValueError) as exc:
+                self._redis_unavailable = True
                 logger.warning(
                     "adaptive_model_state_degraded",
                     extra={
@@ -130,7 +136,7 @@ class ModelRuntimeState:
                 }
             )
         client = get_redis_client()
-        if not client:
+        if not client or self._redis_unavailable:
             return
         try:
             window_key = key + ":window"
@@ -162,7 +168,8 @@ class ModelRuntimeState:
             if latency_ms is not None and success:
                 pipe.set(key + ":latency", max(0.0, latency_ms), ex=MODEL_LATENCY_TTL)
             await pipe.execute()
-        except RedisError:
+        except (RedisError, TimeoutError):
+            self._redis_unavailable = True
             logger.warning(
                 "adaptive_model_state_degraded",
                 extra={"event": "adaptive_model_state_degraded", "model": model_id},
@@ -174,7 +181,7 @@ class ModelRuntimeState:
             item = _LOCAL_STATE.setdefault((model_id, task_type), {})
             item.update(eval_score=normalized_score, expires_at=time.monotonic() + 86400)
         client = get_redis_client()
-        if not client:
+        if not client or self._redis_unavailable:
             return
         try:
             await client.set(
@@ -182,7 +189,8 @@ class ModelRuntimeState:
                 normalized_score,
                 ex=86400,
             )
-        except RedisError:
+        except (RedisError, TimeoutError):
+            self._redis_unavailable = True
             logger.warning(
                 "adaptive_model_eval_state_degraded",
                 extra={"event": "adaptive_model_eval_state_degraded", "model": model_id},
@@ -277,6 +285,9 @@ class AdaptiveFreeModelRouter:
                 rejections.append((candidate.model_id, "circuit_open_or_unhealthy"))
                 continue
             eval_score = float(state["eval_score"])
+            if eval_score <= 0:
+                rejections.append((candidate.model_id, "eval_quality_gate_failed"))
+                continue
             reliability = 1.0 - float(state["failure_rate"])
             rate_limit_score = 1.0 - float(state["429_rate"])
             latency_score = 1.0 - min(float(state["latency"]) / 15000.0, 1.0)
