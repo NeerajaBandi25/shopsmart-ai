@@ -469,3 +469,68 @@ test('home, category search, product, comparison, cart and checkout routes', asy
     true
   );
 });
+
+test('browser checkout persists an authoritative pending order through the local fake provider', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    process.env.E2E_FAKE_CHECKOUT !== '1' || testInfo.project.name === 'mobile',
+    'Requires the isolated local fake-payment backend and desktop checkout viewport.'
+  );
+  await page.route('https://checkout.stripe.com/**', async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<h1>Local synthetic hosted-checkout boundary</h1>',
+    })
+  );
+  let createdOrder: Record<string, unknown> | null = null;
+  await page.route('**/api/orders/checkout', async (route) => {
+    const response = await route.fetch();
+    createdOrder = (await response.json()) as Record<string, unknown>;
+    await route.fulfill({ response, body: JSON.stringify(createdOrder) });
+  });
+  const cartSetup = await page.evaluate(async () => {
+    const productsResponse = await fetch('/api/products?skip=0&limit=24&category=laptops');
+    if (!productsResponse.ok) throw new Error(`Product lookup returned ${productsResponse.status}`);
+    const products = (await productsResponse.json()) as { items: { id: string }[] };
+    const product = products.items[0];
+    if (!product) throw new Error('No synthetic laptop is available for checkout QA.');
+    const csrfResponse = await fetch('/api/auth/csrf');
+    const { csrf_token: csrfToken } = await csrfResponse.json();
+    const cartResponse = await fetch('/api/cart/items', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ product_id: product.id, quantity: 1 }),
+    });
+    return { status: cartResponse.status };
+  });
+  expect(cartSetup.status).toBe(200);
+  await page.goto('/checkout');
+  await page.getByLabel('Recipient name', { exact: true }).fill('Local Test Shopper');
+  await page.getByLabel('Phone', { exact: true }).fill('9999999999');
+  await page.getByLabel('Address line 1', { exact: true }).fill('1 Fictional Test Street');
+  await page.getByLabel('City', { exact: true }).fill('Hyderabad');
+  await page.getByLabel('State or region', { exact: true }).fill('Telangana');
+  await page.getByLabel('Postal code', { exact: true }).fill('500001');
+  const checkoutResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/orders/checkout') && response.request().method() === 'POST'
+  );
+  await page.getByRole('button', { name: 'Continue to secure checkout', exact: true }).click();
+  const response = await checkoutResponse;
+  expect(response.status()).toBe(201);
+  const order = createdOrder;
+  expect(order).not.toBeNull();
+  if (!order) throw new Error('Checkout response body was not captured.');
+  expect(order.status).toBe('pending_payment');
+  expect(order.payment_status).toBe('requires_action');
+  expect(order.checkout_url).toMatch(/^https:\/\/checkout\.stripe\.com\//);
+  await expect(
+    page.getByRole('heading', { name: 'Local synthetic hosted-checkout boundary' })
+  ).toBeVisible();
+  await page.goto('/orders');
+  await expect(page.getByRole('heading', { name: 'Order history', exact: true })).toBeVisible();
+  await expect(page.getByText(new RegExp(`Order from`)).first()).toBeVisible();
+});
