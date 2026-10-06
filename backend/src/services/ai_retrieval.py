@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.ai import Document, DocumentChunk
-from src.services.ai_provider import EmbeddingProvider, Evidence
+from src.services.ai_provider import EmbeddingProvider, Evidence, GroundedAnswerProvider
 
 
 @dataclass(frozen=True)
@@ -29,9 +29,10 @@ class RetrievalService:
         self.embedder = embedder or EmbeddingProvider()
 
     async def retrieve(
-        self, owner_id: UUID, question: str, top_k: int = 5, threshold: float = 0.12
+        self, owner_id: UUID, question: str, top_k: int = 5, threshold: float = 0.4
     ) -> list[RetrievedChunk]:
         query_embedding = self.embedder.embed(question)
+        query_terms = GroundedAnswerProvider.content_terms(question)
         rows = (
             await self.db.execute(
                 select(DocumentChunk, Document.classification)
@@ -44,12 +45,34 @@ class RetrievalService:
         ).all()
         ranked = sorted(
             (
-                RetrievedChunk(row, cosine(query_embedding, row.embedding), classification)
+                RetrievedChunk(
+                    row,
+                    0.8
+                    * (
+                        len(query_terms & GroundedAnswerProvider.content_terms(row.text))
+                        / len(query_terms)
+                        if query_terms
+                        else 0.0
+                    )
+                    + 0.2 * cosine(query_embedding, row.embedding),
+                    classification,
+                )
                 for row, classification in rows
             ),
             key=lambda item: item.score,
             reverse=True,
         )
+        if ranked:
+            # The hashed vector is only a coarse local signal. Requiring some
+            # normalized lexical evidence and trimming the long tail prevents
+            # token-hash collisions from filling the context with unrelated chunks.
+            cutoff = max(threshold, ranked[0].score * 0.7)
+            ranked = [
+                item
+                for item in ranked
+                if item.score >= cutoff
+                and query_terms & GroundedAnswerProvider.content_terms(item.chunk.text)
+            ]
         result: list[RetrievedChunk] = []
         seen: set[str] = set()
         for item in ranked:
