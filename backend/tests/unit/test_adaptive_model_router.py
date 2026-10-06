@@ -139,6 +139,28 @@ async def test_redis_timeout_is_probed_once_per_request_state(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_redis_zero_scores_and_rates_override_stale_process_state(monkeypatch):
+    class RedisSnapshot:
+        async def mget(self, *_keys):
+            return ["healthy", 0, 0, 0, "closed", 0]
+
+    model = "redis-zero/authoritative:free"
+    state = ModelRuntimeState()
+    await state.record_eval(model, "PRODUCT_SEARCH", 0.8)
+    await state.record(model, success=False, status_code=429)
+    monkeypatch.setattr(router_module, "get_redis_client", lambda: RedisSnapshot())
+
+    snapshot = await state.snapshot(model, "PRODUCT_SEARCH")
+
+    assert snapshot["health"] == "healthy"
+    assert snapshot["latency"] == 0
+    assert snapshot["429_rate"] == 0
+    assert snapshot["failure_rate"] == 0
+    assert snapshot["circuit_state"] == "closed"
+    assert snapshot["eval_score"] == 0
+
+
+@pytest.mark.asyncio
 async def test_failed_eval_quality_gate_rejects_model_from_adaptive_candidates(monkeypatch):
     monkeypatch.setattr(router_module, "get_redis_client", lambda: None)
     monkeypatch.setattr(settings, "ai_model_routing_mode", "ADAPTIVE_FREE")

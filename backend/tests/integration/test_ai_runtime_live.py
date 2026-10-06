@@ -112,6 +112,13 @@ async def test_real_redis_model_rate_limits_and_circuit_have_bounded_ttls(monkey
         snapshot = await state.snapshot(model, "PRODUCT_SEARCH")
         assert snapshot["circuit_state"] == "closed"
         assert snapshot["latency"] == 37.0
+
+        await state.record_eval(model, "PRODUCT_SEARCH", 0.73)
+        independent_state = ModelRuntimeState()
+        independent_snapshot = await independent_state.snapshot(model, "PRODUCT_SEARCH")
+        assert independent_snapshot["eval_score"] == 0.73
+        eval_ttl = await client.ttl(key + ":eval_score:product_search")
+        assert 0 < eval_ttl <= 86400
     finally:
         keys = [key async for key in client.scan_iter(match=f"{key}:*")]
         if keys:

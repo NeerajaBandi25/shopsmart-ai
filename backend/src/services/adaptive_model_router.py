@@ -76,12 +76,22 @@ class ModelRuntimeState:
                 result = self._local_snapshot(model_id, task_type)
                 result.update(
                     {
-                        "health": values[0] or result["health"],
-                        "latency": float(values[1]) if values[1] else result["latency"],
-                        "429_rate": float(values[2]) if values[2] else result["429_rate"],
-                        "failure_rate": float(values[3]) if values[3] else result["failure_rate"],
-                        "circuit_state": values[4] or result["circuit_state"],
-                        "eval_score": float(values[5]) if values[5] else result["eval_score"],
+                        "health": values[0] if values[0] is not None else result["health"],
+                        "latency": (
+                            float(values[1]) if values[1] is not None else result["latency"]
+                        ),
+                        "429_rate": (
+                            float(values[2]) if values[2] is not None else result["429_rate"]
+                        ),
+                        "failure_rate": (
+                            float(values[3]) if values[3] is not None else result["failure_rate"]
+                        ),
+                        "circuit_state": (
+                            values[4] if values[4] is not None else result["circuit_state"]
+                        ),
+                        "eval_score": (
+                            float(values[5]) if values[5] is not None else result["eval_score"]
+                        ),
                     }
                 )
                 return result
