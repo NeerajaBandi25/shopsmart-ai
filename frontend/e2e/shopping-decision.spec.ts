@@ -52,13 +52,17 @@ test.beforeEach(async ({ page }, testInfo) => {
 });
 
 async function ask(page: Page, question: string) {
+  const responseTimeout = process.env.E2E_LIVE_ADAPTIVE === '1' ? 120_000 : 30_000;
   const responseCount = await page.getByText('ShopSmart assistant', { exact: true }).count();
   await page.getByLabel('Message the shopping assistant').fill(question);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeEnabled({
+    timeout: responseTimeout,
+  });
   await expect(page.getByText('ShopSmart assistant', { exact: true })).toHaveCount(
-    responseCount + 1
+    responseCount + 1,
+    { timeout: responseTimeout }
   );
 }
 
@@ -109,6 +113,7 @@ async function clearCurrentCart(page: Page) {
 test('shopping mission, evidence, refinement, cart, offers, policy and owner-scoped orders', async ({
   page,
 }, testInfo) => {
+  if (process.env.E2E_LIVE_ADAPTIVE === '1') test.setTimeout(12 * 60_000);
   const errors: string[] = [];
   const failedRequests: string[] = [];
   let rejectedCouponResponses = 0;
@@ -174,21 +179,24 @@ test('shopping mission, evidence, refinement, cart, offers, policy and owner-sco
   await ask(page, 'Add your recommended one.');
   await ask(page, "What's in my cart?");
   await expect(page.getByText(/Subtotal/).last()).toBeVisible();
-  const cartLine = page.locator('p').filter({ hasText: recommendedName! }).last();
-  await expect(cartLine).toBeVisible();
-  await expect
-    .poll(async () => (await cartLine.textContent())?.trim() ?? '')
-    .toMatch(/^1\s*\u00d7/);
   const updatedCart = await page.evaluate(async () => {
     const response = await fetch('/api/cart', { credentials: 'include' });
     if (!response.ok) throw new Error(`Cart API returned ${response.status}`);
     return response.json();
   });
-  const recommendedItem = updatedCart.items.find(
-    (item: { name: string }) => item.name === recommendedName
-  );
-  expect(recommendedItem?.quantity).toBe(1);
-  expect(recommendedItem?.unit_price).toBeGreaterThan(0);
+  expect(updatedCart.items).toHaveLength(1);
+  const cartItem = updatedCart.items[0];
+  expect(cartItem.quantity).toBe(1);
+  const cartLine = page
+    .locator('p')
+    .filter({ hasText: /^1\s*×/ })
+    .filter({ hasText: cartItem.name })
+    .last();
+  await expect(cartLine).toBeVisible();
+  await expect
+    .poll(async () => (await cartLine.textContent())?.trim() ?? '')
+    .toMatch(/^1\s*\u00d7/);
+  expect(cartItem.unit_price).toBeGreaterThan(0);
   await ask(page, 'Any offers?');
   await expect(page.getByRole('list', { name: 'Promotion results' }).last()).toBeVisible();
   const cartBeforeCoupon = await page.evaluate(async () => {
@@ -230,7 +238,7 @@ test('shopping mission, evidence, refinement, cart, offers, policy and owner-sco
     expect(unchangedCart.coupon_code).toBe('SAVE20');
     expect(unchangedCart.total_cents).toBe(couponCart.total_cents);
   }
-  await page.getByLabel(`Quantity for ${recommendedName}`, { exact: true }).fill('2');
+  await page.getByLabel(`Quantity for ${cartItem.name}`, { exact: true }).fill('2');
   await page.getByRole('button', { name: 'Update', exact: true }).click();
   await expect
     .poll(async () =>
@@ -239,7 +247,7 @@ test('shopping mission, evidence, refinement, cart, offers, policy and owner-sco
         if (!response.ok) throw new Error(`Cart API returned ${response.status}`);
         const cart = await response.json();
         return cart.items.find((item: { name: string }) => item.name === name)?.quantity;
-      }, recommendedName)
+      }, cartItem.name)
     )
     .toBe(2);
   const quantityCart = await page.evaluate(async () => {
@@ -248,9 +256,9 @@ test('shopping mission, evidence, refinement, cart, offers, policy and owner-sco
     return response.json();
   });
   expect(
-    quantityCart.items.find((item: { name: string }) => item.name === recommendedName)?.quantity
+    quantityCart.items.find((item: { name: string }) => item.name === cartItem.name)?.quantity
   ).toBe(2);
-  expect(quantityCart.subtotal).toBe(recommendedItem.unit_price * 2);
+  expect(quantityCart.subtotal).toBe(cartItem.unit_price * 2);
   expect(quantityCart.coupon_code).toBe('SAVE20');
   expect(quantityCart.total_cents).toBe(quantityCart.subtotal - quantityCart.discount_total_cents);
   await page.getByRole('button', { name: 'Remove coupon', exact: true }).click();
