@@ -43,6 +43,15 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     env:
       # Matches the local backend/.env convention. The companion
@@ -81,6 +90,15 @@ jobs:
 
       - name: Apply Alembic migrations
         run: uv run --no-sync alembic upgrade head
+
+      - name: Verify Redis-backed AI runtime state and TTLs
+        env:
+          AI_RUNTIME_LIVE_TEST: "1"
+          REDIS_URL: redis://localhost:6379/0
+        run: >-
+          uv run --no-sync python -m pytest
+          tests/integration/test_ai_runtime_live.py
+          -k real_redis
 
       - name: Run deterministic AI quality gates
         run: >-
