@@ -70,3 +70,15 @@ The final live run added an explicit catalog-grounding instruction to the search
 | `dots-studio/dots-3-note-preview:free` | 1.00 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 6,997 ms | 6,603 / 941 | 0 | 0 | FAIL: comparison grounding/recommendation, completion |
 
 Apodex passed PRODUCT_SEARCH, PRODUCT_ADVICE, and PRODUCT_COMPARE gates, while its runner-up models remain gated per task. This is evidence for the current three-case routing smoke only; expand the cases before treating these scores as a broad quality estimate. Redis remained unavailable, so benchmark scores could not be published across processes in this run. Full raw output: `backend/evals/results/adaptive-model-live-v5.json` (local, not committed).
+
+## Expanded six-case comparison (2026-10-06)
+
+Dataset v2 doubles the controlled cases to six: two catalog searches (including phone price conversion and stock filtering), two mission extractions (including student portability), and two ranked recommendations (including a best-value/lower-cost trade-off). Mission scoring now evaluates requested soft fields as well as desired-use labels. The quality gates remain unchanged at 1.0 for objective checks and zero provider failures/rate limits.
+
+| Model | Tool | Mission | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Failures / 429s | Gate |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `apodex/apodex-1.1-mini:free` | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 970 ms | 0 / 0 | 6 / 6 | FAIL: HTTP 429 on every case |
+| `cohere/north-mini-code:free` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 5,892 ms | 7,922 / 2,121 | 0 / 0 | PASS (.9902 score) |
+| `dots-studio/dots-3-note-preview:free` | 1.00 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 7,947 ms | 12,696 / 1,547 | 0 / 0 | FAIL: compare synthesis |
+
+This run used ShopSmart's provider adapter and captured upstream HTTP 429 for all six Apodex cases; it did not infer a connectivity failure. Cohere passed all six synthetic cases, while Dots passed search/advice and failed both comparison syntheses. Redis was unavailable, so the model scores were not reusable across processes. This is a stronger but still bounded evaluation, not a general quality guarantee. Raw local report: `backend/evals/results/adaptive-model-live-v6.json` (excluded from Git).

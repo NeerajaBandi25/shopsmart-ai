@@ -6,6 +6,8 @@ from src.evals.adaptive_model_eval import (
     QUALITY_THRESHOLDS,
     _case_score,
     _completion_success,
+    _ensure_case_score,
+    _mission_expectation_result,
     quality_gate_failures,
     task_quality_gate_failures,
 )
@@ -13,12 +15,13 @@ from src.evals.adaptive_model_eval import (
 
 def test_adaptive_model_eval_dataset_scores_tool_mission_grounding_and_recommendations():
     dataset = json.loads(Path(DATASET).read_text(encoding="utf-8"))
-    assert dataset["version"] == "adaptive-model-cases-v1"
+    assert dataset["version"] == "adaptive-model-cases-v2"
     assert {item["task_type"] for item in dataset["cases"]} == {
         "PRODUCT_SEARCH",
         "PRODUCT_ADVICE",
         "PRODUCT_COMPARE",
     }
+    assert len(dataset["cases"]) == 6
     mission_case = next(item for item in dataset["cases"] if item.get("mission_expectations"))
 
     perfect = _case_score(mission_case, True, True, True, False, False)
@@ -49,6 +52,20 @@ def test_adaptive_model_eval_dataset_scores_tool_mission_grounding_and_recommend
     )
 
 
+def test_mission_eval_checks_soft_preference_fields_as_well_as_use_cases():
+    case = {
+        "mission_expectations": ["student"],
+        "mission_field_expectations": {"portability": True},
+    }
+    from src.services.assistant_tools import UnderstandMissionArgs
+
+    complete = UnderstandMissionArgs(desired_use_cases=["student"], portability=True)
+    missing_soft_preference = UnderstandMissionArgs(desired_use_cases=["student"])
+
+    assert _mission_expectation_result(case, complete)[0]
+    assert not _mission_expectation_result(case, missing_soft_preference)[0]
+
+
 def test_adaptive_model_quality_gate_requires_perfect_objective_cases_and_reliability():
     metrics = {name: value for name, value in QUALITY_THRESHOLDS.items()}
     metrics.update(provider_failures=0.0, rate_limits=0.0)
@@ -57,6 +74,17 @@ def test_adaptive_model_quality_gate_requires_perfect_objective_cases_and_reliab
     metrics["tool_call_correctness"] = 0.9
     metrics["provider_failures"] = 1.0
     assert set(quality_gate_failures(metrics)) == {"tool_call_correctness", "provider_failures"}
+
+
+def test_provider_failure_case_keeps_zero_score_for_complete_benchmark_report():
+    case = {
+        "score_weights": {"tool_call_correctness": 0.5, "grounding": 0.5},
+    }
+    sample = {"error_category": "provider_unavailable"}
+
+    _ensure_case_score(case, sample)
+
+    assert sample["eval_score"] == 0.0
 
 
 def test_task_quality_gate_only_uses_objective_checks_for_that_task():

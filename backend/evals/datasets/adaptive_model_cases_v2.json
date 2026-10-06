@@ -1,0 +1,260 @@
+{
+  "version": "adaptive-model-cases-v2",
+  "cases": [
+    {
+      "id": "catalog-search-grounding",
+      "task_type": "PRODUCT_SEARCH",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Use ShopSmart tools for catalog facts. Do not invent products, prices, or stock. For 60000 INR, max_price_cents uses paise and must be 6000000; use the canonical category laptops. After receiving the search result, repeat the exact product name and price as returned by the catalog."
+        },
+        {
+          "role": "user",
+          "content": "Show me laptops under INR 60000. Call the catalog search tool."
+        }
+      ],
+      "expected_tool": "search_products",
+      "constraint_expectations": {
+        "category": "laptops",
+        "max_price_cents": 6000000
+      },
+      "score_weights": {
+        "tool_call_correctness": 0.35,
+        "constraint_accuracy": 0.2,
+        "mission_extraction": 0.0,
+        "grounding": 0.45,
+        "recommendation_quality": 0.0
+      },
+      "tool_result": {
+        "total": 1,
+        "products": [
+          {
+            "name": "Benchmark Aurora Notebook",
+            "price_cents": 5990000,
+            "stock_quantity": 3
+          }
+        ]
+      },
+      "grounding_terms": [
+        "Benchmark Aurora Notebook"
+      ]
+    },
+    {
+      "id": "developer-mission-extraction",
+      "task_type": "PRODUCT_ADVICE",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Call understand_shopping_mission to enrich only the soft use-case preferences."
+        },
+        {
+          "role": "user",
+          "content": "I'm a developer using React, Python, and Docker. I occasionally run local AI models. I commute often and prefer professional design. My budget is around INR 75000 and can stretch to INR 85000."
+        }
+      ],
+      "expected_tool": "understand_shopping_mission",
+      "mission_expectations": [
+        "software_development",
+        "docker",
+        "local_ai"
+      ],
+      "score_weights": {
+        "tool_call_correctness": 0.35,
+        "constraint_accuracy": 0.0,
+        "mission_extraction": 0.65,
+        "grounding": 0.0,
+        "recommendation_quality": 0.0
+      }
+    },
+    {
+      "id": "ranked-recommendation-grounding",
+      "task_type": "PRODUCT_COMPARE",
+      "messages": [
+        {
+          "role": "system",
+          "content": "A validated development mission and authoritative search results are present in this conversation. Rank only those verified candidates with rank_recommendations. The tool takes an empty JSON object because the server owns mission and catalog state. Do not rank from memory."
+        },
+        {
+          "role": "user",
+          "content": "Find laptops for software development, then rank the verified results and explain the top fit."
+        },
+        {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "benchmark-search-call",
+              "type": "function",
+              "function": {
+                "name": "search_products",
+                "arguments": "{\"category\":\"laptops\",\"in_stock_only\":true}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "benchmark-search-call",
+          "name": "search_products",
+          "content": "{\"total\":2,\"products\":[{\"id\":\"8bd0d2d4-52ca-4bc6-8b85-674d0ed1bfee\",\"name\":\"Benchmark Atlas Pro\",\"price_cents\":7990000,\"stock_quantity\":3,\"specifications\":{\"ram_gb\":32,\"processor\":\"8-core processor\"}},{\"id\":\"c32e1a0b-93f4-4f55-a9ab-4c95a7fb37e1\",\"name\":\"Benchmark Cedar Air\",\"price_cents\":6990000,\"stock_quantity\":5,\"specifications\":{\"ram_gb\":16,\"processor\":\"6-core processor\"}}]}"
+        },
+        {
+          "role": "user",
+          "content": "Call rank_recommendations now using the validated mission and catalog results. In the final answer, name Benchmark Atlas Pro exactly as the rank-one recommendation, cite its verified 32 GB RAM and 8-core processor, and mention Benchmark Cedar Air as the lower-price trade-off."
+        }
+      ],
+      "expected_tool": "rank_recommendations",
+      "score_weights": {
+        "tool_call_correctness": 0.35,
+        "constraint_accuracy": 0.0,
+        "mission_extraction": 0.0,
+        "grounding": 0.3,
+        "recommendation_quality": 0.35
+      },
+      "tool_result": {
+        "recommendations": [
+          {
+            "name": "Benchmark Atlas Pro",
+            "rank": 1,
+            "reasons": [
+              "32 GB RAM",
+              "8-core processor",
+              "verified catalog match"
+            ]
+          },
+          {
+            "name": "Benchmark Cedar Air",
+            "rank": 2,
+            "reasons": [
+              "16 GB RAM",
+              "lower catalog price"
+            ]
+          }
+        ]
+      },
+      "grounding_terms": [
+        "Benchmark Atlas Pro"
+      ],
+      "recommendation_terms": [
+        "Benchmark Atlas Pro"
+      ]
+    },
+    {
+      "id": "catalog-phone-budget-and-stock",
+      "task_type": "PRODUCT_SEARCH",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Use ShopSmart tools for catalog facts. Convert INR to paise exactly, use the canonical phones category, and request only in-stock results. After the tool result, repeat the exact product name and listed price."
+        },
+        {
+          "role": "user",
+          "content": "Find an in-stock phone below INR 30000 and show me the catalog result."
+        }
+      ],
+      "expected_tool": "search_products",
+      "constraint_expectations": {
+        "category": "phones",
+        "max_price_cents": 3000000,
+        "in_stock_only": true
+      },
+      "score_weights": {
+        "tool_call_correctness": 0.35,
+        "constraint_accuracy": 0.35,
+        "mission_extraction": 0.0,
+        "grounding": 0.3,
+        "recommendation_quality": 0.0
+      },
+      "tool_result": {
+        "total": 1,
+        "products": [
+          {
+            "name": "Benchmark Metro Phone",
+            "price_cents": 2999000,
+            "stock_quantity": 5
+          }
+        ]
+      },
+      "grounding_terms": [
+        "Benchmark Metro Phone"
+      ]
+    },
+    {
+      "id": "student-portable-mission",
+      "task_type": "PRODUCT_ADVICE",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Call understand_shopping_mission only to enrich soft preferences. Preserve the student's explicit use case and portability preference; do not turn preferences into unsupported hardware constraints."
+        },
+        {
+          "role": "user",
+          "content": "I'm a university student who carries a laptop across campus every day. I need it for classes and prefer something portable."
+        }
+      ],
+      "expected_tool": "understand_shopping_mission",
+      "mission_expectations": [
+        "student"
+      ],
+      "mission_field_expectations": {
+        "portability": true
+      },
+      "score_weights": {
+        "tool_call_correctness": 0.35,
+        "constraint_accuracy": 0.0,
+        "mission_extraction": 0.65,
+        "grounding": 0.0,
+        "recommendation_quality": 0.0
+      }
+    },
+    {
+      "id": "ranked-value-tradeoff",
+      "task_type": "PRODUCT_COMPARE",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Rank only the verified products using rank_recommendations. The tool takes an empty JSON object because the server owns catalog and mission state. Treat the tool result as authoritative."
+        },
+        {
+          "role": "user",
+          "content": "Call rank_recommendations, then explain Benchmark Pine 5G as the best-value rank-one option and Benchmark Maple 5G as the lower-cost trade-off. Use those exact names."
+        }
+      ],
+      "expected_tool": "rank_recommendations",
+      "score_weights": {
+        "tool_call_correctness": 0.35,
+        "constraint_accuracy": 0.0,
+        "mission_extraction": 0.0,
+        "grounding": 0.3,
+        "recommendation_quality": 0.35
+      },
+      "tool_result": {
+        "recommendations": [
+          {
+            "name": "Benchmark Pine 5G",
+            "rank": 1,
+            "reasons": [
+              "best-value score",
+              "verified catalog match"
+            ]
+          },
+          {
+            "name": "Benchmark Maple 5G",
+            "rank": 2,
+            "reasons": [
+              "lower catalog price",
+              "verified catalog match"
+            ]
+          }
+        ]
+      },
+      "grounding_terms": [
+        "Benchmark Pine 5G"
+      ],
+      "recommendation_terms": [
+        "Benchmark Pine 5G",
+        "Benchmark Maple 5G"
+      ]
+    }
+  ]
+}

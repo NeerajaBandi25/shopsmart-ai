@@ -20,7 +20,7 @@ from src.services.assistant_tools import (
     tool_schemas,
 )
 
-DATASET = Path(__file__).parents[2] / "evals" / "datasets" / "adaptive_model_cases_v1.json"
+DATASET = Path(__file__).parents[2] / "evals" / "datasets" / "adaptive_model_cases_v2.json"
 QUALITY_THRESHOLDS = {
     "tool_call_correctness": 1.0,
     "mission_extraction": 1.0,
@@ -87,6 +87,19 @@ def _case_score(
     return sum(values[key] * weight for key, weight in active.items()) / denominator
 
 
+def _ensure_case_score(case: dict, sample: dict) -> None:
+    """Provider failures still need a zero case score so reporting can complete."""
+    if "eval_score" not in sample:
+        sample["eval_score"] = _case_score(
+            case,
+            tool_ok=False,
+            mission_ok=False,
+            constraints_ok=False,
+            grounded=False,
+            recommended=False,
+        )
+
+
 def _completion_success(
     case: dict,
     *,
@@ -96,13 +109,34 @@ def _completion_success(
     synthesis_ok: bool,
 ) -> bool:
     required = [tool_ok]
-    if case.get("mission_expectations"):
+    if case.get("mission_expectations") or case.get("mission_field_expectations"):
         required.append(mission_ok)
     if case.get("constraint_expectations"):
         required.append(constraints_ok)
     if case.get("tool_result"):
         required.append(synthesis_ok)
     return all(required)
+
+
+def _mission_expectation_result(case: dict, parsed_arguments) -> tuple[bool, list[str], dict]:
+    expected = set(case.get("mission_expectations", []))
+    actual = set(parsed_arguments.desired_use_cases)
+    fields = case.get("mission_field_expectations", {})
+    field_checks = {
+        name: getattr(parsed_arguments, name, object()) == value for name, value in fields.items()
+    }
+    return (
+        expected.issubset(actual) and all(field_checks.values()),
+        sorted(expected - actual),
+        {
+            name: {
+                "expected": value,
+                "actual": getattr(parsed_arguments, name, None),
+                "matched": field_checks[name],
+            }
+            for name, value in fields.items()
+        },
+    )
 
 
 async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -> dict:
@@ -135,7 +169,7 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
     )
     state = ModelRuntimeState()
     report = {
-        "dataset": "adaptive-model-cases-v1",
+        "dataset": "adaptive-model-cases-v2",
         "quality_thresholds": QUALITY_THRESHOLDS,
         "models": {},
     }
@@ -207,11 +241,14 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
                 mission_ok = False
                 grounded = False
                 recommended = False
-                if tool_ok and case.get("mission_expectations"):
-                    expected = set(case["mission_expectations"])
-                    actual = set(parsed_arguments.desired_use_cases)
-                    mission_ok = expected.issubset(actual)
-                    sample["mission_missing"] = sorted(expected - actual)
+                if tool_ok and (
+                    case.get("mission_expectations") or case.get("mission_field_expectations")
+                ):
+                    (
+                        mission_ok,
+                        sample["mission_missing"],
+                        sample["mission_field_checks"],
+                    ) = _mission_expectation_result(case, parsed_arguments)
                     sample["mission_extraction"] = float(mission_ok)
                 synthesis_ok = True
                 if tool_ok and case.get("tool_result"):
@@ -311,6 +348,7 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
                     success=False,
                     status_code=exc.status_code,
                 )
+            _ensure_case_score(case, sample)
             sample["latency_ms"] = round((time.perf_counter() - started) * 1000, 2)
             samples.append(sample)
         reliability = sum(item["success"] for item in samples) / len(samples) if samples else 0.0
@@ -320,7 +358,7 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
             "mission_extraction": [
                 (case, sample)
                 for case, sample in zip(cases, samples)
-                if case.get("mission_expectations")
+                if case.get("mission_expectations") or case.get("mission_field_expectations")
             ],
             "constraint_accuracy": [
                 (case, sample)
