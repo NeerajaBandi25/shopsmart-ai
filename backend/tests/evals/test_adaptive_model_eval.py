@@ -1,0 +1,58 @@
+import json
+from pathlib import Path
+
+from src.evals.adaptive_model_eval import (
+    DATASET,
+    QUALITY_THRESHOLDS,
+    _case_score,
+    _completion_success,
+    quality_gate_failures,
+)
+
+
+def test_adaptive_model_eval_dataset_scores_tool_mission_grounding_and_recommendations():
+    dataset = json.loads(Path(DATASET).read_text(encoding="utf-8"))
+    assert dataset["version"] == "adaptive-model-cases-v1"
+    assert {item["task_type"] for item in dataset["cases"]} == {
+        "PRODUCT_SEARCH",
+        "PRODUCT_ADVICE",
+        "PRODUCT_COMPARE",
+    }
+    mission_case = next(item for item in dataset["cases"] if item.get("mission_expectations"))
+
+    perfect = _case_score(mission_case, True, True, True, False, False)
+    missed_mission = _case_score(mission_case, True, False, True, False, False)
+
+    assert perfect == 1.0
+    assert missed_mission == 0.35 / (0.35 + 0.65)
+    constrained_case = next(
+        item for item in dataset["cases"] if item.get("constraint_expectations")
+    )
+    assert _case_score(constrained_case, True, True, False, True, False) < _case_score(
+        constrained_case, True, True, True, True, False
+    )
+    assert not _completion_success(
+        mission_case,
+        tool_ok=True,
+        mission_ok=False,
+        constraints_ok=True,
+        synthesis_ok=True,
+    )
+    search_case = next(item for item in dataset["cases"] if item.get("constraint_expectations"))
+    assert not _completion_success(
+        search_case,
+        tool_ok=True,
+        mission_ok=True,
+        constraints_ok=False,
+        synthesis_ok=True,
+    )
+
+
+def test_adaptive_model_quality_gate_requires_perfect_objective_cases_and_reliability():
+    metrics = {name: value for name, value in QUALITY_THRESHOLDS.items()}
+    metrics.update(provider_failures=0.0, rate_limits=0.0)
+    assert quality_gate_failures(metrics) == []
+
+    metrics["tool_call_correctness"] = 0.9
+    metrics["provider_failures"] = 1.0
+    assert set(quality_gate_failures(metrics)) == {"tool_call_correctness", "provider_failures"}

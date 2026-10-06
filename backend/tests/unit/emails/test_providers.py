@@ -3,7 +3,6 @@
 import logging
 
 import httpx
-
 import pytest
 
 from src.emails.providers import (
@@ -145,10 +144,7 @@ async def test_smtp_uses_tls_and_sends_multipart_order_email(monkeypatch) -> Non
     assert captured["auth"] == ("sender@gmail.com", "app-password")
     assert captured["message"]["To"] == "buyer@example.net"
     assert captured["message"].get_body(preferencelist=("plain",)).get_content() == "Plain text\n"
-    assert (
-        captured["message"].get_body(preferencelist=("html",)).get_content()
-        == "<p>HTML</p>\n"
-    )
+    assert captured["message"].get_body(preferencelist=("html",)).get_content() == "<p>HTML</p>\n"
 
 
 @pytest.mark.asyncio

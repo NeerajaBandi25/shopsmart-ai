@@ -24,7 +24,7 @@ Provider timeouts, rate limits, and server failures get bounded provider-only re
 
 Structured logs include request correlation, provider/model, classification, latency, fallback, token usage, tool names/status, and configured cost estimate. They exclude prompts and credentials. Per-message usage is stored with the conversation, and `/api/v1/ai/usage` provides a user-scoped aggregate over the latest 2,000 messages. Cost remains unavailable until `AI_MODEL_PRICING_JSON` is configured with current pricing metadata.
 
-The chat response is buffered JSON; there is currently no SSE or token streaming. The tool loop must finish before the backend can produce a verified response. Provider streaming support is a follow-up capability, not a verified feature of this implementation.
+The assistant UI calls the same-origin `/api/ai/chat/stream` BFF, which forwards FastAPI SSE without buffering. OpenAI-compatible gateways use native provider streaming to assemble a complete tool turn; Gemini or any provider without a streaming adapter uses a buffered call under the same contract. The backend publishes safe tool status and only chunks the verified server-built answer after authoritative tools finish. It does not expose partial tool arguments or model reasoning. The frontend appends the structured `assistant.completed` result once, so streamed text never becomes a source of commerce facts.
 
 ## Current constraints
 

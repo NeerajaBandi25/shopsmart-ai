@@ -1,5 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { TextDecoder as NodeTextDecoder } from 'util';
 import AssistantPage from './page';
+
+Object.defineProperty(globalThis, 'TextDecoder', {
+  configurable: true,
+  value: NodeTextDecoder,
+});
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -143,7 +149,7 @@ describe('shopping assistant page', () => {
     expect(
       await screen.findByRole('table', { name: 'Catalog fields returned for these products' })
     ).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Scrollable product comparison' })).toHaveAttribute(
+    expect(screen.getByRole('region', { name: /Scrollable product comparison/ })).toHaveAttribute(
       'tabindex',
       '0'
     );
@@ -317,6 +323,61 @@ describe('shopping assistant page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
     expect(screen.queryByText('Hi! I can help you find products.')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What can I help you find?' })).toBeInTheDocument();
+  });
+
+  it('renders streamed verified text once and keeps the final structured result', async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    const finalResult = {
+      conversation_id: 'conversation-stream',
+      message_id: 'message-stream',
+      answer: 'I found one verified laptop.',
+      answerable: true,
+      reason: null,
+      intent: 'PRODUCT_SEARCH',
+      citations: [],
+      result_data: null,
+      tool_events: [{ tool: 'search_products', status: 'completed' }],
+      degraded_mode: false,
+    };
+    const frames = [
+      ['assistant.started', { status: 'started' }],
+      ['tool.started', { tool: 'search_products' }],
+      ['tool.completed', { tool: 'search_products', status: 'completed', result_count: 1 }],
+      ['assistant.delta', { text: 'I found one verified laptop.' }],
+      ['assistant.completed', finalResult],
+    ].map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    const chunk = new Uint8Array(
+      Array.from(frames.join(''), (character) => character.charCodeAt(0))
+    );
+    let chunkRead = false;
+    const streamResponse = {
+      ok: true,
+      headers: { get: () => 'text/event-stream' },
+      body: {
+        getReader: () => ({
+          read: async () => {
+            if (chunkRead) return { done: true, value: undefined };
+            chunkRead = true;
+            return { done: false, value: chunk };
+          },
+        }),
+      },
+    } as unknown as Response;
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrf_token: 'csrf-stream' }) })
+      .mockResolvedValueOnce(streamResponse)
+      .mockResolvedValueOnce({ ok: true, json: async () => [] });
+
+    render(<AssistantPage />);
+    fireEvent.change(screen.getByLabelText('Message the shopping assistant'), {
+      target: { value: 'Show me a laptop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByText(finalResult.answer)).toBeInTheDocument();
+    expect(screen.getAllByText(finalResult.answer)).toHaveLength(1);
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/ai/chat/stream');
   });
 
   it('renders only authoritative promotion results returned by the assistant', async () => {

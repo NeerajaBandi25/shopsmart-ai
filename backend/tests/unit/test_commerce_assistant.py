@@ -9,9 +9,45 @@ import pytest
 from src.core.exceptions import AppException, NotFoundError
 from src.core.observability import JsonLogFormatter
 from src.services import commerce_assistant as assistant_module
-from src.services.ai_gateway import FunctionCall, ToolTurn
+from src.services.adaptive_model_router import ModelSelection
+from src.services.ai_gateway import FunctionCall, ProviderUnavailable, ToolTurn
+from src.services.ai_governance import PolicyViolation
 from src.services.ai_provider import Evidence, ProviderAnswer
-from src.services.commerce_assistant import CommerceAssistantService
+from src.services.assistant_router import AssistantIntent
+from src.services.commerce_assistant import CommerceAssistantService, _tools_for_intent
+
+
+def test_llm_tools_are_scoped_to_route_and_private_data_policy():
+    public_search_tools = _tools_for_intent(
+        AssistantIntent.PRODUCT_SEARCH,
+        allow_private=False,
+        knowledge_available=True,
+    )
+    private_cart_tools = _tools_for_intent(
+        AssistantIntent.CART_QUERY,
+        allow_private=True,
+        knowledge_available=True,
+    )
+    cart_action_tools = _tools_for_intent(
+        AssistantIntent.CART_ACTION,
+        allow_private=True,
+        knowledge_available=False,
+    )
+    coupon_tools = _tools_for_intent(
+        AssistantIntent.COUPON_APPLY,
+        allow_private=True,
+        knowledge_available=False,
+    )
+
+    assert "search_products" in public_search_tools
+    assert "retrieve_policy_knowledge" not in public_search_tools
+    assert "get_cart" not in public_search_tools
+    assert "apply_promotion" not in public_search_tools
+    assert private_cart_tools == {"get_cart"}
+    assert {"add_to_cart", "remove_from_cart"} <= cart_action_tools
+    assert "get_orders" not in cart_action_tools
+    assert "apply_promotion" in coupon_tools
+    assert "remove_promotion" not in coupon_tools
 
 
 class FakeConversations:
@@ -95,10 +131,14 @@ class FakeKnowledge:
 class FakeGateway:
     def __init__(self):
         self.answer = AsyncMock()
+        self.select_model = AsyncMock()
+        self.tool_turn = AsyncMock()
 
 
 @pytest.fixture
 def assistant(monkeypatch):
+    preferences = SimpleNamespace(get=AsyncMock(return_value={"explicit": {}}))
+    monkeypatch.setattr(assistant_module, "ShopperPreferenceService", lambda _db: preferences)
     monkeypatch.setattr(assistant_module, "ConversationRepository", FakeConversations)
     monkeypatch.setattr(assistant_module, "ProductCatalogService", FakeProducts)
     monkeypatch.setattr(assistant_module, "CartService", FakeCart)
@@ -106,7 +146,7 @@ def assistant(monkeypatch):
     monkeypatch.setattr(assistant_module, "KnowledgeRetrievalService", FakeKnowledge)
     gateway = FakeGateway()
     monkeypatch.setattr(assistant_module, "ProviderGateway", lambda: gateway)
-    db = SimpleNamespace(commit=AsyncMock())
+    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
     return CommerceAssistantService(db), gateway, db
 
 
@@ -127,6 +167,76 @@ async def test_greeting_is_deterministic_and_does_not_call_tools(assistant):
 
 
 @pytest.mark.asyncio
+async def test_explicit_external_provider_handles_simple_product_search(assistant, monkeypatch):
+    service, _gateway, _db = assistant
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    expected = {"answer": "Verified catalog response", "usage": {"provider": "openrouter"}}
+    service._answer_with_tools = AsyncMock(return_value=expected)
+
+    result = await service._answer_routed(uuid4(), "Show me laptops under \u20b960,000.")
+
+    assert result is expected
+    service._answer_with_tools.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_trace_marks_explicit_external_simple_search_as_llm_attempt(assistant, monkeypatch):
+    service, _gateway, _db = assistant
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    service._answer_routed = AsyncMock(return_value={"answer": "catalog result", "usage": None})
+
+    result = await service.answer(uuid4(), "Show me laptops under \u20b960,000.")
+
+    assert result["trace"]["attempted_path"] == "LLM_PATH"
+    assert result["trace"]["executed_path"] == "FAST_PATH"
+
+
+def test_buying_advice_for_local_ai_uses_only_published_ram():
+    products = [
+        SimpleNamespace(
+            id="laptop-16",
+            name="Sixteen GB",
+            price=1_000_000,
+            specifications={"memory": "16 GB RAM"},
+        ),
+        SimpleNamespace(
+            id="laptop-32",
+            name="Thirty Two GB",
+            price=1_100_000,
+            specifications={"memory": "32 GB RAM"},
+        ),
+    ]
+
+    answer, brief = CommerceAssistantService._buying_advice(
+        "Which is better for local AI?", products
+    )
+
+    assert "Thirty Two GB" in answer
+    assert "32 GB RAM" in answer
+    assert "not a measured model-performance result" in answer
+    assert len(brief) == 2
+
+
+def test_buying_advice_explains_upgrade_cost_without_inventing_benefits():
+    products = [
+        SimpleNamespace(id="base", name="Base", price=1_000_000, specifications={}),
+        SimpleNamespace(id="upgrade", name="Upgrade", price=1_100_000, specifications={}),
+    ]
+
+    answer, _brief = CommerceAssistantService._buying_advice(
+        "Is spending the extra money worth it?", products
+    )
+
+    assert "1,000.00" in answer
+    assert "value choice" in answer
+    assert "published specifications" in answer
+
+
+@pytest.mark.asyncio
 async def test_external_provider_tool_result_is_returned_for_grounded_synthesis(
     assistant, monkeypatch
 ):
@@ -134,7 +244,7 @@ async def test_external_provider_tool_result_is_returned_for_grounded_synthesis(
     from src.core.config import settings
 
     class FakeToolExecutor:
-        def __init__(self):
+        def __init__(self, *_args, **_kwargs):
             self.events = []
             self.citations = []
             self.result_data = {}
@@ -149,7 +259,11 @@ async def test_external_provider_tool_result_is_returned_for_grounded_synthesis(
             return {"total": 1, "products": [product]}
 
     executor = FakeToolExecutor()
-    monkeypatch.setattr(assistant_module, "CommerceToolExecutor", lambda *_args: executor)
+    monkeypatch.setattr(
+        assistant_module,
+        "CommerceToolExecutor",
+        lambda *_args, **_kwargs: executor,
+    )
     monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
     monkeypatch.setattr(settings, "ai_external_private_data_enabled", False)
     gateway.tool_turn = AsyncMock(
@@ -172,7 +286,16 @@ async def test_external_provider_tool_result_is_returned_for_grounded_synthesis(
         ]
     )
 
-    result = await service.answer(uuid4(), "Find laptops for React development and local AI")
+    streamed_events = []
+
+    async def capture_stream_event(event_name, data):
+        streamed_events.append((event_name, data))
+
+    result = await service.answer(
+        uuid4(),
+        "Find laptops for React development and local AI",
+        stream_events=capture_stream_event,
+    )
 
     assert result["answer"] == (
         "I found Catalog Laptop. Its current price, availability, and specifications are "
@@ -184,8 +307,14 @@ async def test_external_provider_tool_result_is_returned_for_grounded_synthesis(
     assert result["usage"]["input_tokens"] == 50
     assert result["usage"]["output_tokens"] == 12
     assert gateway.tool_turn.await_count == 2
+    assert gateway.tool_turn.await_args_list[0].kwargs["streaming"] is True
+    assert streamed_events == [
+        ("tool.started", {"tool": "search_products"}),
+        ("tool.completed", {"tool": "search_products", "status": "completed", "result_count": 1}),
+    ]
     second_turn_messages = gateway.tool_turn.await_args_list[1].args[0]
-    assert "Find laptops" not in json.dumps(second_turn_messages)
+    # Complex requests now include bounded public shopping language for typed AI understanding.
+    assert "Find laptops for React development and local AI" in json.dumps(second_turn_messages)
     route_message = next(
         message
         for message in second_turn_messages
@@ -195,6 +324,237 @@ async def test_external_provider_tool_result_is_returned_for_grounded_synthesis(
     assert route_payload["safe_product_terms"] == ["react", "development", "local", "ai"]
     tool_result = next(message for message in second_turn_messages if message["role"] == "tool")
     assert '"name": "Catalog Laptop"' in tool_result["content"]
+
+
+@pytest.mark.asyncio
+async def test_openrouter_model_is_selected_once_and_pinned_across_tool_rounds(
+    assistant, monkeypatch
+):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    class FakeToolExecutor:
+        def __init__(self, *_args, **_kwargs):
+            self.events = []
+            self.citations = []
+            self.result_data = {"products": []}
+            self.mutation_count = 0
+
+        async def execute(self, name, arguments):
+            self.events.append({"tool": name, "status": "completed"})
+            return {"products": [], "total": 0}
+
+    monkeypatch.setattr(assistant_module, "CommerceToolExecutor", FakeToolExecutor)
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    selection = ModelSelection(
+        "ADAPTIVE_FREE",
+        "PRODUCT_SEARCH",
+        False,
+        ("poolside/laguna-s-2.1:free", "cohere/north-mini-code:free", "openrouter/free"),
+        (("poolside/laguna-s-2.1:free", 0.9), ("cohere/north-mini-code:free", 0.7)),
+    )
+    gateway.select_model.return_value = selection
+    gateway.tool_turn.side_effect = [
+        (
+            ToolTurn("", (FunctionCall("c1", "search_products", '{"category":"laptops"}'),)),
+            "openrouter",
+            "poolside/laguna-s-2.1:free",
+        ),
+        (ToolTurn("No matching catalog products.", ()), "openrouter", "poolside/laguna-s-2.1:free"),
+    ]
+
+    await service.answer(uuid4(), "Show me laptops")
+
+    gateway.select_model.assert_awaited_once_with("PRODUCT_SEARCH", streaming_required=False)
+    assert [call.kwargs["model_override"] for call in gateway.tool_turn.await_args_list] == [
+        "poolside/laguna-s-2.1:free",
+        "poolside/laguna-s-2.1:free",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_openrouter_restarts_read_only_tool_loop_before_switching_models(
+    assistant, monkeypatch
+):
+    service, gateway, db = assistant
+    from src.core.config import settings
+
+    class FakeToolExecutor:
+        def __init__(self, *_args, **_kwargs):
+            self.events = []
+            self.citations = []
+            self.result_data = {"products": []}
+            self.mutation_count = 0
+
+        async def execute(self, name, arguments):
+            self.events.append({"tool": name, "status": "completed"})
+            return {"products": [], "total": 0}
+
+    monkeypatch.setattr(assistant_module, "CommerceToolExecutor", FakeToolExecutor)
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    gateway.select_model.return_value = ModelSelection(
+        "ADAPTIVE_FREE",
+        "PRODUCT_SEARCH",
+        False,
+        ("model-a:free", "model-b:free", "openrouter/free"),
+        (("model-a:free", 0.9), ("model-b:free", 0.8)),
+    )
+    product_call = (
+        ToolTurn("", (FunctionCall("c1", "search_products", '{"category":"laptops"}'),)),
+        "openrouter",
+        "model-a:free",
+    )
+    fallback_product_call = (
+        ToolTurn("", (FunctionCall("c2", "search_products", '{"category":"laptops"}'),)),
+        "openrouter",
+        "model-b:free",
+    )
+    gateway.tool_turn.side_effect = [
+        product_call,
+        ProviderUnavailable("temporary provider failure"),
+        fallback_product_call,
+        (ToolTurn("No matching catalog products.", ()), "openrouter", "model-b:free"),
+    ]
+
+    result = await service.answer(uuid4(), "Show me laptops")
+
+    assert [call.kwargs["model_override"] for call in gateway.tool_turn.await_args_list] == [
+        "model-a:free",
+        "model-a:free",
+        "model-b:free",
+        "model-b:free",
+    ]
+    db.rollback.assert_awaited_once()
+    assert result["trace"]["fallback"] is True
+    assert result["result_data"]["routing"]["attempted_models"] == [
+        "model-a:free",
+        "model-b:free",
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_kind", ["400", "429", "timeout", "5xx", "malformed"])
+async def test_openrouter_restarts_on_next_model_after_bounded_provider_failure(
+    assistant, monkeypatch, failure_kind
+):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    class FakeToolExecutor:
+        def __init__(self, *_args, **_kwargs):
+            self.events = []
+            self.citations = []
+            self.result_data = {"products": []}
+            self.mutation_count = 0
+
+        async def execute(self, name, _arguments):
+            self.events.append({"tool": name, "status": "completed"})
+            return {"products": [], "total": 0}
+
+    monkeypatch.setattr(assistant_module, "CommerceToolExecutor", FakeToolExecutor)
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    gateway.select_model.return_value = ModelSelection(
+        "ADAPTIVE_FREE", "PRODUCT_SEARCH", False, ("model-a:free", "model-b:free"), ()
+    )
+    gateway.tool_turn.side_effect = [
+        (
+            PolicyViolation("candidate does not support tool schema", status_code=400)
+            if failure_kind == "400"
+            else ProviderUnavailable(
+                "controlled candidate failure",
+                category={
+                    "429": "rate_limited",
+                    "timeout": "timeout",
+                    "5xx": "server_error",
+                    "malformed": "malformed_response",
+                }[failure_kind],
+                status_code=429
+                if failure_kind == "429"
+                else (503 if failure_kind == "5xx" else None),
+            )
+        ),
+        (
+            ToolTurn("", (FunctionCall("c2", "search_products", '{"category":"laptops"}'),)),
+            "openrouter",
+            "model-b:free",
+        ),
+        (ToolTurn("No matching catalog products.", ()), "openrouter", "model-b:free"),
+    ]
+
+    result = await service.answer(uuid4(), "Show me laptops")
+
+    assert [call.kwargs["model_override"] for call in gateway.tool_turn.await_args_list] == [
+        "model-a:free",
+        "model-b:free",
+        "model-b:free",
+    ]
+    assert result["trace"]["fallback"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [401, 403])
+async def test_openrouter_auth_rejection_does_not_fan_out_to_other_models(
+    assistant, monkeypatch, status_code
+):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    gateway.select_model.return_value = ModelSelection(
+        "ADAPTIVE_FREE", "PRODUCT_SEARCH", False, ("model-a:free", "model-b:free"), ()
+    )
+    gateway.tool_turn.side_effect = PolicyViolation(
+        "provider authentication rejected", status_code=status_code
+    )
+
+    result = await service.answer(uuid4(), "Show me laptops")
+
+    assert "couldn't safely" in result["answer"].lower()
+    assert gateway.tool_turn.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_openrouter_free_alias_resolves_once_and_pins_concrete_model_for_synthesis(
+    assistant, monkeypatch
+):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    class FakeToolExecutor:
+        def __init__(self, *_args, **_kwargs):
+            self.events = []
+            self.citations = []
+            self.result_data = {"products": []}
+            self.mutation_count = 0
+
+        async def execute(self, name, _arguments):
+            self.events.append({"tool": name, "status": "completed"})
+            return {"products": [], "total": 0}
+
+    monkeypatch.setattr(assistant_module, "CommerceToolExecutor", FakeToolExecutor)
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    gateway.select_model.return_value = ModelSelection(
+        "ADAPTIVE_FREE", "PRODUCT_SEARCH", False, ("openrouter/free",), ()
+    )
+    resolved = "cohere/unranked-but-free:free"
+    gateway.tool_turn.side_effect = [
+        (
+            ToolTurn("", (FunctionCall("c1", "search_products", '{"category":"laptops"}'),)),
+            "openrouter",
+            resolved,
+        ),
+        (ToolTurn("No matching catalog products.", ()), "openrouter", resolved),
+    ]
+
+    result = await service.answer(uuid4(), "Show me laptops")
+
+    assert [call.kwargs["model_override"] for call in gateway.tool_turn.await_args_list] == [
+        "openrouter/free",
+        resolved,
+    ]
+    assert resolved in gateway.tool_turn.await_args_list[1].kwargs["model_selection"].candidates
+    assert result["trace"]["fallback"] is True
+    assert result["trace"]["model"] == resolved
 
 
 @pytest.mark.asyncio
@@ -210,6 +570,77 @@ async def test_personal_identifiers_in_a_public_shopping_query_stay_on_local_pat
 
     assert result["intent"] == "PRODUCT_SEARCH"
     assert result["degraded_mode"] is False
+    gateway.tool_turn.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_health_context_stays_on_local_path(assistant, monkeypatch):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
+    gateway.tool_turn = AsyncMock()
+    result = await service.answer(
+        uuid4(), "Find a lightweight laptop while I'm undergoing chemotherapy"
+    )
+
+    assert result["intent"] in {"PRODUCT_SEARCH", "PRODUCT_ADVICE"}
+    gateway.tool_turn.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "health_context",
+    ["I have diabetes", "I'm pregnant", "I have ADHD", "I live with asthma"],
+)
+async def test_common_health_disclosures_stay_on_local_path(assistant, monkeypatch, health_context):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
+    gateway.tool_turn = AsyncMock()
+    await service.answer(uuid4(), f"Find a quiet laptop for me. {health_context}.")
+
+    gateway.tool_turn.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_family_injury_context_stays_local_but_shopping_add_verb_does_not(
+    assistant, monkeypatch
+):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
+    gateway.tool_turn = AsyncMock()
+    assert CommerceAssistantService._contains_sensitive_content(
+        "Find a laptop for my child, who has a broken wrist"
+    )
+    assert CommerceAssistantService._contains_sensitive_content("My child has ADD")
+    assert CommerceAssistantService._contains_sensitive_content("My child broke her arm")
+    assert not CommerceAssistantService._contains_sensitive_content(
+        "Add more laptop options to my search"
+    )
+    await service.answer(uuid4(), "Find a laptop for my child, who has a broken wrist")
+
+    gateway.tool_turn.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Ship a laptop to 12 Oak Road",
+        "My PIN is 500001, find a laptop",
+    ],
+)
+async def test_street_address_and_postal_code_stay_on_local_path(assistant, monkeypatch, prompt):
+    service, gateway, _db = assistant
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
+    gateway.tool_turn = AsyncMock()
+    result = await service.answer(uuid4(), prompt)
+
+    assert result["intent"] == "PRODUCT_SEARCH"
     gateway.tool_turn.assert_not_awaited()
 
 
@@ -278,7 +709,7 @@ async def test_product_filters_are_forwarded_as_structured_constraints(assistant
         id=uuid4(),
         name="Headphones",
         description="Wireless",
-        category="accessories",
+        category="headphones",
         sku="HP-1",
         price=4999,
         stock_quantity=3,
@@ -370,7 +801,12 @@ async def test_product_search_logs_bounded_structured_context(assistant, caplog)
 
     await service.answer(uuid4(), "Show me laptops under 60000")
 
-    record = next(record for record in caplog.records if record.name == "shopsmart.assistant")
+    record = next(
+        record
+        for record in caplog.records
+        if record.name == "shopsmart.assistant"
+        and getattr(record, "event", None) == "assistant_operation"
+    )
     assert record.operation == "product_search"
     assert record.intent == "PRODUCT_SEARCH"
     assert record.category == "laptops"
@@ -811,6 +1247,13 @@ async def test_foreign_conversation_is_rejected(assistant):
 async def test_portfolio_budget_does_not_leak_into_text_search(assistant, question, maximum):
     service, _, _ = assistant
     await service.answer(uuid4(), question)
+    if question.startswith("coding"):
+        # Workload-aware requests now use bounded mission candidates and ranking.
+        assert all(
+            call.kwargs.get("query_text") is None for call in service.catalog.search.await_args_list
+        )
+        assert service.catalog.search.await_args_list[0].kwargs["max_price_cents"] == maximum
+        return
     service.catalog.search.assert_awaited_once_with(
         query_text=None,
         category="laptops",

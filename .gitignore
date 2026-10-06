@@ -19,6 +19,8 @@ dist/
 node_modules/
 .vercel/
 .next/
+.next-e2e/
+.npm-cache/
 out/
 npm-debug.log*
 yarn-debug.log*
@@ -56,6 +58,7 @@ htmlcov/
 .factory/python-packages/
 .factory/uv-cache/
 .factory/browser/
+.factory/browser-binaries/
 .factory/runtime/
 .harness/uv-cache/
 *.tsbuildinfo

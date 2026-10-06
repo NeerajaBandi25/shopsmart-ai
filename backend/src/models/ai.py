@@ -110,10 +110,21 @@ class ChatMessage(BaseModel):
     citations: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     result_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    client_request_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    client_request_owner_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    client_request_conversation_id: Mapped[UUID | None] = mapped_column(nullable=True)
 
     __table_args__ = (
         Index("ix_ai_messages_conversation_created", "conversation_id", "created_at"),
         Index("ix_ai_messages_conversation_sequence", "conversation_id", "sequence"),
+        Index(
+            "uq_ai_messages_owner_request_id",
+            "client_request_owner_id",
+            "client_request_id",
+            unique=True,
+        ),
         UniqueConstraint(
             "conversation_id", "sequence", name="uq_ai_messages_conversation_sequence"
         ),

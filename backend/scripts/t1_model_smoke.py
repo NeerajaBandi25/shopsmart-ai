@@ -67,9 +67,9 @@ async def main() -> int:
         ).scalar_one()
         assert loaded.id == uid, "user id mismatch on read-back"
         assert loaded.password_hash.startswith("$2b$"), "bcrypt hash not stored"
-        assert len(loaded.sessions) == 1 and str(loaded.sessions[0].csrf_token) == csrf, (
-            "session relationship not readable"
-        )
+        assert (
+            len(loaded.sessions) == 1 and str(loaded.sessions[0].csrf_token) == csrf
+        ), "session relationship not readable"
         sess = (await s.execute(select(Session).where(Session.id == sid))).scalar_one()
         assert sess.is_active is True and sess.user_id == uid
         stale = now - timedelta(days=31)
@@ -92,17 +92,15 @@ async def main() -> int:
             return 1
         await s.delete(sess)
         await s.commit()
-        orphans = (
-            await s.execute(select(Session).where(Session.user_id == uid))
-        ).scalars().all()
+        orphans = (await s.execute(select(Session).where(Session.user_id == uid))).scalars().all()
         assert not orphans, "ON DELETE CASCADE did not remove session"
 
     async with AsyncSessionLocal() as s:
         for row in (
-            await s.execute(
-                select(LoginAttempt).where(LoginAttempt.email == email)
-            )
-        ).scalars().all():
+            (await s.execute(select(LoginAttempt).where(LoginAttempt.email == email)))
+            .scalars()
+            .all()
+        ):
             await s.delete(row)
         user = (await s.execute(select(User).where(User.id == uid))).scalar_one()
         await s.delete(user)

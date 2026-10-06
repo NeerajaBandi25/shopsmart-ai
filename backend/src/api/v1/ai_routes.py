@@ -1,15 +1,22 @@
 """Authenticated document assistant API."""
 
+import asyncio
+import json
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.v1.deps import get_current_user, get_db, require_csrf_token
 from src.core.config import settings
-from src.core.exceptions import AuthorizationError, NotFoundError, ValidationError
+from src.core.exceptions import AuthorizationError, ConflictError, NotFoundError, ValidationError
+from src.core.observability import request_id_context
 from src.models.ai import ChatMessage, Conversation, Document, DocumentChunk
+from src.models.user import User
 from src.schemas.ai import (
     ChatRequest,
     ChatResponse,
@@ -21,8 +28,85 @@ from src.schemas.ai import (
 from src.services.ai_ingestion import DocumentIngestionService, extract_document_text
 from src.services.ai_repository import ConversationRepository
 from src.services.commerce_assistant import CommerceAssistantService
+from src.services.shopper_preferences import ExplicitPreferences, ShopperPreferenceService
 
 router = APIRouter(prefix="/ai", tags=["AI assistant"])
+logger = logging.getLogger(__name__)
+
+
+async def _answer_idempotently(
+    db: AsyncSession,
+    user_id: UUID,
+    request: ChatRequest,
+    *,
+    stream_events=None,
+) -> dict:
+    # Serialize assistant submissions per owner until the request-keyed user message
+    # and its authoritative response commit together.
+    await db.scalar(select(User.id).where(User.id == user_id).with_for_update())
+    conversations = ConversationRepository(db)
+    replay = await conversations.request_replay(user_id, request.request_id)
+    if replay:
+        prior_request, prior_response = replay
+        if prior_request.content != request.question or (
+            request.conversation_id != prior_request.client_request_conversation_id
+        ):
+            raise ConflictError(
+                "This assistant request key was already used for a different message.",
+                "idempotency_conflict",
+            )
+        if prior_response is None:
+            raise ConflictError(
+                "This assistant request is still being processed.", "request_in_progress"
+            )
+        result_data = prior_response.result_data or {}
+        return {
+            "conversation_id": prior_response.conversation_id,
+            "message_id": prior_response.id,
+            "answer": prior_response.content,
+            "answerable": True,
+            "reason": None,
+            "citations": prior_response.citations or [],
+            "intent": result_data.get("intent", "UNSUPPORTED"),
+            "result_data": result_data,
+            "tool_events": [],
+            "usage": result_data.get("usage"),
+            "degraded_mode": False,
+            "trace": result_data.get("trace"),
+        }
+    return await CommerceAssistantService(db).answer(
+        user_id,
+        request.question,
+        request.conversation_id,
+        stream_events=stream_events,
+        client_request_id=request.request_id,
+    )
+
+
+@router.get("/preferences")
+async def get_preferences(
+    user_id: UUID = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    return await ShopperPreferenceService(db).get(user_id)
+
+
+@router.put("/preferences")
+async def replace_preferences(
+    preferences: ExplicitPreferences,
+    user_id: UUID = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_token),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    return await ShopperPreferenceService(db).replace(user_id, preferences)
+
+
+@router.delete("/preferences", status_code=204)
+async def clear_preferences(
+    user_id: UUID = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_token),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    await ShopperPreferenceService(db).clear(user_id)
 
 
 def require_internal_document_capability() -> None:
@@ -135,10 +219,71 @@ async def chat(
     _csrf: None = Depends(require_csrf_token),
     db: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
-    return ChatResponse(
-        **await CommerceAssistantService(db).answer(
-            user_id, request.question, request.conversation_id
-        )
+    return ChatResponse(**await _answer_idempotently(db, user_id, request))
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    request: ChatRequest,
+    user_id: UUID = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_token),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Stream safe status and verified final content; never expose model reasoning."""
+
+    async def events():
+        queue: asyncio.Queue[tuple[str, dict] | None] = asyncio.Queue()
+
+        async def publish(event_name: str, data: dict) -> None:
+            await queue.put((event_name, data))
+
+        async def run_assistant() -> None:
+            try:
+                result = await _answer_idempotently(db, user_id, request, stream_events=publish)
+                # Stream only after authoritative services and policy checks have completed.
+                answer = str(result.get("answer") or "")
+                for offset in range(0, len(answer), 48):
+                    await publish("assistant.delta", {"text": answer[offset : offset + 48]})
+                await publish("assistant.completed", jsonable_encoder(result))
+            except Exception as exc:
+                # Avoid leaking provider responses, tool payloads, or exception text to clients.
+                logger.error(
+                    "assistant_stream_failed",
+                    extra={
+                        "request_id": request_id_context.get(),
+                        "exception_type": type(exc).__name__,
+                    },
+                )
+                await publish(
+                    "assistant.error",
+                    {"message": "The assistant could not complete this request. Please try again."},
+                )
+            finally:
+                await queue.put(None)
+
+        def encode(event_name: str, data: dict) -> bytes:
+            return f"event: {event_name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n".encode()
+
+        yield encode("assistant.started", {"status": "started"})
+        task = asyncio.create_task(run_assistant())
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield encode(*item)
+        finally:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )
 
 

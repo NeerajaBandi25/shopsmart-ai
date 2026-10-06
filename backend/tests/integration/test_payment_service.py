@@ -6,12 +6,12 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
+from src.core.exceptions import AppException
+from src.models.cart import Cart, CartItem
 from src.models.order import Order, OrderItem
 from src.models.payment import Payment, PaymentWebhookEvent
 from src.models.product import Product
-from src.models.cart import Cart, CartItem
 from src.models.user import User
-from src.core.exceptions import AppException
 from src.services.payment_provider import CheckoutSession, VerifiedPaymentEvent
 from src.services.payment_service import (
     PaymentService,

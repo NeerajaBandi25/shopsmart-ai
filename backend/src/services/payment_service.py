@@ -24,8 +24,8 @@ from src.models.payment import Payment, PaymentWebhookEvent
 from src.models.product import Product
 from src.models.user import User
 from src.notifications.payment_events import queue_payment_notification
-from src.services.product_catalog_cache import invalidate_product_catalog_cache
 from src.services.payment_provider import PaymentProvider, VerifiedPaymentEvent
+from src.services.product_catalog_cache import invalidate_product_catalog_cache
 
 logger = logging.getLogger(__name__)
 MAX_PAYMENT_RETRIES = 4
@@ -94,9 +94,7 @@ async def expire_abandoned_failed_payment_reservations(
     db: AsyncSession, *, limit: int = 100
 ) -> int:
     """Close orders whose verified failed payment was never retried within 24 hours."""
-    cutoff = datetime.now(timezone.utc) - timedelta(
-        seconds=FAILED_PAYMENT_RETRY_WINDOW_SECONDS
-    )
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=FAILED_PAYMENT_RETRY_WINDOW_SECONDS)
     candidates = await db.execute(
         select(Payment.id, Payment.order_id)
         .join(Order, Order.id == Payment.order_id)
@@ -112,7 +110,9 @@ async def expire_abandoned_failed_payment_reservations(
     for payment_id, order_id in candidates.all():
         payment = await db.scalar(
             select(Payment)
-            .where(Payment.id == payment_id, Payment.status == "failed", Payment.updated_at <= cutoff)
+            .where(
+                Payment.id == payment_id, Payment.status == "failed", Payment.updated_at <= cutoff
+            )
             .with_for_update(skip_locked=True)
         )
         if payment is None:

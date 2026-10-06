@@ -53,9 +53,12 @@ class GroundedAnswerProvider:
 
     injection_patterns = (
         r"ignore\s+(?:all\s+)?(?:previous| prior| earlier)\s+instructions?",
+        r"forget\s+(?:everything|all\s+(?:previous|prior)\s+instructions?)\s+(?:above|before|earlier)",
         r"disregard\s+(?:all\s+)?(?:previous|prior|earlier)\s+(?:directives|instructions?)",
         r"(?:system|developer)\s*(?:message|prompt|instruction)",
         r"(?:reveal|show| disclose)\s+(?:the\s+)?(?:secret|api\s*key|password|token)",
+        r"(?:export|dump|send|email|print)\s+(?:all\s+)?(?:customer|shopper|user)\s+(?:orders?|records?|data)",
+        r"(?:call|invoke|use)\s+(?:the\s+)?(?:get_orders|get_order_status|add_to_cart|apply_promotion)\b",
         r"(?:change|switch|use)\s+(?:the\s+)?(?:provider|model)",
         r"follow\s+these\s+instructions",
         r"you\s+are\s+now\s+(?:the\s+)?(?:system|developer)",

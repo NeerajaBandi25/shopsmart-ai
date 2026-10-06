@@ -70,6 +70,30 @@ def aggregate(scores: list[dict[str, float]]) -> dict[str, float]:
     return {key: sum(item[key] for item in scores) / len(scores) for key in keys}
 
 
+LOWER_IS_BETTER = {
+    "unauthorized_retrieval",
+    "prompt_injection_success",
+    "unsupported_claim_rate",
+    "invalid_tool_rate",
+}
+
+
+def baseline_passes(result: dict[str, float], accepted: dict[str, float]) -> bool:
+    """Missing measurements fail closed; leakage rates have upper-bound gates."""
+    tolerance = accepted.get("max_regression", 0.0)
+    for key, target in accepted.items():
+        if key == "max_regression":
+            continue
+        if key not in result:
+            return False
+        if key in LOWER_IS_BETTER:
+            if result[key] > target + tolerance:
+                return False
+        elif result[key] < target - tolerance:
+            return False
+    return True
+
+
 FIXTURES = {
     "chunk-return": "Customers may return an item within 30 days of delivery.",
     "chunk-warranty": "Laptop purchases include a two year limited warranty.",
@@ -132,13 +156,7 @@ def run_contract_evaluation(dataset: dict, baseline: dict | None = None) -> dict
     result["estimated_cost_usd"] = 0.0
     if baseline:
         accepted = baseline["accepted_baseline"]
-        result["baseline_passed"] = float(
-            all(
-                result.get(key, 0.0) >= accepted.get(key, 0.0) - accepted.get("max_regression", 0.0)
-                for key in accepted
-                if key != "max_regression"
-            )
-        )
+        result["baseline_passed"] = float(baseline_passes(result, accepted))
     return result
 
 
@@ -153,13 +171,7 @@ def main() -> None:
     result = run_contract_evaluation(load_dataset(args.dataset))
     result.update(evaluate_assistant_dataset(load_dataset(args.assistant_dataset)))
     accepted = load_dataset(args.baseline)["accepted_baseline"]
-    result["baseline_passed"] = float(
-        all(
-            result.get(key, 0.0) >= value - accepted.get("max_regression", 0.0)
-            for key, value in accepted.items()
-            if key != "max_regression"
-        )
-    )
+    result["baseline_passed"] = float(baseline_passes(result, accepted))
     print(json.dumps(result, indent=2, sort_keys=True))
     if not result["baseline_passed"]:
         raise SystemExit(1)

@@ -1,4 +1,8 @@
-type AiProxyOptions = { method: 'GET' | 'POST'; forwardBody?: boolean };
+type AiProxyOptions = {
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  forwardBody?: boolean;
+  streamResponse?: boolean;
+};
 
 export async function proxyAiRequest(
   request: Request,
@@ -11,7 +15,9 @@ export async function proxyAiRequest(
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
-  const headers = new Headers({ Accept: 'application/json' });
+  const headers = new Headers({
+    Accept: options.streamResponse ? 'text/event-stream' : 'application/json',
+  });
   const cookie = request.headers.get('cookie');
   const csrf = request.headers.get('x-csrf-token');
   const contentType = request.headers.get('content-type');
@@ -25,13 +31,20 @@ export async function proxyAiRequest(
       body: options.forwardBody ? await request.arrayBuffer() : undefined,
       cache: 'no-store',
       redirect: 'manual',
+      signal: request.signal,
     });
     const responseHeaders = new Headers({ 'Cache-Control': 'no-store' });
     const upstreamType = upstream.headers.get('content-type');
     if (upstreamType) responseHeaders.set('Content-Type', upstreamType);
     const requestId = upstream.headers.get('x-request-id');
     if (requestId) responseHeaders.set('X-Request-ID', requestId);
-    return new Response([204, 205, 304].includes(upstream.status) ? null : await upstream.text(), {
+    // Pass the upstream stream through unchanged so SSE frames arrive progressively.
+    const body = [204, 205, 304].includes(upstream.status)
+      ? null
+      : options.streamResponse
+        ? upstream.body
+        : await upstream.text();
+    return new Response(body, {
       status: upstream.status,
       headers: responseHeaders,
     });

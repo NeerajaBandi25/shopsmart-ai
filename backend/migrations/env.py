@@ -22,6 +22,7 @@ backend_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_root))
 
 from src.core.config import settings  # noqa: E402
+from src.emails.model import NotificationOutbox  # noqa: E402, F401
 from src.models.ai import (  # noqa: E402, F401
     ChatMessage,
     Conversation,
@@ -37,10 +38,10 @@ from src.models.cart import Cart, CartItem  # noqa: E402, F401
 from src.models.login_attempt import LoginAttempt  # noqa: E402, F401
 from src.models.order import Order, OrderItem  # noqa: E402, F401
 from src.models.payment import Payment, PaymentWebhookEvent  # noqa: E402, F401
-from src.emails.model import NotificationOutbox  # noqa: E402, F401
 from src.models.product import Product  # noqa: E402, F401
 from src.models.promotion import Promotion  # noqa: E402, F401
 from src.models.session import Session  # noqa: E402, F401
+from src.models.shopper_preference import ShopperPreference  # noqa: E402, F401
 from src.models.user import User  # noqa: E402, F401
 
 # Set target_metadata for autogenerate support

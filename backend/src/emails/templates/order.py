@@ -7,7 +7,6 @@ from urllib.parse import urlsplit
 
 from src.core.config import settings
 
-
 TemplateName = Literal[
     "order_confirmation", "payment_success", "payment_failed", "order_cancelled", "order_status"
 ]

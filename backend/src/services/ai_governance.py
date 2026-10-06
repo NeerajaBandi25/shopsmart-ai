@@ -17,9 +17,20 @@ class DataClassification(StrEnum):
 class PolicyViolation(ValueError):  # noqa: N818
     """Raised when a provider request violates a deterministic policy."""
 
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class ProviderUnavailable(RuntimeError):  # noqa: N818
     """Raised for retryable provider failures."""
+
+    def __init__(
+        self, message: str, *, status_code: int | None = None, category: str = "failure"
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.category = category
 
 
 @dataclass(frozen=True)
@@ -36,6 +47,7 @@ class ProviderPolicy:
     retention_policy: str = "not-configured"
     training_policy: str = "not-configured"
     health: str = "healthy"
+    allow_discovered_free_models: bool = False
 
 
 class UsageTracker:
@@ -129,11 +141,20 @@ class ProviderPolicyRegistry:
                         if settings.ai_external_private_data_enabled
                         else {DataClassification.PUBLIC}
                     ),
-                    frozenset({model}),
+                    frozenset(
+                        {item for item in (model, settings.ai_fixed_model) if item}
+                        if provider == "openrouter"
+                        else {model}
+                    ),
                     priority=priority,
                     quota_per_day=1000,
                     retention_policy="provider-policy-required",
                     training_policy="provider-policy-required",
+                    allow_discovered_free_models=(
+                        provider == "openrouter"
+                        and settings.ai_model_routing_mode == "ADAPTIVE_FREE"
+                        and model == "openrouter/free"
+                    ),
                 )
         return cls(policies)
 
@@ -155,12 +176,24 @@ class ProviderPolicyRegistry:
         )
 
     def validate(
-        self, provider: str, model: str, classification: DataClassification
+        self,
+        provider: str,
+        model: str,
+        classification: DataClassification,
+        *,
+        discovered_free_model_approved: bool = False,
     ) -> ProviderPolicy:
         policy = self.policies.get(provider)
         if policy is None or not policy.enabled:
             raise PolicyViolation("Provider is not allowlisted")
-        if model not in policy.allowed_models:
+        model_allowlisted = model in policy.allowed_models
+        dynamic_model_allowed = (
+            provider == "openrouter"
+            and policy.allow_discovered_free_models
+            and discovered_free_model_approved
+            and classification == DataClassification.PUBLIC
+        )
+        if not model_allowlisted and not dynamic_model_allowed:
             raise PolicyViolation("Model is not allowlisted")
         if classification not in policy.allowed_data_classes:
             raise PolicyViolation("Provider is not approved for this data classification")

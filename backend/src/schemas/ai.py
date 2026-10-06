@@ -1,7 +1,7 @@
 """AI API contracts."""
 
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
@@ -32,6 +32,7 @@ class Citation(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    request_id: UUID = Field(default_factory=uuid4)
     conversation_id: UUID | None = None
     question: str = Field(min_length=1, max_length=4000)
 
@@ -48,6 +49,7 @@ class ChatResponse(BaseModel):
     tool_events: list[dict[str, str]] = Field(default_factory=list)
     usage: dict | None = None
     degraded_mode: bool = False
+    trace: dict | None = None
 
 
 class ConversationResponse(BaseModel):

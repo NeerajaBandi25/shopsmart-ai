@@ -27,9 +27,7 @@ def create_worker_provider() -> EmailProvider:
         smtp_use_ssl=os.getenv("SMTP_USE_SSL", "false"),
     )
     if provider.name not in {"resend", "smtp"}:
-        raise RuntimeError(
-            "Email worker requires Resend or SMTP; console/capture are test sinks"
-        )
+        raise RuntimeError("Email worker requires Resend or SMTP; console/capture are test sinks")
     return provider
 
 

@@ -107,6 +107,15 @@ class ProductRepository:
         result = await self.db.execute(query)
         return result.scalars().all()
 
+    async def get_active_products_by_ids(self, product_ids: list[UUID]) -> list[Product]:
+        """Rehydrate cached page ordering using current authoritative catalog rows."""
+        if not product_ids:
+            return []
+        result = await self.db.execute(
+            select(Product).where(Product.id.in_(product_ids), Product.is_active.is_(True))
+        )
+        return result.scalars().all()
+
     async def count_active_products(self) -> int:
         result = await self.db.execute(
             select(func.count(Product.id)).where(Product.is_active.is_(True))

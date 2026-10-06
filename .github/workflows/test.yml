@@ -2,6 +2,12 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      run_openrouter_benchmark:
+        description: Run the bounded live OpenRouter model benchmark
+        required: true
+        type: boolean
+        default: false
   pull_request:
     branches: [main]
   push:
@@ -68,8 +74,23 @@ jobs:
       - name: Sync dependencies (uv, lock-pinned)
         run: uv sync --frozen --extra test --no-install-project
 
+      - name: Enforce whole-backend Ruff and Black gates
+        run: |
+          uvx --from ruff==0.1.8 ruff check .
+          uvx --from black==23.12.0 black --check --fast .
+
       - name: Apply Alembic migrations
         run: uv run --no-sync alembic upgrade head
+
+      - name: Run deterministic AI quality gates
+        run: >-
+          uv run --no-sync python -m pytest
+          tests/evals
+          tests/unit/test_assistant_router.py
+          tests/unit/test_assistant_tools.py
+          tests/unit/test_recommendation_ranking.py
+          tests/unit/test_shopping_mission.py
+          tests/unit/test_assistant_runtime.py
 
       # python -m (not the console script) so the backend root lands on
       # sys.path and `import src` resolves the same way as local runs.
@@ -83,6 +104,49 @@ jobs:
           name: backend-coverage-html
           path: backend/htmlcov/
           retention-days: 7
+
+  live-openrouter-benchmark:
+    name: Opt-in OpenRouter benchmark (bounded, read-only)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_openrouter_benchmark && github.ref == 'refs/heads/feature/promotions-discount-engine' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SECRET_KEY: ci-only-not-a-production-secret
+      AI_PROVIDER: openrouter
+      AI_MODEL_ROUTING_MODE: ADAPTIVE_FREE
+      OPENROUTER_MODEL: openrouter/free
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Sync dependencies (uv, lock-pinned)
+        run: uv sync --frozen --extra test --no-install-project
+      - name: Require configured OpenRouter credential
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        shell: bash
+        run: test -n "$OPENROUTER_API_KEY"
+      - name: Run controlled benchmark across up to three ranked free models
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: >-
+          uv run --no-sync python -m src.evals.adaptive_model_eval
+          --limit 3 --output evals/results/adaptive-model-${{ github.run_id }}.json
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openrouter-adaptive-benchmark-${{ github.run_id }}
+          path: backend/evals/results/adaptive-model-${{ github.run_id }}.json
+          if-no-files-found: ignore
+          retention-days: 14
 
   backend-security-gates:
     name: Backend security gates (Ruff, pip-audit)

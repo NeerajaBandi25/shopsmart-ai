@@ -51,7 +51,11 @@ The database retains conversation history for the signed-in user, but that free-
 
 ## FAILURE HANDLING
 
-Provider timeouts and transport failures use bounded retries; only provider requests are retried. Retryable HTTP 429 and 5xx responses may try another eligible provider. Invalid schemas, unknown tools, failed authorization, and provider policy rejections fail closed. After a cart/promotion mutation, the service does not rerun the tool or switch to a second execution path; it returns a server-built confirmation from the committed service result. Current provider responses are buffered JSON. There is no SSE/token streaming; buffering ensures the UI receives final structured results only after tool execution and persistence.
+Provider timeouts and transport failures use bounded retries; only provider requests are retried. Retryable HTTP 429 and 5xx responses may try another eligible provider. Invalid schemas, unknown tools, failed authorization, and provider policy rejections fail closed. After a cart/promotion mutation, the service does not rerun the tool or switch to a second execution path; it returns a server-built confirmation from the committed service result.
+
+## STREAMING
+
+The signed-in UI posts to the same-origin `/api/ai/chat/stream` BFF, which passes through FastAPI's authenticated `POST /api/v1/ai/chat/stream` SSE response. OpenAI-compatible providers are requested in native streaming mode; tool-call deltas and text stay private in the backend until the complete turn is parsed. Gemini and providers without a streaming adapter use the same endpoint with a buffered provider completion. The stream exposes only `assistant.started`, safe `tool.started`/`tool.completed` status, `assistant.delta` chunks from the server-verified final answer, and one `assistant.completed` structured payload. It never streams chain-of-thought or partial tool arguments. This ordering means final text may begin after tools finish; the UI never infers prices or actions from streamed prose. A disconnected client cancels the in-flight request where the server transport supports cancellation.
 
 ## OBSERVABILITY
 

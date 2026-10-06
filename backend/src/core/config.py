@@ -64,7 +64,11 @@ class Settings(BaseSettings):
     ai_provider: str = "deterministic"
     ai_user_documents_enabled: bool = False
     openrouter_api_key: Optional[str] = None
-    openrouter_model: str = "openai/gpt-4o-mini"
+    # OpenRouter's router follows the currently available free eligible models;
+    # deployments can pin a reviewed, tool-capable model through configuration.
+    openrouter_model: str = "openrouter/free"
+    ai_model_routing_mode: str = "ADAPTIVE_FREE"
+    ai_fixed_model: Optional[str] = None
     openai_api_key: Optional[str] = None
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
@@ -89,6 +93,14 @@ class Settings(BaseSettings):
         if not secret_key.strip():
             raise ValueError("SECRET_KEY must not be empty")
         return secret_key
+
+    @field_validator("ai_model_routing_mode")
+    @classmethod
+    def validate_ai_model_routing_mode(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized not in {"FIXED", "ADAPTIVE_FREE", "BENCHMARK"}:
+            raise ValueError("AI_MODEL_ROUTING_MODE must be FIXED, ADAPTIVE_FREE, or BENCHMARK")
+        return normalized
 
     @field_validator("cors_origins")
     @classmethod

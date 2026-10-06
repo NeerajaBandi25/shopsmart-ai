@@ -1,12 +1,11 @@
 """Focused outbox reliability and retry checks against an isolated SQLite table."""
 
-from datetime import datetime, timezone
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.emails.model import NotificationOutbox
 from src.emails.providers import CaptureEmailProvider, EmailDeliveryError

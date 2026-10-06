@@ -1,0 +1,100 @@
+{
+  "version": "adaptive-model-cases-v1",
+  "cases": [
+    {
+      "id": "catalog-search-grounding",
+      "task_type": "PRODUCT_SEARCH",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Use ShopSmart tools for catalog facts. Do not invent products, prices, or stock."
+        },
+        {
+          "role": "user",
+          "content": "Show me laptops under INR 60000. Call the catalog search tool."
+        }
+      ],
+      "expected_tool": "search_products",
+      "constraint_expectations": {"category": "laptops", "max_price_cents": 6000000},
+      "score_weights": {
+        "tool_call_correctness": 0.35,
+        "constraint_accuracy": 0.20,
+        "mission_extraction": 0.0,
+        "grounding": 0.45,
+        "recommendation_quality": 0.0
+      },
+      "tool_result": {
+        "total": 1,
+        "products": [
+          {
+            "name": "Benchmark Aurora Notebook",
+            "price_cents": 5990000,
+            "stock_quantity": 3
+          }
+        ]
+      },
+      "grounding_terms": ["Benchmark Aurora Notebook"]
+    },
+    {
+      "id": "developer-mission-extraction",
+      "task_type": "PRODUCT_ADVICE",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Call understand_shopping_mission to enrich only the soft use-case preferences."
+        },
+        {
+          "role": "user",
+          "content": "I'm a developer using React, Python, and Docker. I occasionally run local AI models. I commute often and prefer professional design. My budget is around INR 75000 and can stretch to INR 85000."
+        }
+      ],
+      "expected_tool": "understand_shopping_mission",
+      "mission_expectations": ["software_development", "docker", "local_ai"],
+      "score_weights": {
+        "tool_call_correctness": 0.35,
+        "constraint_accuracy": 0.0,
+        "mission_extraction": 0.65,
+        "grounding": 0.0,
+        "recommendation_quality": 0.0
+      }
+    },
+    {
+      "id": "ranked-recommendation-grounding",
+      "task_type": "PRODUCT_COMPARE",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Rank only the verified candidate list with the ShopSmart ranking tool."
+        },
+        {
+          "role": "user",
+          "content": "Rank these verified laptops for development work and explain the top fit."
+        }
+      ],
+      "expected_tool": "rank_recommendations",
+      "score_weights": {
+        "tool_call_correctness": 0.35,
+        "constraint_accuracy": 0.0,
+        "mission_extraction": 0.0,
+        "grounding": 0.30,
+        "recommendation_quality": 0.35
+      },
+      "tool_result": {
+        "recommendations": [
+          {
+            "name": "Benchmark Atlas Pro",
+            "rank": 1,
+            "reasons": ["32 GB RAM", "verified catalog match"]
+          },
+          {
+            "name": "Benchmark Cedar Air",
+            "rank": 2,
+            "reasons": ["16 GB RAM", "lower catalog price"]
+          }
+        ]
+      },
+      "grounding_terms": ["Benchmark Atlas Pro"],
+      "recommendation_terms": ["Benchmark Atlas Pro"]
+    }
+  ]
+}

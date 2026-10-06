@@ -14,6 +14,7 @@ from src.services import product_catalog_service as service_module
 from src.services.product_catalog_cache import (
     CACHE_PREFIX,
     GENERATION_KEY,
+    CachedCatalogPage,
     ProductCatalogCache,
     product_catalog_cache_key,
 )
@@ -113,7 +114,7 @@ def test_product_catalog_cache_keys_include_namespace_generation_and_pagination(
     assert GENERATION_KEY == f"{CACHE_PREFIX}:generation"
 
 
-async def test_cache_miss_reads_database_and_hit_skips_repository(fake_redis, monkeypatch):
+async def test_cache_hit_rehydrates_current_authoritative_product_facts(fake_redis, monkeypatch):
     repository = Repository()
     calls = []
 
@@ -144,6 +145,12 @@ async def test_cache_miss_reads_database_and_hit_skips_repository(fake_redis, mo
 
     repository.get_products = get_products
 
+    async def get_active_products_by_ids(_ids):
+        calls.append(("rehydrate",))
+        return [{**_page("CACHED-1").items[0].model_dump(), "price": 9999, "stock_quantity": 0}]
+
+    repository.get_active_products_by_ids = get_active_products_by_ids
+
     async def count_active_products():
         return 1
 
@@ -154,20 +161,19 @@ async def test_cache_miss_reads_database_and_hit_skips_repository(fake_redis, mo
     first = await service.list_products(skip=0, limit=24)
     assert first == _page("CACHED-1")
     assert calls == [(0, 24)]
-
-    async def unexpected_database_read(**_kwargs):
-        raise AssertionError("valid cache hit must not query the repository")
-
-    repository.get_products = unexpected_database_read
     second = await service.list_products(skip=0, limit=24)
 
-    assert second == first
-    assert calls == [(0, 24)]
+    assert second.items[0].price == 9999
+    assert second.items[0].stock_quantity == 0
+    assert calls == [(0, 24), ("rehydrate",)]
     cache_key = product_catalog_cache_key(skip=0, limit=24)
     assert fake_redis.expirations[cache_key] == 30
-    assert fake_redis.values[cache_key] == json.dumps(
-        first.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    )
+    assert json.loads(fake_redis.values[cache_key]) == {
+        "limit": 24,
+        "product_ids": ["00000000-0000-0000-0000-000000000001"],
+        "skip": 0,
+        "total_hint": 1,
+    }
 
 
 async def test_distinct_pagination_parameters_populate_distinct_entries(fake_redis, monkeypatch):
@@ -273,7 +279,7 @@ async def test_invalid_cached_payload_falls_back_and_replaces_it(fake_redis, mon
     page = await ProductCatalogService(db=None).list_products(skip=0, limit=24)
 
     assert page == _page_for_empty()
-    assert ProductPageResponse.model_validate_json(fake_redis.values[key]) == page
+    assert CachedCatalogPage.model_validate_json(fake_redis.values[key]).product_ids == []
 
 
 async def test_repository_error_is_not_cached(fake_redis, monkeypatch):
@@ -293,7 +299,7 @@ async def test_repository_error_is_not_cached(fake_redis, monkeypatch):
 
 async def test_invalidation_advances_generation_and_orphans_existing_pages(fake_redis):
     cache = ProductCatalogCache()
-    await cache.set_page(0, 24, "0", _page("OLD"))
+    await cache.set_page(0, 24, "0", ["00000000-0000-0000-0000-000000000001"], 1)
 
     await cache.invalidate()
 

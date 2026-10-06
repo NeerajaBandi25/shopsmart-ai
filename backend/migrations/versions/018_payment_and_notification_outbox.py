@@ -8,7 +8,6 @@ Create Date: 2026-10-04
 import sqlalchemy as sa
 from alembic import op
 
-
 revision = "018_payment_email_outbox"
 down_revision = "017_order_delivery_images"
 branch_labels = None
@@ -19,8 +18,12 @@ def upgrade() -> None:
     op.create_table(
         "payments",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("order_id", sa.Uuid(), nullable=False),
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.Column("provider", sa.String(length=32), nullable=False),
@@ -53,8 +56,12 @@ def upgrade() -> None:
     op.create_table(
         "payment_webhook_events",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("provider", sa.String(length=32), nullable=False),
         sa.Column("event_id", sa.String(length=255), nullable=False),
         sa.Column("event_type", sa.String(length=100), nullable=False),
@@ -66,8 +73,12 @@ def upgrade() -> None:
     op.create_table(
         "notification_outbox",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("event_type", sa.String(length=64), nullable=False),
         sa.Column("aggregate_id", sa.Uuid(), nullable=False),
         sa.Column("destination", sa.String(length=320), nullable=False),
@@ -77,10 +88,17 @@ def upgrade() -> None:
         sa.Column("request_id", sa.String(length=128), nullable=True),
         sa.Column("status", sa.String(length=16), nullable=False, server_default="pending"),
         sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "next_attempt_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
         sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_error_code", sa.String(length=64), nullable=True),
-        sa.CheckConstraint("attempts >= 0 AND attempts <= 8", name="ck_notification_outbox_attempts"),
+        sa.CheckConstraint(
+            "attempts >= 0 AND attempts <= 8", name="ck_notification_outbox_attempts"
+        ),
         sa.CheckConstraint(
             "status IN ('pending', 'sending', 'sent', 'failed')",
             name="ck_notification_outbox_status",

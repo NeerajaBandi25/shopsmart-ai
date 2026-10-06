@@ -54,10 +54,11 @@ async def lifespan(app: FastAPI):
     reservation_sweeper = asyncio.create_task(run_payment_reservation_sweeper())
     email_worker = None
     email_worker_enabled = os.getenv("EMAIL_WORKER_ENABLED", "false").strip().lower()
-    if (
-        settings.app_env.strip().lower() in {"local", "dev", "development"}
-        and email_worker_enabled in {"1", "true", "yes", "on"}
-    ):
+    if settings.app_env.strip().lower() in {
+        "local",
+        "dev",
+        "development",
+    } and email_worker_enabled in {"1", "true", "yes", "on"}:
         email_worker = asyncio.create_task(run_email_worker(), name="email-outbox-worker")
     try:
         yield
