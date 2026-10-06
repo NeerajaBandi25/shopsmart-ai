@@ -96,7 +96,7 @@
 - [x] T037 Run migration graph/SQL checks, focused and full pytest, Ruff, Black, and compileall in `backend/` against isolated test resources only.
 - [x] T038 Run focused/full Jest, TypeScript, lint, scoped Prettier, and Next.js build for `frontend/` without mass-formatting unrelated files.
 - [x] T039 Review all ten PROMO invariants and the independent questions in `specs/009-promotions-discount-engine/spec.md`; record findings and resolve any legitimate defect in its owning source/test files.
-- [ ] T040 Review `git diff --check`, changed-file scope, and final worktree against the quickstart. Commit/push only the explicitly authorized milestone to the existing branch; do not create a new PR, merge, or deploy.
+- [x] T040 Review `git diff --check`, changed-file scope, and final worktree against the quickstart. Commit/push only the explicitly authorized milestone to the existing branch; do not create a new PR, merge, or deploy.
 
 ## Dependencies and Execution Order
 
