@@ -44,6 +44,28 @@ def quality_gate_failures(metrics: dict[str, float]) -> list[str]:
     return failures
 
 
+def task_quality_gate_failures(cases: list[dict], samples: list[dict]) -> list[str]:
+    """Gate each task on only the objective checks represented by its cases."""
+    failures = []
+    for name, threshold in QUALITY_THRESHOLDS.items():
+        relevant = [
+            sample[name]
+            for case, sample in zip(cases, samples)
+            if case.get("score_weights", {}).get(name, 0) > 0
+        ]
+        if relevant and statistics.mean(relevant) < threshold:
+            failures.append(name)
+    if samples:
+        completion = sum(bool(sample.get("success")) for sample in samples) / len(samples)
+        if completion < QUALITY_THRESHOLDS["completion_success_rate"]:
+            failures.append("completion_success_rate")
+    if any(sample.get("provider_failures", 0) for sample in samples):
+        failures.append("provider_failures")
+    if any(sample.get("rate_limits", 0) for sample in samples):
+        failures.append("rate_limits")
+    return failures
+
+
 def _case_score(
     case: dict,
     tool_ok: bool,
@@ -343,19 +365,32 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
         failed_thresholds = quality_gate_failures(metrics)
         metrics["quality_gate_passed"] = not failed_thresholds
         metrics["quality_gate_failures"] = failed_thresholds
+        task_quality_gates = {}
+        for task_type in sorted({case["task_type"] for case in cases}):
+            matching_pairs = [
+                (case, sample)
+                for case, sample in zip(cases, samples)
+                if case["task_type"] == task_type
+            ]
+            task_cases = [case for case, _ in matching_pairs]
+            task_samples = [sample for _, sample in matching_pairs]
+            task_failures = task_quality_gate_failures(task_cases, task_samples)
+            task_quality_gates[task_type] = {
+                "passed": not task_failures,
+                "failures": task_failures,
+            }
         report["models"][model_id] = {**metrics, "cases": samples}
-        for case in cases:
-            matching = [item for item in samples if item["task_type"] == case["task_type"]]
-            if matching:
-                await state.record_eval(
-                    model_id,
-                    case["task_type"],
-                    (
-                        sum(item["eval_score"] for item in matching) / len(matching)
-                        if not failed_thresholds
-                        else 0.0
-                    ),
-                )
+        report["models"][model_id]["task_quality_gates"] = task_quality_gates
+        for task_type in task_quality_gates:
+            matching = [
+                sample["eval_score"] for sample in samples if sample["task_type"] == task_type
+            ]
+            task_score = (
+                sum(matching) / len(matching)
+                if task_quality_gates[task_type]["passed"] and matching
+                else 0.0
+            )
+            await state.record_eval(model_id, task_type, task_score)
     return report
 
 

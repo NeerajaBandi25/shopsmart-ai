@@ -7,6 +7,7 @@ from src.evals.adaptive_model_eval import (
     _case_score,
     _completion_success,
     quality_gate_failures,
+    task_quality_gate_failures,
 )
 
 
@@ -56,3 +57,36 @@ def test_adaptive_model_quality_gate_requires_perfect_objective_cases_and_reliab
     metrics["tool_call_correctness"] = 0.9
     metrics["provider_failures"] = 1.0
     assert set(quality_gate_failures(metrics)) == {"tool_call_correctness", "provider_failures"}
+
+
+def test_task_quality_gate_only_uses_objective_checks_for_that_task():
+    search_case = {
+        "task_type": "PRODUCT_SEARCH",
+        "score_weights": {"tool_call_correctness": 0.35, "constraint_accuracy": 0.65},
+    }
+    advice_case = {
+        "task_type": "PRODUCT_ADVICE",
+        "score_weights": {"tool_call_correctness": 0.35, "mission_extraction": 0.65},
+    }
+    search_sample = {
+        "tool_call_correctness": 1.0,
+        "constraint_accuracy": 1.0,
+        "mission_extraction": 0.0,
+        "success": True,
+        "provider_failures": 0,
+        "rate_limits": 0,
+    }
+    advice_sample = {
+        "tool_call_correctness": 1.0,
+        "constraint_accuracy": 1.0,
+        "mission_extraction": 0.0,
+        "success": False,
+        "provider_failures": 0,
+        "rate_limits": 0,
+    }
+
+    assert task_quality_gate_failures([search_case], [search_sample]) == []
+    assert set(task_quality_gate_failures([advice_case], [advice_sample])) == {
+        "mission_extraction",
+        "completion_success_rate",
+    }

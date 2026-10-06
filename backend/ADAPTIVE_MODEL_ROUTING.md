@@ -37,4 +37,26 @@ A credentialed benchmark ran through the ShopSmart backend against three current
 | `cohere/north-mini-code:free` | 0.67 | 0.00 | 1.00 | 0.50 | 0.00 | 0.33 | 7,772 ms | 3,111 / 725 | 0 | 0 | FAIL |
 | `dots-studio/dots-3-note-preview:free` | 0.67 | 0.00 | 1.00 | 0.50 | 0.00 | 0.33 | 15,405 ms | 5,304 / 784 | 1 timeout | 0 | FAIL |
 
-The suite exposed a coverage weakness as well as model weaknesses: the ranking case currently expects exact synthetic product-name reproduction from a ranking-only tool call. Keep its failure visible while improving the golden case to measure structured recommendation choice and evidence. The router excludes models whose persisted task score is zero; only a quality-gated score is fed back into routing. Redis was unavailable during this run, so this process used request-local health state and could not persist benchmark scores for a later process.
+The suite exposed a coverage weakness as well as model weaknesses: the ranking case currently expects exact synthetic product-name reproduction from a ranking-only tool call. Keep its failure visible while improving the golden case to measure structured recommendation choice and evidence. Redis was unavailable during the first live run, so that process could not persist benchmark scores for a later process.
+
+## Task-specific gate correction and rerun
+
+The first benchmark version incorrectly used the aggregate model gate when publishing every task score. This meant a model with a failed comparison case also lost its passing search and mission scores. Score publication now gates each task using only objective metrics represented by that task's cases, while the aggregate report retains its full-suite gate. The benchmark was rerun against the same three free models on 2026-10-06 after this change:
+
+| Model | Tool correctness | Mission extraction | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Task gates |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `apodex/apodex-1.1-mini:free` | 1.00 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 3,685 ms | 7,517 / 661 | 0 | 0 | search PASS, advice PASS, compare FAIL |
+| `cohere/north-mini-code:free` | 0.67 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 6,262 ms | 3,111 / 752 | 0 | 0 | search PASS, advice PASS, compare FAIL |
+| `dots-studio/dots-3-note-preview:free` | 1.00 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 6,315 ms | 6,481 / 846 | 0 | 0 | search PASS, advice PASS, compare FAIL |
+
+All three still fail the aggregate comparison set because none grounded the rank-one synthetic product name in its final comparison synthesis. The important routing result is task-specific: valid search/advice scores survive; PRODUCT_COMPARE receives score zero and cannot rank those candidates. The complete raw report is at `backend/evals/results/adaptive-model-live-v3.json` (local runtime artifact; not committed). Redis remained unavailable, so benchmark scores used request-local fallback state and were not persisted across processes. Do not claim complete model qualification from this three-case subset.
+
+The comparison case was then made more explicit about its required grounded synthesis (name the provided rank-one item and cite its verified specs), without changing thresholds, and run again through the host-network runtime. The latest result is:
+
+| Model | Tool correctness | Mission extraction | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Task gates |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `apodex/apodex-1.1-mini:free` | 1.00 | 1.00 | 1.00 | 0.50 | 1.00 | 0.67 | 5,410 ms | 7,601 / 945 | 0 | 0 | search FAIL, advice PASS, compare PASS |
+| `cohere/north-mini-code:free` | 1.00 | 0.00 | 1.00 | 1.00 | 1.00 | 0.67 | 8,441 ms | 4,127 / 1,019 | 0 | 0 | search PASS, advice FAIL, compare PASS |
+| `dots-studio/dots-3-note-preview:free` | 0.67 | 1.00 | 1.00 | 0.00 | 0.00 | 0.33 | 5,837 ms | 5,057 / 864 | 0 | 0 | search FAIL, advice PASS, compare FAIL |
+
+No candidate passed the full three-case aggregate. The per-task gates now preserve useful measured routes for search, advice, and comparison rather than marking every model unusable. Because Redis was still unavailable, cross-process score persistence and live reuse remain unverified. This three-case set is a bounded routing smoke, not a broad estimate of model quality; the complete local output is `backend/evals/results/adaptive-model-live-v4.json` and is excluded from Git.

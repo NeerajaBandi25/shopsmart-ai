@@ -91,7 +91,7 @@
         },
         {
           "role": "user",
-          "content": "Call rank_recommendations now using the validated mission and catalog results."
+          "content": "Call rank_recommendations now using the validated mission and catalog results. In the final answer, name Benchmark Atlas Pro exactly as the rank-one recommendation, cite its verified 32 GB RAM and 8-core processor, and mention Benchmark Cedar Air as the lower-price trade-off."
         }
       ],
       "expected_tool": "rank_recommendations",
