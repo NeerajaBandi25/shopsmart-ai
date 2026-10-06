@@ -60,3 +60,13 @@ The comparison case was then made more explicit about its required grounded synt
 | `dots-studio/dots-3-note-preview:free` | 0.67 | 1.00 | 1.00 | 0.00 | 0.00 | 0.33 | 5,837 ms | 5,057 / 864 | 0 | 0 | search FAIL, advice PASS, compare FAIL |
 
 No candidate passed the full three-case aggregate. The per-task gates now preserve useful measured routes for search, advice, and comparison rather than marking every model unusable. Because Redis was still unavailable, cross-process score persistence and live reuse remain unverified. This three-case set is a bounded routing smoke, not a broad estimate of model quality; the complete local output is `backend/evals/results/adaptive-model-live-v4.json` and is excluded from Git.
+
+The final live run added an explicit catalog-grounding instruction to the search case, retaining the same exact-match scoring and unchanged thresholds. Apodex passed the complete three-case suite:
+
+| Model | Tool correctness | Mission extraction | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Aggregate gate |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `apodex/apodex-1.1-mini:free` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 4,643 ms | 7,639 / 943 | 0 | 0 | PASS (.9923 score) |
+| `cohere/north-mini-code:free` | 1.00 | 0.00 | 1.00 | 1.00 | 1.00 | 0.67 | 8,466 ms | 4,165 / 974 | 0 | 0 | FAIL: mission extraction, completion |
+| `dots-studio/dots-3-note-preview:free` | 1.00 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 6,997 ms | 6,603 / 941 | 0 | 0 | FAIL: comparison grounding/recommendation, completion |
+
+Apodex passed PRODUCT_SEARCH, PRODUCT_ADVICE, and PRODUCT_COMPARE gates, while its runner-up models remain gated per task. This is evidence for the current three-case routing smoke only; expand the cases before treating these scores as a broad quality estimate. Redis remained unavailable, so benchmark scores could not be published across processes in this run. Full raw output: `backend/evals/results/adaptive-model-live-v5.json` (local, not committed).

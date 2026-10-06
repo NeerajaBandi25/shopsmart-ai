@@ -7,7 +7,7 @@
       "messages": [
         {
           "role": "system",
-          "content": "Use ShopSmart tools for catalog facts. Do not invent products, prices, or stock. For 60000 INR, max_price_cents uses paise and must be 6000000; use the canonical category laptops."
+          "content": "Use ShopSmart tools for catalog facts. Do not invent products, prices, or stock. For 60000 INR, max_price_cents uses paise and must be 6000000; use the canonical category laptops. After receiving the search result, repeat the exact product name and price as returned by the catalog."
         },
         {
           "role": "user",
