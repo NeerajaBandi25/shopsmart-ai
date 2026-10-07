@@ -51,12 +51,17 @@ test.beforeEach(async ({ page }, testInfo) => {
   await page.getByRole('button', { name: 'New chat', exact: true }).click();
 });
 
-async function ask(page: Page, question: string) {
+async function ask(page: Page, question: string, assertStreamProgress = false) {
   const responseTimeout = process.env.E2E_LIVE_ADAPTIVE === '1' ? 120_000 : 30_000;
   const responseCount = await page.getByText('ShopSmart assistant', { exact: true }).count();
   await page.getByLabel('Message the shopping assistant').fill(question);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  if (assertStreamProgress) {
+    await expect(page.getByText(/Checking|Verifying the results/).first()).toBeVisible({
+      timeout: responseTimeout,
+    });
+  }
   await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeEnabled({
     timeout: responseTimeout,
   });
@@ -145,7 +150,8 @@ test('shopping mission, evidence, refinement, cart, offers, policy and owner-sco
   );
   await ask(
     page,
-    'I am a developer using React, Python and Docker. I occasionally run local AI models. I commute often and prefer something professional-looking. I prefer around ₹75,000 but can stretch to ₹85,000 if worthwhile.'
+    'I am a developer using React, Python and Docker. I occasionally run local AI models. I commute often and prefer something professional-looking. I prefer around ₹75,000 but can stretch to ₹85,000 if worthwhile.',
+    true
   );
   const streamResponse = await firstStreamResponse;
   expect(streamResponse.status()).toBe(200);
