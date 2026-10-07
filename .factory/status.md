@@ -1,6 +1,6 @@
-# ShopSmart AI factory checkpoint
+﻿# ShopSmart AI factory checkpoint
 
-Updated: 2026-10-06 (Asia/Kolkata). Branch: `feature/promotions-discount-engine`; existing Draft PR #46. No merge or deployment was performed.
+Updated: 2026-10-07 (Asia/Kolkata). Branch `feature/ai-production-hardening` was created from post-merge HEAD `43465e4`; `origin/main` was merged successfully with no reported conflicts. PR #46 is already merged; no deployment has occurred.
 
 ## Workstreams
 
@@ -155,3 +155,12 @@ Do not merge, deploy, create another PR, modify the accepted hero, or use the po
 - The selected tests cover owner-scoped mission-cache TTL/privacy and Redis model health, rolling 429/failure rates, circuit TTL, successful latency, task eval-score TTL, and retrieval from an independent `ModelRuntimeState` instance.
 - Local YAML parsing passed, and pytest collection confirmed exactly the intended two Redis tests (one PostgreSQL-only test deselected). This host still cannot execute them because 127.0.0.1:6379 refuses connections. Remote CI runtime outcome is pending; no Redis pass is claimed yet.
 - Added a workflow-contract test to keep the Redis service, opt-in flag, and real Redis test selector present. The contract suite passes: **9 passed**.
+
+## Current branch and host acceptance checkpoint (2026-10-07)
+
+- The 19 post-merge commits are preserved atop merge commit `43465e4`. Three focused review commits were created for adaptive evaluation/Redis support, assistant/RAG browser tests, and status documentation; the branch is awaiting its first push.
+- **Redis score persistence: PASS.** User-reported normal Windows-host acceptance proved application DB 15, eval score `0.731`, TTL `86400`, fresh-process read and adaptive-router consumption, followed by temporary-key cleanup. The acceptance script is included as a reusable dev check; it was not rerun here.
+- **Stripe hosted test Checkout: PASS.** User reports a hosted test session was created and loaded, test payment completed, signed `checkout.session.completed` webhook accepted with HTTP 200, server-side order/payment confirmation succeeded, and frontend redirect was corrected to port 3003. This live flow was not repeated.
+- **Adaptive OpenRouter shopping mission: PASS.** User reports `ADAPTIVE_FREE`, provider `openrouter`, selected model `apodex/apodex-1.1-mini:free`, `LLM_PATH`, fallback false, two tool calls, three LLM requests, and guardrail `PASSED`. Migration 020 was the history issue; current DB revision is `020_ai_request_idempotency (head)` and `alembic check` is clean.
+- **Targeted validation:** backend 53 passed, 4 skipped, 7 deselected; frontend Jest 3 suites / 16 tests; TypeScript check passed; Playwright discovered 12 tests in the touched E2E spec; Prettier passed; Ruff lint and format passed; `git diff --check` passed. Black check was stopped after the bounded time limit. No full backend suite, live acceptance, or expensive benchmark was rerun.
+- **Deployment prerequisite:** real business/legal policy approval for production policy content.
