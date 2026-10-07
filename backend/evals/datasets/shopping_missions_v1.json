@@ -1,0 +1,25 @@
+{
+  "version": "shopping-missions-v1",
+  "scenarios": [
+    {"id":"laptop-developer-stretch","query":"I'm a frontend developer moving into AI. I use React, Python and Docker and sometimes run models locally. I commute, so I don't want a huge laptop. I prefer staying under ₹75k, but show me one option up to ₹85k if the upgrade is genuinely worthwhile.","category":"laptops","workloads":["software_development","docker","local_ai"],"preferred_budget_cents":7500000,"max_budget_cents":8500000,"path":"LLM_PATH"},
+    {"id":"fast-laptop-cap","query":"Show laptops under ₹60,000","category":"laptops","max_budget_cents":6000000,"path":"FAST_PATH"},
+    {"id":"phone-cap","query":"Show phones below ₹25k","category":"phones","max_budget_cents":2500000,"path":"FAST_PATH"},
+    {"id":"laptop-weight","query":"Find laptops below 1.7 kg","category":"laptops","max_weight_kg":1.7,"path":"LLM_PATH"},
+    {"id":"ram-hard","query":"Laptop under ₹90k with at least 32 GB RAM","category":"laptops","min_ram_gb":32,"max_budget_cents":9000000,"path":"FAST_PATH"},
+    {"id":"ram-gb-floor-not-money","query":"Laptop with at least 32 GB RAM","category":"laptops","min_ram_gb":32,"path":"LLM_PATH"},
+    {"id":"student-budget","query":"I am a student. I need a laptop for college and studying around ₹50k","category":"laptops","preferred_budget_cents":5000000,"workloads":["student"],"path":"LLM_PATH"},
+    {"id":"gaming-mission","query":"Recommend a gaming laptop under 100k","category":"laptops","max_budget_cents":10000000,"workloads":["gaming"],"path":"LLM_PATH"},
+    {"id":"creative-mission","query":"Laptop for video editing and 3D rendering under 120k","category":"laptops","max_budget_cents":12000000,"workloads":["creative"],"path":"LLM_PATH"},
+    {"id":"commuter-preference","query":"Laptop under ₹85k for commuting, prefer something lightweight","category":"laptops","max_budget_cents":8500000,"path":"LLM_PATH"},
+    {"id":"clarify-laptop","query":"I need a good laptop","category":"laptops","clarification":true,"path":"LLM_PATH"},
+    {"id":"no-unneeded-clarification","query":"Show laptops under ₹60,000","category":"laptops","clarification":false,"max_budget_cents":6000000,"path":"FAST_PATH"},
+    {"id":"turn-refinement","query":"Make it lighter","previous":"Laptop under ₹85k with at least 32 GB RAM","category":"laptops","max_budget_cents":8500000,"min_ram_gb":32,"portability":true},
+    {"id":"turn-refinement-budget","query":"Only ones below ₹70k","previous":"Laptop for Docker under ₹85k with 32 GB RAM","category":"laptops","max_budget_cents":7000000,"min_ram_gb":32,"workloads":["docker"]},
+    {"id":"turn-refinement-exclude","query":"Exclude brand Dell","previous":"Laptop under ₹85k for React development","category":"laptops","max_budget_cents":8500000,"workloads":["software_development"]},
+    {"id":"explicit-preferred-vs-max","query":"I prefer around 75k but can stretch to 85k","preferred_budget_cents":7500000,"max_budget_cents":8500000},
+    {"id":"optional-display","query":"Laptop under ₹90k; OLED would be nice","category":"laptops","max_budget_cents":9000000},
+    {"id":"required-display","query":"Laptop under ₹90k, must have OLED","category":"laptops","max_budget_cents":9000000},
+    {"id":"avoid-gaming-aesthetic","query":"Need a professional-looking laptop; no gaming-looking design","category":"laptops"},
+    {"id":"travel-urgency","query":"I travel tomorrow and need a portable laptop under 80k","category":"laptops","max_budget_cents":8000000,"portability":true,"urgency":"soon"}
+  ]
+}

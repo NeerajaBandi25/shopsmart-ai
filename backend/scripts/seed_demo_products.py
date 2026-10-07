@@ -129,8 +129,7 @@ async def run_seed(
             await session.commit()
     except Exception as error:
         print(
-            f"Demo seeding failed ({type(error).__name__}); "
-            "connection details were suppressed.",
+            f"Demo seeding failed ({type(error).__name__}); " "connection details were suppressed.",
             file=sys.stderr,
         )
         return 1
@@ -147,9 +146,7 @@ def main(argv: list[str] | None = None) -> int:
         help="allow inserts when SHOPSMART_ALLOW_DEMO_SEEDING=true is also set",
     )
     args = parser.parse_args(argv)
-    return asyncio.run(
-        run_seed(args.apply, os.environ.get("SHOPSMART_ALLOW_DEMO_SEEDING"))
-    )
+    return asyncio.run(run_seed(args.apply, os.environ.get("SHOPSMART_ALLOW_DEMO_SEEDING")))
 
 
 if __name__ == "__main__":

@@ -3,7 +3,6 @@
 import pytest
 
 from src.core.config import settings
-
 from src.emails.templates.order import OrderEmail, OrderLine, render_order_email
 
 

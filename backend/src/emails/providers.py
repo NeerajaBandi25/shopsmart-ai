@@ -155,9 +155,7 @@ class SMTPEmailProvider:
         context = ssl.create_default_context()
         try:
             if self._use_ssl:
-                client = smtplib.SMTP_SSL(
-                    self._host, self._port, timeout=15, context=context
-                )
+                client = smtplib.SMTP_SSL(self._host, self._port, timeout=15, context=context)
             else:
                 client = smtplib.SMTP(self._host, self._port, timeout=15)
             with client:
@@ -175,16 +173,12 @@ class SMTPEmailProvider:
             raise EmailDeliveryError("smtp_authentication_failed", transient=False) from exc
         except smtplib.SMTPResponseException as exc:
             code = int(exc.smtp_code)
-            raise EmailDeliveryError(
-                f"smtp_response_{code}", transient=400 <= code < 500
-            ) from exc
+            raise EmailDeliveryError(f"smtp_response_{code}", transient=400 <= code < 500) from exc
         except (smtplib.SMTPServerDisconnected, TimeoutError, OSError) as exc:
             raise EmailDeliveryError("smtp_connection_failed", transient=True) from exc
 
 
-def create_email_provider(
-    name: str, *, app_env: str, **credentials: str | None
-) -> EmailProvider:
+def create_email_provider(name: str, *, app_env: str, **credentials: str | None) -> EmailProvider:
     """Select a provider without ever treating a missing external adapter as success."""
     normalized = name.strip().lower()
     if normalized in {"console", "capture"}:

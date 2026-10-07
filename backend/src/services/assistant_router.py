@@ -222,6 +222,7 @@ def route_assistant_message(message: str) -> AssistantRoute:
             "where's my order",
             "where is my last order",
             "where's my last order",
+            "latest order",
             "order history",
             "check my order",
         )
@@ -233,7 +234,7 @@ def route_assistant_message(message: str) -> AssistantRoute:
     is_cart_mutation = any(
         re.search(pattern, text)
         for pattern in (
-            r"^(?:please\s+)?add\s+(?:the\s+)?(?:cheaper|cheapest|first|second|third|recommended)\s+(?:one|product)\b",
+            r"^(?:please\s+)?add\s+(?:(?:the|your)\s+)?(?:cheaper|cheapest|first|second|third|recommended)\s+(?:one|product)\b",
             r"\badd(?:\s+\d{1,2})?.{0,80}\bto\s+(?:my\s+)?cart\b",
             r"\bput\b.{0,80}\bin\s+(?:my\s+)?cart\b",
             r"\bremove\b.{0,80}\bfrom\s+(?:my\s+)?cart\b",
@@ -258,7 +259,15 @@ def route_assistant_message(message: str) -> AssistantRoute:
     if re.search(
         r"\b(?:which|what)\b.{0,60}\b(?:better|best)\b|\b(?:react development|occasional gaming)\b",
         text,
+    ) or re.search(
+        r"\b(?:worth it|worthwhile|spending the extra|extra money|upgrade worth)\b", text
     ):
+        return AssistantRoute(AssistantIntent.PRODUCT_ADVICE)
+    if re.search(r"\b(?:lighter|lightweight|more portable)\b", text):
+        return AssistantRoute(AssistantIntent.PRODUCT_ADVICE)
+    if re.search(
+        r"\b(?:developer|react|python|docker|local ai|local models)\b", text
+    ) and re.search(r"\b(?:budget|around|stretch|stay|prefer|laptop)\b", text):
         return AssistantRoute(AssistantIntent.PRODUCT_ADVICE)
     if any(term in text for term in ("compare", " versus ", " vs ")) or re.search(
         r"\bwhich\b.{0,50}\b(?:cheaper|cheapest|less expensive|lower[- ]priced)\b",

@@ -12,6 +12,7 @@ import httpx
 
 from src.core.config import settings
 from src.core.observability import metrics
+from src.services.adaptive_model_router import AdaptiveFreeModelRouter, ModelSelection
 from src.services.ai_governance import (
     DataClassification,
     PolicyViolation,
@@ -23,6 +24,30 @@ from src.services.ai_governance import (
 from src.services.ai_provider import Evidence, GroundedAnswerProvider, ProviderAnswer
 
 logger = logging.getLogger("shopsmart.ai_gateway")
+_PROCESS_USAGE_TRACKER = UsageTracker()
+
+
+def _log_provider_failure(
+    provider: str,
+    category: str,
+    *,
+    status_code: int | None = None,
+    error: Exception | None = None,
+) -> None:
+    error_chain = []
+    current = error
+    while current and len(error_chain) < 6:
+        error_chain.append(type(current).__name__)
+        current = current.__cause__ or current.__context__
+    context = {
+        "event": "provider_request_failed",
+        "provider": provider,
+        "provider_error_category": category,
+        "provider_error_type": type(error).__name__ if error else None,
+        "provider_error_chain": "->".join(error_chain) if error_chain else None,
+        "provider_http_status": status_code,
+    }
+    logger.warning("provider_request_failed", extra=context)
 
 
 def _escaped_prompt_text(text: str) -> str:
@@ -56,6 +81,39 @@ class GenerationProvider(Protocol):
         self, question: str, evidence: list[Evidence], model: str, timeout_seconds: float
     ) -> ProviderAnswer:
         ...
+
+    async def complete(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        model: str,
+        timeout_seconds: float,
+    ) -> "ToolTurn":
+        ...
+
+
+@dataclass(frozen=True)
+class FunctionCall:
+    call_id: str
+    name: str
+    arguments: str
+
+
+@dataclass(frozen=True)
+class ToolTurn:
+    text: str
+    tool_calls: tuple[FunctionCall, ...] = ()
+    input_tokens: int = 0
+    output_tokens: int = 0
+    reported_model: str | None = None
+
+
+class StreamingUnsupportedError(Exception):
+    """Provider rejected streaming; the gateway should retry this turn buffered."""
+
+
+# Keep the earlier internal exception import stable while using conventional naming.
+StreamingUnsupported = StreamingUnsupportedError
 
 
 class DeterministicGenerationProvider:
@@ -115,13 +173,36 @@ class OpenAICompatibleProvider:
                     json=payload,
                 )
         except httpx.TimeoutException as exc:
-            raise ProviderUnavailable("provider timeout") from exc
+            _log_provider_failure(self.provider_name, "timeout", error=exc)
+            raise ProviderUnavailable("provider timeout", category="timeout") from exc
         except httpx.HTTPError as exc:
-            raise ProviderUnavailable("provider connection failure") from exc
+            _log_provider_failure(self.provider_name, "connection_error", error=exc)
+            raise ProviderUnavailable(
+                "provider connection failure", category="connection_error"
+            ) from exc
         if response.status_code == 429 or response.status_code >= 500:
-            raise ProviderUnavailable(f"provider temporary failure: {response.status_code}")
+            _log_provider_failure(
+                self.provider_name,
+                "rate_limited" if response.status_code == 429 else "server_error",
+                status_code=response.status_code,
+            )
+            raise ProviderUnavailable(
+                f"provider temporary failure: {response.status_code}",
+                status_code=response.status_code,
+                category="rate_limited" if response.status_code == 429 else "server_error",
+            )
         if response.status_code >= 400:
-            raise PolicyViolation(f"{self.provider_name} provider rejected the request")
+            _log_provider_failure(
+                self.provider_name,
+                "authentication_rejected"
+                if response.status_code in {401, 403}
+                else "request_rejected",
+                status_code=response.status_code,
+            )
+            raise PolicyViolation(
+                f"{self.provider_name} provider rejected the request",
+                status_code=response.status_code,
+            )
         data = response.json()
         answer, answerable, evidence_ids = parse_provider_answer(
             str(data.get("choices", [{}])[0].get("message", {}).get("content", "")).strip()
@@ -137,6 +218,205 @@ class OpenAICompatibleProvider:
             answerable and bool(valid_ids),
             int(usage.get("total_tokens", len(answer.split()))),
             valid_ids,
+        )
+
+    async def complete(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        model: str,
+        timeout_seconds: float,
+    ) -> ToolTurn:
+        """Use native OpenAI-compatible tool calls; mutations happen outside provider retries."""
+        payload = {
+            "model": model,
+            "temperature": 0,
+            "messages": messages,
+            "tools": tools,
+            "tool_choice": "auto",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                response = await client.post(
+                    self.endpoint,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+        except httpx.TimeoutException as exc:
+            _log_provider_failure(self.provider_name, "timeout", error=exc)
+            raise ProviderUnavailable("provider timeout", category="timeout") from exc
+        except httpx.HTTPError as exc:
+            _log_provider_failure(self.provider_name, "connection_error", error=exc)
+            raise ProviderUnavailable(
+                "provider connection failure", category="connection_error"
+            ) from exc
+        if response.status_code == 429 or response.status_code >= 500:
+            _log_provider_failure(
+                self.provider_name,
+                "rate_limited" if response.status_code == 429 else "server_error",
+                status_code=response.status_code,
+            )
+            raise ProviderUnavailable(
+                f"provider temporary failure: {response.status_code}",
+                status_code=response.status_code,
+                category="rate_limited" if response.status_code == 429 else "server_error",
+            )
+        if response.status_code >= 400:
+            _log_provider_failure(
+                self.provider_name,
+                "authentication_rejected"
+                if response.status_code in {401, 403}
+                else "request_rejected",
+                status_code=response.status_code,
+            )
+            raise PolicyViolation(
+                f"{self.provider_name} provider rejected the request",
+                status_code=response.status_code,
+            )
+        data = response.json()
+        choice = (data.get("choices") or [{}])[0]
+        message = choice.get("message") or {}
+        calls = tuple(
+            FunctionCall(
+                str(call.get("id") or f"call-{index}"),
+                str((call.get("function") or {}).get("name") or ""),
+                str((call.get("function") or {}).get("arguments") or "{}"),
+            )
+            for index, call in enumerate(message.get("tool_calls") or [])
+        )
+        content = message.get("content")
+        if isinstance(content, list):
+            content = "".join(
+                str(part.get("text", "")) for part in content if isinstance(part, dict)
+            )
+        usage = data.get("usage") or {}
+        return ToolTurn(
+            text=str(content or ""),
+            tool_calls=calls,
+            input_tokens=int(usage.get("prompt_tokens", 0) or 0),
+            output_tokens=int(usage.get("completion_tokens", 0) or 0),
+            reported_model=str(data.get("model") or "") or None,
+        )
+
+    async def complete_stream(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        model: str,
+        timeout_seconds: float,
+    ) -> ToolTurn:
+        """Consume provider SSE and assemble a complete, validated-turn candidate.
+
+        Model text and partial tool arguments remain server-side until the full response
+        is parsed; the API streams only safe tool status and verified final content.
+        """
+        payload = {
+            "model": model,
+            "temperature": 0,
+            "messages": messages,
+            "tools": tools,
+            "tool_choice": "auto",
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+        content: list[str] = []
+        calls: dict[int, dict[str, str]] = {}
+        input_tokens = output_tokens = 0
+        reported_model = None
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                async with client.stream(
+                    "POST",
+                    self.endpoint,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                        "Accept": "text/event-stream",
+                    },
+                    json=payload,
+                ) as response:
+                    if response.status_code == 429 or response.status_code >= 500:
+                        _log_provider_failure(
+                            self.provider_name,
+                            "rate_limited" if response.status_code == 429 else "server_error",
+                            status_code=response.status_code,
+                        )
+                        raise ProviderUnavailable(
+                            f"provider temporary failure: {response.status_code}",
+                            status_code=response.status_code,
+                            category="rate_limited"
+                            if response.status_code == 429
+                            else "server_error",
+                        )
+                    if response.status_code >= 400:
+                        if response.status_code in {400, 404, 405, 406, 415, 422}:
+                            _log_provider_failure(
+                                self.provider_name,
+                                "streaming_unsupported",
+                                status_code=response.status_code,
+                            )
+                            raise StreamingUnsupported("provider does not accept streaming mode")
+                        _log_provider_failure(
+                            self.provider_name,
+                            "authentication_rejected"
+                            if response.status_code in {401, 403}
+                            else "request_rejected",
+                            status_code=response.status_code,
+                        )
+                        raise PolicyViolation(
+                            f"{self.provider_name} provider rejected the streaming request",
+                            status_code=response.status_code,
+                        )
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        raw = line[5:].strip()
+                        if not raw or raw == "[DONE]":
+                            continue
+                        try:
+                            chunk = json.loads(raw)
+                        except json.JSONDecodeError as exc:
+                            raise ProviderUnavailable(
+                                "malformed provider stream", category="malformed_stream"
+                            ) from exc
+                        usage = chunk.get("usage") or {}
+                        reported_model = str(chunk.get("model") or reported_model or "") or None
+                        input_tokens = int(usage.get("prompt_tokens", input_tokens) or 0)
+                        output_tokens = int(usage.get("completion_tokens", output_tokens) or 0)
+                        for choice in chunk.get("choices") or []:
+                            delta = choice.get("delta") or {}
+                            text = delta.get("content")
+                            if isinstance(text, str):
+                                content.append(text)
+                            for tool in delta.get("tool_calls") or []:
+                                index = int(tool.get("index", 0))
+                                target = calls.setdefault(
+                                    index, {"id": "", "name": "", "arguments": ""}
+                                )
+                                target["id"] += str(tool.get("id") or "")
+                                function = tool.get("function") or {}
+                                target["name"] += str(function.get("name") or "")
+                                target["arguments"] += str(function.get("arguments") or "")
+        except httpx.TimeoutException as exc:
+            _log_provider_failure(self.provider_name, "timeout", error=exc)
+            raise ProviderUnavailable("provider timeout", category="timeout") from exc
+        except httpx.HTTPError as exc:
+            _log_provider_failure(self.provider_name, "connection_error", error=exc)
+            raise ProviderUnavailable(
+                "provider connection failure", category="connection_error"
+            ) from exc
+        if not content and not calls:
+            _log_provider_failure(self.provider_name, "empty_stream")
+            raise ProviderUnavailable("provider returned an empty stream", category="empty_stream")
+        function_calls = tuple(
+            FunctionCall(value["id"] or f"call-{index}", value["name"], value["arguments"] or "{}")
+            for index, value in sorted(calls.items())
+        )
+        return ToolTurn(
+            "".join(content), function_calls, input_tokens, output_tokens, reported_model
         )
 
 
@@ -170,7 +450,9 @@ class GeminiProvider:
         }
         try:
             async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-                response = await client.post(url, params={"key": self.api_key}, json=payload)
+                response = await client.post(
+                    url, headers={"x-goog-api-key": self.api_key}, json=payload
+                )
         except httpx.TimeoutException as exc:
             raise ProviderUnavailable("provider timeout") from exc
         except httpx.HTTPError as exc:
@@ -178,7 +460,10 @@ class GeminiProvider:
         if response.status_code == 429 or response.status_code >= 500:
             raise ProviderUnavailable(f"provider temporary failure: {response.status_code}")
         if response.status_code >= 400:
-            raise PolicyViolation("gemini provider rejected the request")
+            raise PolicyViolation(
+                "gemini provider rejected the request",
+                status_code=response.status_code,
+            )
         data = response.json()
         raw_answer = str(
             data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
@@ -192,6 +477,108 @@ class GeminiProvider:
             answerable and bool(valid_ids),
             len(raw_answer.split()),
             valid_ids,
+        )
+
+    async def complete(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        model: str,
+        timeout_seconds: float,
+    ) -> ToolTurn:
+        system_text = "\n".join(
+            str(message.get("content", ""))
+            for message in messages
+            if message.get("role") == "system"
+        )
+        contents = []
+        for message in messages:
+            role = message.get("role")
+            if role == "system":
+                continue
+            if role == "tool":
+                try:
+                    response_value = json.loads(str(message.get("content", "{}")))
+                except json.JSONDecodeError:
+                    response_value = {"error": "Tool result unavailable"}
+                contents.append(
+                    {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "functionResponse": {
+                                    "name": str(message.get("name", "")),
+                                    "response": {"result": response_value},
+                                }
+                            }
+                        ],
+                    }
+                )
+                continue
+            role_name = "model" if role == "assistant" else "user"
+            parts: list[dict] = [{"text": str(message.get("content", ""))}]
+            for call in message.get("tool_calls", []):
+                function = call.get("function", {})
+                try:
+                    arguments = json.loads(function.get("arguments", "{}"))
+                except (json.JSONDecodeError, TypeError):
+                    arguments = {}
+                parts.append(
+                    {
+                        "functionCall": {
+                            "name": function.get("name", ""),
+                            "args": arguments,
+                        }
+                    }
+                )
+            contents.append({"role": role_name, "parts": parts})
+        declarations = [
+            {
+                "name": item["function"]["name"],
+                "description": item["function"]["description"],
+                "parameters": item["function"]["parameters"],
+            }
+            for item in tools
+        ]
+        payload: dict = {
+            "contents": contents,
+            "tools": [{"functionDeclarations": declarations}],
+            "generationConfig": {"temperature": 0},
+        }
+        if system_text:
+            payload["systemInstruction"] = {"parts": [{"text": system_text}]}
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                response = await client.post(
+                    url, headers={"x-goog-api-key": self.api_key}, json=payload
+                )
+        except httpx.TimeoutException as exc:
+            raise ProviderUnavailable("provider timeout") from exc
+        except httpx.HTTPError as exc:
+            raise ProviderUnavailable("provider connection failure") from exc
+        if response.status_code == 429 or response.status_code >= 500:
+            raise ProviderUnavailable(f"provider temporary failure: {response.status_code}")
+        if response.status_code >= 400:
+            raise PolicyViolation("gemini provider rejected the request")
+        data = response.json()
+        parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+        calls = tuple(
+            FunctionCall(
+                f"gemini-call-{index}",
+                str(part["functionCall"].get("name", "")),
+                json.dumps(part["functionCall"].get("args") or {}),
+            )
+            for index, part in enumerate(parts)
+            if isinstance(part, dict) and isinstance(part.get("functionCall"), dict)
+        )
+        text = "".join(str(part.get("text", "")) for part in parts if isinstance(part, dict))
+        usage = data.get("usageMetadata") or {}
+        return ToolTurn(
+            text,
+            calls,
+            int(usage.get("promptTokenCount", 0) or 0),
+            int(usage.get("candidatesTokenCount", 0) or 0),
         )
 
 
@@ -210,9 +597,11 @@ class ProviderGateway:
         registry: ProviderPolicyRegistry | None = None,
         providers: dict[str, GenerationProvider] | None = None,
         usage: UsageTracker | None = None,
+        model_router: AdaptiveFreeModelRouter | None = None,
     ) -> None:
         self.registry = registry or ProviderPolicyRegistry.from_settings()
-        self.usage = usage or UsageTracker()
+        self.usage = usage or _PROCESS_USAGE_TRACKER
+        self.model_router = model_router or AdaptiveFreeModelRouter()
         configured: dict[str, GenerationProvider] = {
             "deterministic": DeterministicGenerationProvider()
         }
@@ -228,7 +617,140 @@ class ProviderGateway:
             )
         if settings.gemini_api_key:
             configured["gemini"] = GeminiProvider(settings.gemini_api_key)
+        if settings.openai_api_key:
+            endpoint = settings.openai_base_url.rstrip("/")
+            if not endpoint.endswith("/chat/completions"):
+                endpoint += "/chat/completions"
+            configured["openai_compatible"] = OpenAICompatibleProvider(
+                endpoint, settings.openai_api_key, "openai-compatible"
+            )
         self.providers = providers or configured
+
+    async def select_model(self, task_type: str, *, streaming_required: bool) -> ModelSelection:
+        return await self.model_router.select(task_type, streaming_required=streaming_required)
+
+    async def tool_turn(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        classification: DataClassification,
+        *,
+        streaming: bool = False,
+        model_override: str | None = None,
+        model_selection: ModelSelection | None = None,
+    ) -> tuple[ToolTurn, str, str]:
+        """Select an eligible real provider and make one bounded model turn."""
+        candidates = [
+            policy
+            for policy in self.registry.eligible(classification, self.usage)
+            if policy.provider != "deterministic"
+            and (model_override is None or policy.provider == "openrouter")
+            and policy.provider in self.providers
+            and hasattr(self.providers[policy.provider], "complete")
+        ]
+        if not candidates:
+            raise ProviderUnavailable("no eligible external tool-calling provider")
+        for policy in candidates:
+            model = (
+                model_override
+                if policy.provider == "openrouter" and model_override
+                else next(iter(policy.allowed_models))
+            )
+            if policy.provider == "openrouter":
+                self.registry.validate(
+                    policy.provider,
+                    model,
+                    classification,
+                    discovered_free_model_approved=(
+                        model_selection is not None
+                        and model in model_selection.candidates
+                        and model != "openrouter/free"
+                    ),
+                )
+            for attempt in range(policy.retries + 1):
+                started = time.perf_counter()
+                logger.info(
+                    "LLM_REQUEST_STARTED",
+                    extra={"provider": policy.provider, "model": model, "tool_count": len(tools)},
+                )
+                try:
+                    provider = self.providers[policy.provider]
+                    stream_method = getattr(provider, "complete_stream", None)
+                    if streaming and callable(stream_method):
+                        try:
+                            turn = await stream_method(
+                                messages, tools, model, policy.timeout_seconds
+                            )
+                        except StreamingUnsupported:
+                            turn = await provider.complete(
+                                messages, tools, model, policy.timeout_seconds
+                            )
+                    else:
+                        # Providers without a streaming adapter keep the same SSE API contract;
+                        # the caller receives the validated buffered completion.
+                        turn = await provider.complete(
+                            messages, tools, model, policy.timeout_seconds
+                        )
+                except ProviderUnavailable as exc:
+                    self.usage.record(policy.provider, model, success=False)
+                    if policy.provider == "openrouter":
+                        await self.model_router.state.record(
+                            model,
+                            success=False,
+                            status_code=exc.status_code,
+                        )
+                    if attempt < policy.retries:
+                        continue
+                    break
+                except PolicyViolation as exc:
+                    if policy.provider == "openrouter" and exc.status_code:
+                        await self.model_router.state.record(
+                            model,
+                            success=False,
+                            status_code=exc.status_code,
+                        )
+                    raise
+                if (
+                    policy.provider == "openrouter"
+                    and model == "openrouter/free"
+                    and not turn.reported_model
+                ):
+                    # Never continue a multi-turn agent on an alias that may resolve
+                    # to a different upstream model on its next request.
+                    self.usage.record(policy.provider, model, success=False)
+                    await self.model_router.state.record(model, success=False, status_code=502)
+                    raise ProviderUnavailable(
+                        "OpenRouter free router did not report a concrete model id",
+                        status_code=502,
+                        category="missing_model_id",
+                    )
+                latency_ms = round((time.perf_counter() - started) * 1000, 2)
+                self.usage.record(
+                    policy.provider,
+                    model,
+                    success=True,
+                    tokens=turn.input_tokens + turn.output_tokens,
+                )
+                if policy.provider == "openrouter":
+                    await self.model_router.state.record(
+                        turn.reported_model or model,
+                        success=True,
+                        latency_ms=latency_ms,
+                        status_code=200,
+                    )
+                logger.info(
+                    "LLM_RESPONSE_RECEIVED",
+                    extra={
+                        "provider": policy.provider,
+                        "model": turn.reported_model or model,
+                        "input_tokens": turn.input_tokens,
+                        "output_tokens": turn.output_tokens,
+                        "tool_calls": len(turn.tool_calls),
+                        "latency_ms": latency_ms,
+                    },
+                )
+                return turn, policy.provider, turn.reported_model or model
+        raise ProviderUnavailable("eligible providers are temporarily unavailable")
 
     async def answer(
         self,

@@ -1,0 +1,32 @@
+{
+  "version": "recommendation-scenarios-v1",
+  "cases": [
+    {"id":"developer-ram-weight","category":"laptops","budget":8500000,"prefer_ram":32,"prefer_low_weight":true},
+    {"id":"student-value","category":"laptops","budget":5500000,"prefer_low_price":true,"prefer_battery":true},
+    {"id":"local-inference","category":"laptops","budget":12000000,"prefer_ram":32,"prefer_gpu":true},
+    {"id":"travel-light","category":"laptops","budget":9000000,"prefer_low_weight":true,"prefer_battery":true},
+    {"id":"gaming-performance","category":"laptops","budget":16000000,"prefer_gpu":true,"prefer_cpu":true},
+    {"id":"phone-photography","category":"phones","budget":8000000,"prefer_camera":true},
+    {"id":"phone-battery-value","category":"phones","budget":4500000,"prefer_low_price":true,"prefer_battery":true},
+    {"id":"headphones-commute","category":"headphones","budget":2500000,"prefer_noise_cancellation":true},
+    {"id":"tablet-study","category":"tablets","budget":6000000,"prefer_low_price":true,"prefer_weight":true},
+    {"id":"camera-entry","category":"cameras","budget":8500000,"prefer_camera":true},
+    {"id":"home-appliance-budget","category":"home_appliances","budget":5000000,"prefer_low_price":true},
+    {"id":"accessory-work","category":"accessories","budget":2000000,"prefer_low_price":true},
+    {"id":"fashion-brand","category":"fashion","budget":3000000,"prefer_brand":true},
+    {"id":"sports-durable","category":"sports","budget":4000000,"prefer_durability":true},
+    {"id":"furniture-compact","category":"furniture","budget":10000000,"prefer_dimensions":true},
+    {"id":"laptop-premium-display","category":"laptops","budget":15000000,"prefer_oled":true},
+    {"id":"laptop-development-storage","category":"laptops","budget":9500000,"prefer_cpu":true,"prefer_storage":1024},
+    {"id":"watch-fitness","category":"smartwatches","budget":4000000,"prefer_battery":true},
+    {"id":"television-home","category":"televisions","budget":9000000,"prefer_display":true},
+    {"id":"automotive-accessory","category":"automotive","budget":3500000,"prefer_low_price":true},
+    {"id":"persona-developer","category":"laptops","budget":9000000,"prefer_ram":32,"prefer_cpu":12,"prefer_storage":1024},
+    {"id":"persona-student","category":"laptops","budget":7000000,"prefer_low_price":true,"prefer_battery":true},
+    {"id":"persona-local-ai","category":"laptops","budget":9000000,"prefer_ram":32,"prefer_gpu":4},
+    {"id":"persona-traveler","category":"laptops","budget":9000000,"prefer_low_weight":true,"prefer_battery":true},
+    {"id":"persona-budget","category":"laptops","budget":6000000,"prefer_low_price":true},
+    {"id":"persona-casual-gamer","category":"laptops","budget":9000000,"prefer_gpu":8,"prefer_cpu":10},
+    {"id":"persona-creator","category":"laptops","budget":9000000,"prefer_ram":32,"prefer_cpu":12,"prefer_storage":2048}
+  ]
+}

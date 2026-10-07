@@ -9,6 +9,19 @@ services:
       OBSERVABILITY_METRICS_TOKEN: ${OBSERVABILITY_METRICS_TOKEN:-}
       CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS as a JSON array in the root .env file}
       APP_ENV: ${APP_ENV:-local}
+      AI_PROVIDER: ${AI_PROVIDER:-deterministic}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openrouter/free}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      AI_EXTERNAL_PRIVATE_DATA_ENABLED: ${AI_EXTERNAL_PRIVATE_DATA_ENABLED:-false}
+      AI_EXTERNAL_PUBLIC_KNOWLEDGE_SOURCE_KEYS: ${AI_EXTERNAL_PUBLIC_KNOWLEDGE_SOURCE_KEYS:-}
+      AI_MODEL_PRICING_JSON: ${AI_MODEL_PRICING_JSON:-}
       AUTO_CREATE_TABLES: "false"
     extra_hosts:
       - "host.docker.internal:host-gateway"

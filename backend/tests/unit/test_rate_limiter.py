@@ -1,8 +1,8 @@
 """Tests for Redis-backed rate limiting and in-memory fallback."""
 
 import json
-from concurrent.futures import ThreadPoolExecutor
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
 import pytest

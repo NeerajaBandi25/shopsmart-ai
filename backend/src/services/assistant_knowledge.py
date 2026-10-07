@@ -93,20 +93,27 @@ class KnowledgeRetrievalService:
         self.embedder = embedder or EmbeddingProvider()
 
     async def retrieve(
-        self, question: str, top_k: int = 5, threshold: float = 0.12
+        self,
+        question: str,
+        top_k: int = 5,
+        threshold: float = 0.12,
+        source_keys: set[str] | None = None,
     ) -> list[RetrievedKnowledge]:
-        rows = (
-            await self.db.execute(
-                select(KnowledgeSource.id, KnowledgeChunk)
-                .join(KnowledgeVersion, KnowledgeVersion.id == KnowledgeChunk.version_id)
-                .join(KnowledgeSource, KnowledgeSource.id == KnowledgeVersion.source_id)
-                .where(
-                    KnowledgeSource.is_active.is_(True),
-                    KnowledgeSource.active_version_id == KnowledgeVersion.id,
-                    KnowledgeVersion.status == "ready",
-                )
+        if source_keys is not None and not source_keys:
+            return []
+        statement = (
+            select(KnowledgeSource.id, KnowledgeChunk)
+            .join(KnowledgeVersion, KnowledgeVersion.id == KnowledgeChunk.version_id)
+            .join(KnowledgeSource, KnowledgeSource.id == KnowledgeVersion.source_id)
+            .where(
+                KnowledgeSource.is_active.is_(True),
+                KnowledgeSource.active_version_id == KnowledgeVersion.id,
+                KnowledgeVersion.status == "ready",
             )
-        ).all()
+        )
+        if source_keys is not None:
+            statement = statement.where(KnowledgeSource.source_key.in_(source_keys))
+        rows = (await self.db.execute(statement)).all()
         query_embedding = self.embedder.embed(question)
         ranked = sorted(
             (

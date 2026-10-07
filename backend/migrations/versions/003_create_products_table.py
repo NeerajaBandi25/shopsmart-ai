@@ -21,8 +21,12 @@ def upgrade() -> None:
     op.create_table(
         "products",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("description", sa.String(length=1000), nullable=True),
         sa.Column("sku", sa.String(length=100), nullable=False),
@@ -31,9 +35,7 @@ def upgrade() -> None:
         sa.Column("max_purchase_quantity", sa.Integer(), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.CheckConstraint("price >= 0", name="ck_products_price_non_negative"),
-        sa.CheckConstraint(
-            "stock_quantity >= 0", name="ck_products_stock_non_negative"
-        ),
+        sa.CheckConstraint("stock_quantity >= 0", name="ck_products_stock_non_negative"),
         sa.CheckConstraint(
             "max_purchase_quantity >= 1",
             name="ck_products_max_purchase_positive",

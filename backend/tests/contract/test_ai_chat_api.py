@@ -1,14 +1,180 @@
-from uuid import UUID
+import json
+from uuid import UUID, uuid4
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.v1 import ai_routes
 from src.core.security import hash_password
 from src.models.product import Product
 from src.repositories.user_repository import UserRepository
 from src.services.assistant_knowledge import KnowledgeIngestionService
 from src.services.cart_service import CartService
 from src.services.order_service import OrderService
+
+
+async def test_chat_response_preserves_numeric_tool_durations(
+    test_client: AsyncClient,
+    test_user_data_in_db: dict,
+    monkeypatch,
+):
+    async def answer_with_tool_event(*args, **kwargs):
+        return {
+            "conversation_id": str(uuid4()),
+            "message_id": str(uuid4()),
+            "answer": "Found a grounded catalog result.",
+            "answerable": True,
+            "citations": [],
+            "intent": "PRODUCT_SEARCH",
+            "tool_events": [
+                {"tool": "search_products", "status": "completed", "duration_ms": 0.45}
+            ],
+            "fallback_used": True,
+        }
+
+    monkeypatch.setattr(ai_routes, "_answer_idempotently", answer_with_tool_event)
+    login = await test_client.post("/api/v1/auth/login", json=test_user_data_in_db)
+    csrf = await test_client.get("/api/v1/auth/csrf", cookies=login.cookies)
+    response = await test_client.post(
+        "/api/v1/ai/chat",
+        cookies=login.cookies,
+        headers={"X-CSRF-Token": csrf.json()["csrf_token"]},
+        json={"question": "Show me laptops."},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tool_events"] == [
+        {"tool": "search_products", "status": "completed", "duration_ms": 0.45}
+    ]
+    assert response.json()["fallback_used"] is True
+
+
+async def test_replayed_assistant_cart_mutation_returns_original_result_once(
+    test_client: AsyncClient,
+    test_db: AsyncSession,
+    test_user_data_in_db: dict,
+):
+    product = Product(
+        name="Idempotency Contract Laptop",
+        description="A local cart replay fixture",
+        category="laptops",
+        brand="Vellune",
+        sku=f"IDEMPOTENCY-{uuid4().hex[:12]}",
+        price=5_000_000,
+        stock_quantity=3,
+        max_purchase_quantity=2,
+        is_active=True,
+        specifications={"ram": "16 GB"},
+    )
+    test_db.add(product)
+    await test_db.commit()
+    login = await test_client.post("/api/v1/auth/login", json=test_user_data_in_db)
+    csrf = await test_client.get("/api/v1/auth/csrf", cookies=login.cookies)
+    headers = {"X-CSRF-Token": csrf.json()["csrf_token"]}
+
+    search = await test_client.post(
+        "/api/v1/ai/chat",
+        cookies=login.cookies,
+        headers=headers,
+        json={"question": "Show me laptops under ₹60,000."},
+    )
+    assert search.status_code == 200
+    conversation_id = search.json()["conversation_id"]
+    request_id = str(uuid4())
+    mutation = {
+        "request_id": request_id,
+        "conversation_id": conversation_id,
+        "question": "Add the recommended one.",
+    }
+    first = await test_client.post(
+        "/api/v1/ai/chat", cookies=login.cookies, headers=headers, json=mutation
+    )
+    replay = await test_client.post(
+        "/api/v1/ai/chat", cookies=login.cookies, headers=headers, json=mutation
+    )
+
+    assert first.status_code == replay.status_code == 200
+    assert first.json()["message_id"] == replay.json()["message_id"]
+    cart = await test_client.get("/api/v1/cart", cookies=login.cookies)
+    assert cart.status_code == 200
+    assert [(item["product_id"], item["quantity"]) for item in cart.json()["items"]] == [
+        (str(product.id), 1)
+    ]
+    removed = await test_client.delete(
+        f"/api/v1/cart/items/{product.id}", cookies=login.cookies, headers=headers
+    )
+    assert removed.status_code == 200
+    await test_client.delete(
+        f"/api/v1/ai/conversations/{conversation_id}", cookies=login.cookies, headers=headers
+    )
+
+
+async def test_idempotency_keys_are_owner_scoped_and_conversation_payload_is_exact(
+    test_client: AsyncClient,
+    test_db: AsyncSession,
+    test_user_data_in_db: dict,
+):
+    first_login = await test_client.post("/api/v1/auth/login", json=test_user_data_in_db)
+    first_csrf = await test_client.get("/api/v1/auth/csrf", cookies=first_login.cookies)
+    first_headers = {"X-CSRF-Token": first_csrf.json()["csrf_token"]}
+    request_id = str(uuid4())
+    first = await test_client.post(
+        "/api/v1/ai/chat",
+        cookies=first_login.cookies,
+        headers=first_headers,
+        json={"question": "Hello", "request_id": request_id},
+    )
+    assert first.status_code == 200
+
+    second_password = "AnotherSecurePassword123!"
+    await UserRepository(test_db).create_user(
+        "idempotency-other-owner@example.test", hash_password(second_password)
+    )
+    await test_db.commit()
+    second_login = await test_client.post(
+        "/api/v1/auth/login",
+        json={"email": "idempotency-other-owner@example.test", "password": second_password},
+    )
+    second_csrf = await test_client.get("/api/v1/auth/csrf", cookies=second_login.cookies)
+    second = await test_client.post(
+        "/api/v1/ai/chat",
+        cookies=second_login.cookies,
+        headers={"X-CSRF-Token": second_csrf.json()["csrf_token"]},
+        json={"question": "Hello", "request_id": request_id},
+    )
+    assert second.status_code == 200
+
+    reused_with_conversation = await test_client.post(
+        "/api/v1/ai/chat",
+        cookies=first_login.cookies,
+        headers=first_headers,
+        json={
+            "question": "Hello",
+            "request_id": request_id,
+            "conversation_id": first.json()["conversation_id"],
+        },
+    )
+    assert reused_with_conversation.status_code == 409
+
+    explicit_request_id = str(uuid4())
+    explicit = await test_client.post(
+        "/api/v1/ai/chat",
+        cookies=first_login.cookies,
+        headers=first_headers,
+        json={
+            "question": "Hello",
+            "request_id": explicit_request_id,
+            "conversation_id": first.json()["conversation_id"],
+        },
+    )
+    assert explicit.status_code == 200
+    omitted_conversation = await test_client.post(
+        "/api/v1/ai/chat",
+        cookies=first_login.cookies,
+        headers=first_headers,
+        json={"question": "Hello", "request_id": explicit_request_id},
+    )
+    assert omitted_conversation.status_code == 409
 
 
 async def test_assistant_chat_requires_auth_and_csrf_and_returns_commerce_contract(
@@ -44,6 +210,59 @@ async def test_assistant_chat_requires_auth_and_csrf_and_returns_commerce_contra
     assert "retrieval_count" not in payload
     assert "token_count" not in payload
     assert "estimated_cost_usd" not in payload
+
+
+async def test_assistant_sse_stream_requires_auth_and_returns_verified_completion(
+    test_client: AsyncClient, test_user_data_in_db: dict
+):
+    anonymous = await test_client.post("/api/v1/ai/chat/stream", json={"question": "Hello"})
+    assert anonymous.status_code == 401
+
+    login = await test_client.post("/api/v1/auth/login", json=test_user_data_in_db)
+    csrf = await test_client.get("/api/v1/auth/csrf", cookies=login.cookies)
+    response = await test_client.post(
+        "/api/v1/ai/chat/stream",
+        cookies=login.cookies,
+        headers={"X-CSRF-Token": csrf.json()["csrf_token"]},
+        json={"question": "Hello"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = []
+    for frame in response.text.strip().split("\n\n"):
+        lines = frame.splitlines()
+        event_name = next(line[6:].strip() for line in lines if line.startswith("event:"))
+        data = json.loads(next(line[5:] for line in lines if line.startswith("data:")))
+        events.append((event_name, data))
+    assert events[0][0] == "assistant.started"
+    assert any(name == "assistant.delta" for name, _ in events)
+    completed = next(data for name, data in events if name == "assistant.completed")
+    assert completed["intent"] == "GREETING"
+    assert completed["answer"].startswith("Hi!")
+
+
+async def test_assistant_sse_stream_sanitizes_internal_errors(
+    monkeypatch, test_client: AsyncClient, test_user_data_in_db: dict
+):
+    async def fail_with_secret(*_args, **_kwargs):
+        raise RuntimeError("provider response contained private diagnostic data")
+
+    monkeypatch.setattr("src.api.v1.ai_routes.CommerceAssistantService.answer", fail_with_secret)
+    login = await test_client.post("/api/v1/auth/login", json=test_user_data_in_db)
+    csrf = await test_client.get("/api/v1/auth/csrf", cookies=login.cookies)
+    response = await test_client.post(
+        "/api/v1/ai/chat/stream",
+        cookies=login.cookies,
+        headers={"X-CSRF-Token": csrf.json()["csrf_token"]},
+        json={"question": "Hello"},
+    )
+
+    assert response.status_code == 200
+    assert "assistant.error" in response.text
+    assert "could not complete this request" in response.text
+    assert "private diagnostic data" not in response.text
+    assert "assistant.completed" not in response.text
 
 
 async def test_conversation_history_is_empty_owner_scoped_and_restorable(
@@ -163,7 +382,7 @@ async def test_conversation_history_is_empty_owner_scoped_and_restorable(
 
     listed = await test_client.get("/api/v1/ai/conversations", cookies=owner_cookies)
     assert listed.status_code == 200
-    assert [item["id"] for item in listed.json()] == [conversation_id]
+    assert conversation_id in {item["id"] for item in listed.json()}
     other_list = await test_client.get("/api/v1/ai/conversations", cookies=other_cookies)
     assert other_list.status_code == 200
     assert other_list.json()

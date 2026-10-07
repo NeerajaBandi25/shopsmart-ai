@@ -56,6 +56,27 @@ class ConversationRepository:
         )
         return list(reversed(result.scalars().all()))
 
+    async def request_replay(
+        self, owner_id: UUID, client_request_id: UUID
+    ) -> tuple[ChatMessage, ChatMessage | None] | None:
+        user_message = await self.db.scalar(
+            select(ChatMessage).where(
+                ChatMessage.client_request_owner_id == owner_id,
+                ChatMessage.client_request_id == client_request_id,
+                ChatMessage.role == "user",
+            )
+        )
+        if user_message is None:
+            return None
+        response = await self.db.scalar(
+            select(ChatMessage).where(
+                ChatMessage.conversation_id == user_message.conversation_id,
+                ChatMessage.sequence == user_message.sequence + 1,
+                ChatMessage.role == "assistant",
+            )
+        )
+        return user_message, response
+
     async def add_message(
         self,
         conversation_id: UUID,
@@ -65,6 +86,8 @@ class ConversationRepository:
         citations: list[dict] | None = None,
         result_data: dict | None = None,
         token_count: int = 0,
+        client_request_id: UUID | None = None,
+        client_request_conversation_id: UUID | None = None,
     ) -> ChatMessage:
         conversation = await self.db.scalar(
             select(Conversation)
@@ -86,6 +109,11 @@ class ConversationRepository:
             citations=citations,
             result_data=result_data,
             token_count=token_count,
+            client_request_id=client_request_id,
+            client_request_owner_id=owner_id if client_request_id is not None else None,
+            client_request_conversation_id=(
+                client_request_conversation_id if client_request_id is not None else None
+            ),
         )
         self.db.add(message)
         await self.db.flush()

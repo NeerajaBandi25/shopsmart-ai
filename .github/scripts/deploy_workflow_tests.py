@@ -31,9 +31,21 @@ class WorkflowContractTests(unittest.TestCase):
         for check_name in REQUIRED_CHECKS:
             with self.subTest(check_name=check_name):
                 self.assertEqual(
-                    len(re.findall(rf"^\s+name: {re.escape(check_name)}$", self.ci_workflow, re.M)),
+                    len(
+                        re.findall(
+                            rf"^\s+name: {re.escape(check_name)}$",
+                            self.ci_workflow,
+                            re.M,
+                        )
+                    ),
                     1,
                 )
+
+    def test_backend_ci_executes_real_redis_runtime_checks(self) -> None:
+        self.assertRegex(self.ci_workflow, r"(?m)^\s+redis:\n\s+image: redis:7-alpine$")
+        self.assertIn('AI_RUNTIME_LIVE_TEST: "1"', self.ci_workflow)
+        self.assertIn("tests/integration/test_ai_runtime_live.py", self.ci_workflow)
+        self.assertIn("-k real_redis", self.ci_workflow)
 
     def test_production_workflow_is_manual_only_and_serialized(self) -> None:
         self.assertRegex(
@@ -51,22 +63,30 @@ class WorkflowContractTests(unittest.TestCase):
             r"(?ms)^  release-approval:\n.*?^      name: release-approval\n",
         )
         self.assertIn("needs: [preflight, release-approval]", self.deploy_workflow)
-        self.assertIn("needs: [preflight, release-approval, backend-deploy]", self.deploy_workflow)
+        self.assertIn(
+            "needs: [preflight, release-approval, backend-deploy]", self.deploy_workflow
+        )
         self.assertIn(
             "needs: [preflight, release-approval, backend-deploy, frontend-deploy]",
             self.deploy_workflow,
         )
         self.assertIn("if: github.ref == 'refs/heads/main'", self.deploy_workflow)
 
-    def test_production_credentials_are_isolated_and_not_long_lived_aws_keys(self) -> None:
+    def test_production_credentials_are_isolated_and_not_long_lived_aws_keys(
+        self,
+    ) -> None:
         self.assertNotIn("AWS_ACCESS_KEY_ID", self.deploy_workflow)
         self.assertNotIn("AWS_SECRET_ACCESS_KEY", self.deploy_workflow)
         self.assertNotIn("DATABASE_URL:", self.deploy_workflow)
         self.assertNotIn("SECRET_KEY:", self.deploy_workflow)
         self.assertIn("role-to-assume: ${{ vars.AWS_ROLE_ARN }}", self.deploy_workflow)
         self.assertIn("VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}", self.deploy_workflow)
-        self.assertIn("VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}", self.deploy_workflow)
-        self.assertIn("VERCEL_PRODUCTION_URL must be an HTTPS origin.", self.deploy_workflow)
+        self.assertIn(
+            "VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}", self.deploy_workflow
+        )
+        self.assertIn(
+            "VERCEL_PRODUCTION_URL must be an HTTPS origin.", self.deploy_workflow
+        )
 
     def test_frontend_failure_and_cancellation_trigger_backend_rollback(self) -> None:
         self.assertIn("vercel rollback --non-interactive", self.deploy_workflow)
@@ -74,7 +94,9 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("needs.frontend-deploy.result != 'success'", self.deploy_workflow)
         self.assertIn("steps.rollback.outputs.rollback_succeeded", self.deploy_workflow)
         self.assertIn("needs.backend-deploy.result != 'success'", self.deploy_workflow)
-        self.assertIn("python3 .github/scripts/deploy_ecs.py rollback", self.deploy_workflow)
+        self.assertIn(
+            "python3 .github/scripts/deploy_ecs.py rollback", self.deploy_workflow
+        )
 
     def test_vercel_health_checks_require_exact_http_200(self) -> None:
         self.assertGreaterEqual(self.deploy_workflow.count('!= "200"'), 3)

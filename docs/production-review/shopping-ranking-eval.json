@@ -1,0 +1,25 @@
+{
+  "case_count": 20,
+  "categories_with_candidates": 13,
+  "category_coverage": {
+    "accessories": 1,
+    "automotive": 1,
+    "cameras": 1,
+    "fashion": 1,
+    "furniture": 1,
+    "headphones": 1,
+    "home_appliances": 1,
+    "laptops": 7,
+    "phones": 2,
+    "smartwatches": 1,
+    "sports": 1,
+    "tablets": 1,
+    "televisions": 1
+  },
+  "dataset": "recommendation-scenarios-v1",
+  "expected_top_six_slots": 90,
+  "hard_constraint_satisfaction": 1.0,
+  "passed": true,
+  "price_evidence_accuracy": 1.0,
+  "ranking_stability_accuracy": 1.0
+}

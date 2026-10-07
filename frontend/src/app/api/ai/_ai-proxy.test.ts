@@ -69,4 +69,26 @@ describe('AI backend proxy', () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error_code: 'invalid_input' });
   });
+
+  it('passes through an SSE response body without buffering it into JSON', async () => {
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('event: assistant.started\ndata: {}\n\n'));
+        controller.close();
+      },
+    });
+    fetchMock.mockResolvedValueOnce(
+      new Response(body, { headers: { 'Content-Type': 'text/event-stream' } })
+    );
+
+    const response = await proxyAiRequest(
+      new Request('http://localhost/api/ai/chat/stream', { method: 'POST' }),
+      '/ai/chat/stream',
+      { method: 'POST', streamResponse: true }
+    );
+
+    expect(response.headers.get('Content-Type')).toBe('text/event-stream');
+    expect(await response.text()).toContain('assistant.started');
+    expect(fetchMock.mock.calls[0][1].headers.get('Accept')).toBe('text/event-stream');
+  });
 });

@@ -1,13 +1,24 @@
-"""Best-effort Redis cache for public product catalog pages."""
+"""Best-effort Redis cache for public catalog page ordering (product IDs only)."""
 
 import json
 from dataclasses import dataclass
 
+from pydantic import BaseModel, ConfigDict
 from redis.exceptions import RedisError
 
 from src.core.config import settings
 from src.core.redis_client import get_redis_client
-from src.schemas.product import ProductPageResponse
+
+
+class CachedCatalogPage(BaseModel):
+    """A cache stores only ordering IDs; all displayed product facts come from PostgreSQL."""
+
+    model_config = ConfigDict(extra="forbid")
+    product_ids: list[str]
+    skip: int
+    limit: int
+    total_hint: int
+
 
 CACHE_PREFIX = "shopsmart:product-catalog:v2"
 GENERATION_KEY = f"{CACHE_PREFIX}:generation"
@@ -17,7 +28,7 @@ GENERATION_KEY = f"{CACHE_PREFIX}:generation"
 class CatalogCacheLookup:
     """A cache result and generation token safe to use for a later fill."""
 
-    page: ProductPageResponse | None
+    page: CachedCatalogPage | None
     generation: str | None
 
 
@@ -27,7 +38,7 @@ def product_catalog_cache_key(skip: int, limit: int, generation: str = "0") -> s
 
 
 class ProductCatalogCache:
-    """Cache validated catalog pages without making Redis availability mandatory."""
+    """Cache page ordering without caching prices, stock, or other product facts."""
 
     async def get_page(self, skip: int, limit: int) -> CatalogCacheLookup:
         if not settings.redis_url:
@@ -52,7 +63,7 @@ class ProductCatalogCache:
             return CatalogCacheLookup(page=None, generation=generation)
 
         try:
-            page = ProductPageResponse.model_validate_json(payload)
+            page = CachedCatalogPage.model_validate_json(payload)
         except (ValueError, TypeError):
             return CatalogCacheLookup(page=None, generation=generation)
         return CatalogCacheLookup(page=page, generation=generation)
@@ -62,7 +73,8 @@ class ProductCatalogCache:
         skip: int,
         limit: int,
         generation: str | None,
-        page: ProductPageResponse,
+        product_ids: list[str],
+        total_hint: int,
     ) -> None:
         if generation is None or not settings.redis_url:
             return
@@ -72,7 +84,12 @@ class ProductCatalogCache:
             if client is None:
                 return
             payload = json.dumps(
-                page.model_dump(mode="json"),
+                CachedCatalogPage(
+                    product_ids=product_ids,
+                    skip=skip,
+                    limit=limit,
+                    total_hint=total_hint,
+                ).model_dump(mode="json"),
                 sort_keys=True,
                 separators=(",", ":"),
                 ensure_ascii=False,

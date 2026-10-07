@@ -1,11 +1,18 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCommerceStore } from '@/lib/commerce-store';
 import AuthenticatedLayout from '@/app/authenticated-layout';
 import { formatInr } from '@/lib/currency';
+import ShopperPreferences from '@/components/assistant/ShopperPreferences';
+import {
+  MissionSummary,
+  ShoppingMission,
+  Recommendation,
+  Relaxation,
+} from '@/components/assistant/DecisionEvidence';
 import CommerceResults, {
   ProductResult,
   PromotionResult,
@@ -17,6 +24,14 @@ type Citation = {
   page_number: number | null;
   chunk_index: number;
 };
+type AIUsage = {
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number | null;
+};
 type ChatResult = {
   conversation_id: string;
   message_id: string;
@@ -25,7 +40,15 @@ type ChatResult = {
   reason: string | null;
   intent: string;
   citations: Citation[];
+  tool_events?: { tool: string; status: string }[];
+  usage?: AIUsage | null;
+  degraded_mode?: boolean;
   result_data: {
+    mission?: ShoppingMission;
+    recommendations?: Recommendation[];
+    relaxations?: Relaxation[];
+    ranking?: { recommendations: Recommendation[]; relaxations: Relaxation[] };
+    usage?: AIUsage;
     comparison?: boolean;
     navigation?: string;
     buying_brief?: { product_id: string; name: string; reasons: string[] }[];
@@ -56,6 +79,11 @@ type StoredMessage = {
   result_data: ChatResult['result_data'];
 };
 
+type AssistantStreamEvent = {
+  type: string;
+  data: Record<string, unknown>;
+};
+
 const suggestions = [
   'Show me the best laptops under ₹60,000',
   'Find in-stock products under ₹5,000',
@@ -66,6 +94,22 @@ const suggestions = [
 
 function money(cents: number) {
   return formatInr(cents);
+}
+
+function createRequestId(): string {
+  const cryptoApi = globalThis.crypto;
+  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID();
+  if (typeof cryptoApi?.getRandomValues !== 'function') {
+    throw new Error('A secure random source is required to send assistant requests.');
+  }
+
+  const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'));
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex
+    .slice(6, 8)
+    .join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`;
 }
 
 async function fetchConversations(): Promise<Conversation[]> {
@@ -86,13 +130,54 @@ function apiErrorMessage(response: Response, fallback: string): string {
   return fallback;
 }
 
+async function consumeAssistantStream(
+  response: Response,
+  onEvent: (event: AssistantStreamEvent) => void
+): Promise<void> {
+  if (!response.body) throw new Error('The assistant stream was interrupted. Please try again.');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const dispatch = (frame: string) => {
+    let type = 'message';
+    const dataLines: string[] = [];
+    for (const line of frame.split('\n')) {
+      if (line.startsWith('event:')) type = line.slice(6).trim();
+      if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+    }
+    if (!dataLines.length) return;
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(dataLines.join('\n')) as Record<string, unknown>;
+    } catch {
+      throw new Error('The assistant returned an invalid streaming response.');
+    }
+    onEvent({ type, data });
+  };
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, '\n');
+    let boundary = buffer.indexOf('\n\n');
+    while (boundary >= 0) {
+      dispatch(buffer.slice(0, boundary));
+      buffer = buffer.slice(boundary + 2);
+      boundary = buffer.indexOf('\n\n');
+    }
+    if (done) break;
+  }
+  if (buffer.trim()) dispatch(buffer);
+}
+
 export default function AssistantPage() {
   const router = useRouter();
+  const requestController = useRef<AbortController | null>(null);
   const [question, setQuestion] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
+  const [streamingAnswer, setStreamingAnswer] = useState('');
+  const [streamActivity, setStreamActivity] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [addingProductId, setAddingProductId] = useState<string | null>(null);
   const [cartAction, setCartAction] = useState<{
@@ -113,27 +198,66 @@ export default function AssistantPage() {
       .catch(() => setError('Could not load recent conversations.'));
   }, []);
 
+  useEffect(() => () => requestController.current?.abort(), []);
+
   async function ask(text: string) {
     const submitted = text.trim();
     if (!submitted || busy) return;
     setQuestion('');
     setBusy(true);
+    setStreamingAnswer('');
+    setStreamActivity(null);
     setError(null);
     setCartAction(null);
     setMessages((items) => [...items, { role: 'user', content: submitted }]);
+    const controller = new AbortController();
+    requestController.current = controller;
     try {
-      const csrfResponse = await fetch('/api/auth/csrf', { credentials: 'include' });
+      const csrfResponse = await fetch('/api/auth/csrf', {
+        credentials: 'include',
+        signal: controller.signal,
+      });
       if (!csrfResponse.ok) throw new Error('Please sign in to continue.');
       const { csrf_token: csrfToken } = await csrfResponse.json();
-      const response = await fetch('/api/ai/chat', {
+      const response = await fetch('/api/ai/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
         credentials: 'include',
-        body: JSON.stringify({ question: submitted, conversation_id: conversationId }),
+        signal: controller.signal,
+        body: JSON.stringify({
+          request_id: createRequestId(),
+          question: submitted,
+          conversation_id: conversationId,
+        }),
       });
       if (!response.ok)
         throw new Error(apiErrorMessage(response, 'The assistant is temporarily unavailable.'));
-      const result: ChatResult = await response.json();
+      const completion: { result: ChatResult | null } = { result: null };
+      if (response.headers?.get?.('content-type')?.includes('text/event-stream')) {
+        await consumeAssistantStream(response, (event) => {
+          if (event.type === 'tool.started') {
+            setStreamActivity(`Checking ${String(event.data.tool ?? 'ShopSmart information')}…`);
+          } else if (event.type === 'tool.completed') {
+            setStreamActivity('Verifying the results…');
+          } else if (event.type === 'assistant.delta') {
+            setStreamActivity(null);
+            setStreamingAnswer((text) => text + String(event.data.text ?? ''));
+          } else if (event.type === 'assistant.completed') {
+            completion.result = event.data as unknown as ChatResult;
+          } else if (event.type === 'assistant.error') {
+            throw new Error(
+              String(event.data.message ?? 'The assistant is temporarily unavailable.')
+            );
+          }
+        });
+      } else {
+        // Keep compatibility with a non-streaming upstream/provider response.
+        completion.result = (await response.json()) as ChatResult;
+      }
+      const result = completion.result;
+      if (controller.signal.aborted) return;
+      if (!result)
+        throw new Error('The assistant stream ended before its verified result arrived.');
       if (result.result_data?.cart)
         useCommerceStore.getState().syncCartCount(result.result_data.cart);
       setConversationId(result.conversation_id);
@@ -145,11 +269,15 @@ export default function AssistantPage() {
         .then(setConversations)
         .catch(() => setError('Could not refresh recent conversations.'));
     } catch (reason) {
+      if (controller.signal.aborted) return;
       setError(
         reason instanceof Error ? reason.message : 'The assistant is temporarily unavailable.'
       );
     } finally {
+      requestController.current = null;
       setBusy(false);
+      setStreamingAnswer('');
+      setStreamActivity(null);
     }
   }
 
@@ -237,6 +365,9 @@ export default function AssistantPage() {
                 intent: 'HISTORY',
                 citations: message.citations,
                 result_data: message.result_data,
+                tool_events: [],
+                usage: message.result_data.usage ?? null,
+                degraded_mode: false,
               }
             : undefined,
         }))
@@ -261,11 +392,14 @@ export default function AssistantPage() {
           <button
             type="button"
             onClick={newConversation}
+            disabled={busy}
             className="rounded border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-white"
           >
             New chat
           </button>
         </header>
+
+        <ShopperPreferences />
 
         {conversations.length > 0 && (
           <nav
@@ -314,6 +448,9 @@ export default function AssistantPage() {
           ) : (
             messages.map((message, index) => (
               <article key={`${index}-${message.role}`} className="space-y-4">
+                {message.result?.result_data && (
+                  <h2 className="sr-only">Assistant response {index + 1} details</h2>
+                )}
                 <div
                   className={message.role === 'user' ? 'ml-auto max-w-3xl text-right' : 'max-w-4xl'}
                 >
@@ -331,22 +468,60 @@ export default function AssistantPage() {
                   </p>
                 </div>
                 {message.result?.result_data && (
-                  <CommerceResults
-                    resultId={message.result.message_id}
-                    products={message.result.result_data.products}
-                    promotions={message.result.result_data.promotions}
-                    addingProductId={addingProductId}
-                    cartAction={cartAction}
-                    onAddToCart={(productId, resultId) => void addToCart(productId, resultId)}
-                    comparison={
-                      message.result.result_data.comparison ||
-                      message.result.intent === 'PRODUCT_COMPARE'
-                    }
-                    onCompare={() => void ask('Compare the first two')}
-                  />
+                  <>
+                    {message.result.result_data.mission && (
+                      <MissionSummary mission={message.result.result_data.mission} />
+                    )}
+                    {!!(
+                      message.result.result_data.ranking?.relaxations ??
+                      message.result.result_data.relaxations
+                    )?.length && (
+                      <section
+                        aria-label="Constraint changes"
+                        className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+                      >
+                        <h3 className="font-semibold">No exact match — your choice</h3>
+                        <p className="mt-2">
+                          Your requirements are still enforced. Tell me which requirement you want
+                          to change before seeing alternatives.
+                        </p>
+                        <ul className="mt-2 space-y-2">
+                          {(
+                            message.result.result_data.ranking?.relaxations ??
+                            message.result.result_data.relaxations ??
+                            []
+                          ).map((item) => (
+                            <li key={item.product_id}>
+                              {item.message} ({item.violated_constraints.join(', ')})
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
+                    <CommerceResults
+                      recommendations={
+                        message.result.result_data.ranking?.recommendations ??
+                        message.result.result_data.recommendations
+                      }
+                      resultId={message.result.message_id}
+                      products={message.result.result_data.products}
+                      promotions={message.result.result_data.promotions}
+                      addingProductId={addingProductId}
+                      cartAction={cartAction}
+                      onAddToCart={(productId, resultId) => void addToCart(productId, resultId)}
+                      comparison={
+                        message.result.result_data.comparison ||
+                        message.result.intent === 'PRODUCT_COMPARE'
+                      }
+                      onCompare={() => void ask('Compare the first two')}
+                    />
+                  </>
                 )}
                 {message.result?.result_data?.buying_brief && (
-                  <section aria-label="AI buying brief" className="grid gap-3 sm:grid-cols-2">
+                  <section
+                    aria-label={`AI buying brief ${message.result.message_id}`}
+                    className="grid gap-3 sm:grid-cols-2"
+                  >
                     {message.result.result_data.buying_brief.map((brief) => (
                       <div
                         key={brief.product_id}
@@ -430,10 +605,30 @@ export default function AssistantPage() {
                     I couldn’t verify an answer from the available ShopSmart information.
                   </p>
                 )}
+                {message.result?.degraded_mode && (
+                  <p role="status" className="max-w-3xl text-xs text-amber-800">
+                    ShopSmart used its verified local response path for this reply.
+                  </p>
+                )}
               </article>
             ))
           )}
-          {busy && (
+          {busy && (streamActivity || streamingAnswer) && (
+            <article className="max-w-4xl space-y-2" aria-live="polite">
+              <p className="text-xs font-semibold uppercase tracking-caps text-ink-500">
+                ShopSmart assistant
+              </p>
+              {streamActivity && (
+                <p role="status" className="text-sm text-ink-600">
+                  {streamActivity}
+                </p>
+              )}
+              {streamingAnswer && (
+                <p className="whitespace-pre-wrap text-ink-900">{streamingAnswer}</p>
+              )}
+            </article>
+          )}
+          {busy && !streamActivity && !streamingAnswer && (
             <p role="status" className="text-sm text-ink-600">
               Checking the catalog, cart, and ShopSmart information…
             </p>
@@ -454,6 +649,7 @@ export default function AssistantPage() {
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               aria-label="Message the shopping assistant"
+              maxLength={1000}
               placeholder="Ask about products, your cart, orders, or ShopSmart policies"
               className="min-w-0 min-h-11 flex-1 rounded border border-ink-200 bg-white px-3 py-2 text-ink-900 outline-none focus:border-accent-600 sm:px-4"
             />
@@ -464,6 +660,18 @@ export default function AssistantPage() {
             >
               Send
             </button>
+            {busy && requestController.current && (
+              <button
+                type="button"
+                onClick={() => {
+                  requestController.current?.abort();
+                  setError('Response stopped. Send a new message to continue.');
+                }}
+                className="min-h-11 rounded border border-ink-300 bg-white px-3 text-sm font-semibold text-ink-700"
+              >
+                Stop
+              </button>
+            )}
           </div>
         </form>
       </div>

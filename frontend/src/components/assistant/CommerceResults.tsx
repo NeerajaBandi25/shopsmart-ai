@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useId, useState } from 'react';
 import { formatInr } from '@/lib/currency';
+import { RecommendationEvidence, Recommendation } from './DecisionEvidence';
 
 export type ProductResult = {
   id: string;
@@ -35,6 +36,7 @@ export type PromotionResult = {
 };
 
 type CommerceResultsProps = {
+  recommendations?: Recommendation[];
   resultId: string;
   products?: ProductResult[];
   promotions?: PromotionResult[];
@@ -45,7 +47,13 @@ type CommerceResultsProps = {
   onCompare?: () => void;
 };
 
-function ProductComparison({ products }: { products: ProductResult[] }) {
+function ProductComparison({
+  products,
+  resultId,
+}: {
+  products: ProductResult[];
+  resultId: string;
+}) {
   if (products.length < 2) return null;
   const specificationKeys = Array.from(
     new Set(
@@ -60,7 +68,7 @@ function ProductComparison({ products }: { products: ProductResult[] }) {
       <h3 className="mb-2 text-sm font-semibold text-ink-900">Compare these results</h3>
       <div
         role="region"
-        aria-label="Scrollable product comparison"
+        aria-label={`Scrollable product comparison ${resultId}`}
         tabIndex={0}
         className="overflow-x-auto rounded border border-ink-200 bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600"
       >
@@ -119,6 +127,7 @@ function ProductComparison({ products }: { products: ProductResult[] }) {
 }
 
 function ProductResults({
+  recommendations,
   resultId,
   products,
   addingProductId,
@@ -129,6 +138,7 @@ function ProductResults({
 }: Pick<
   CommerceResultsProps,
   | 'resultId'
+  | 'recommendations'
   | 'products'
   | 'addingProductId'
   | 'cartAction'
@@ -152,7 +162,7 @@ function ProductResults({
   const visibleProducts = expanded ? products : products.slice(0, 4);
 
   return (
-    <section aria-label="Product results">
+    <div role="group" aria-label="Product results">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-600" aria-live="polite">
           {products.length > 4
@@ -241,6 +251,11 @@ function ProductResults({
                 </dd>
               </div>
             </dl>
+            {recommendations?.find((item) => item.product_id === product.id) && (
+              <RecommendationEvidence
+                recommendation={recommendations.find((item) => item.product_id === product.id)!}
+              />
+            )}
             <div className="mt-auto flex flex-wrap gap-2 pt-4">
               <Link
                 href={`/products/${encodeURIComponent(product.id)}`}
@@ -276,8 +291,8 @@ function ProductResults({
           {cartAction.message}
         </p>
       )}
-      {comparison && <ProductComparison products={products} />}
-    </section>
+      {comparison && <ProductComparison products={products} resultId={resultId} />}
+    </div>
   );
 }
 
@@ -332,6 +347,7 @@ function PromotionResults({ promotions }: { promotions: PromotionResult[] }) {
 }
 
 export default function CommerceResults({
+  recommendations,
   resultId,
   products,
   promotions,
@@ -344,6 +360,7 @@ export default function CommerceResults({
   return (
     <div className="space-y-5">
       <ProductResults
+        recommendations={recommendations}
         resultId={resultId}
         products={products}
         addingProductId={addingProductId}

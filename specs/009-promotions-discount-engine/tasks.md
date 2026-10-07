@@ -12,18 +12,18 @@
 
 **Purpose**: Add the minimal persistent entities while preserving current checkout/history and metadata behavior.
 
-- [ ] T001 Add the Promotion SQLAlchemy entity with code, time window, type/value, scope, thresholds/cap, optional eligible user, indexes, and database constraints in `backend/src/models/promotion.py`.
-- [ ] T002 Add the optional normalized coupon code to Cart and order subtotal/discount/snapshot fields to Order in `backend/src/models/cart.py` and `backend/src/models/order.py`.
-- [ ] T003 Register Promotion with Alembic and test metadata in `backend/migrations/env.py` and `backend/tests/conftest.py`.
-- [ ] T004 Add additive migration 013 for promotions, cart coupon state, order snapshot fields/backfill, indexes, and constraints in `backend/migrations/versions/013_promotions_discount_engine.py`.
+- [x] T001 Add the Promotion SQLAlchemy entity with code, time window, type/value, scope, thresholds/cap, optional eligible user, indexes, and database constraints in `backend/src/models/promotion.py`.
+- [x] T002 Add the optional normalized coupon code to Cart and order subtotal/discount/snapshot fields to Order in `backend/src/models/cart.py` and `backend/src/models/order.py`.
+- [x] T003 Register Promotion with Alembic and test metadata in `backend/migrations/env.py` and `backend/tests/conftest.py`.
+- [x] T004 Add additive migration 013 for promotions, cart coupon state, order snapshot fields/backfill, indexes, and constraints in `backend/migrations/versions/013_promotions_discount_engine.py`.
 
 ## Phase 2: Foundational Promotion Evaluation
 
 **Purpose**: Establish tested deterministic eligibility and pricing shared by cart, checkout, and assistant.
 
-- [ ] T005 [P] Add unit tests for date boundaries, UTC-awareness, scope, threshold, shopper restriction, code normalization, reason codes, percentage rounding, fixed caps, zero protection, and no-stacking tie breaks in `backend/tests/unit/test_promotion_service.py`.
-- [ ] T006 Implement promotion lookup and canonical code resolution in `backend/src/repositories/promotion_repository.py`.
-- [ ] T007 Implement deterministic evaluation, quote calculation, active offer listing, and typed results in `backend/src/services/promotion_service.py`.
+- [x] T005 [P] Add unit tests for date boundaries, UTC-awareness, scope, threshold, shopper restriction, code normalization, reason codes, percentage rounding, fixed caps, zero protection, and no-stacking tie breaks in `backend/tests/unit/test_promotion_service.py`.
+- [x] T006 Implement promotion lookup and canonical code resolution in `backend/src/repositories/promotion_repository.py`.
+- [x] T007 Implement deterministic evaluation, quote calculation, active offer listing, and typed results in `backend/src/services/promotion_service.py`.
 
 ## Phase 3: User Story 1 - Accurate Cart Price and Available Offers (Priority: P1)
 
@@ -31,10 +31,10 @@
 
 **Independent Test**: Seed test products/promotions and assert cart amounts and selection exactly match independently computed integer cents across matching/mismatching scopes, thresholds, windows, and two users.
 
-- [ ] T008 [P] [US1] Add cart pricing integration tests for automatic offers, product/category scope, threshold changes, empty cart, and cross-user isolation in `backend/tests/integration/test_cart_api.py`.
-- [ ] T009 [US1] Route cart line totals and reads through PromotionService and preserve the existing cents-valued `subtotal` contract in `backend/src/services/cart_service.py`.
-- [ ] T010 [US1] Extend cart response schemas with coupon evaluation, selected promotion, discount cents, and final total in `backend/src/api/v1/cart_routes.py`.
-- [ ] T011 [US1] Verify cart mutations recalculate using current product and promotion rows and never store a discount amount in `backend/tests/unit/test_cart_service.py`.
+- [x] T008 [P] [US1] Add cart pricing integration tests for automatic offers, product/category scope, threshold changes, empty cart, and cross-user isolation in `backend/tests/integration/test_cart_api.py`.
+- [x] T009 [US1] Route cart line totals and reads through PromotionService and preserve the existing cents-valued `subtotal` contract in `backend/src/services/cart_service.py`.
+- [x] T010 [US1] Extend cart response schemas with coupon evaluation, selected promotion, discount cents, and final total in `backend/src/api/v1/cart_routes.py`.
+- [x] T011 [US1] Verify cart mutations recalculate using current product and promotion rows and never store a discount amount in `backend/tests/unit/test_cart_service.py`.
 
 ## Phase 4: User Story 2 - Apply, Check, and Remove Coupon (Priority: P1)
 
@@ -42,13 +42,13 @@
 
 **Independent Test**: Exercise authenticated, CSRF-protected coupon apply/remove against valid, unknown, expired, future, wrong-user, wrong-scope, and threshold cases; verify invalid attempts do not overwrite existing state.
 
-- [ ] T012 [P] [US2] Add API tests for valid apply/remove, generic invalid-code errors, CSRF/auth rejection, retained prior code, and shopper isolation in `backend/tests/integration/test_promotions_api.py`.
-- [ ] T013 [US2] Implement owner-scoped coupon persistence, normalization, safe failures, remove behavior, and fresh quote responses in `backend/src/services/cart_service.py`.
-- [ ] T014 [US2] Add typed `POST /cart/coupon` and `DELETE /cart/coupon` routes with authenticated user and CSRF dependencies in `backend/src/api/v1/cart_routes.py`.
-- [ ] T015 [P] [US2] Add same-origin coupon proxy routes in `frontend/src/app/api/cart/coupon/route.ts`.
-- [ ] T016 [US2] Extend Cart types and add CSRF-protected apply/remove calls in `frontend/src/lib/cart-api.ts`.
-- [ ] T017 [US2] Add accessible coupon input, eligibility feedback, remove control, applied-offer list, discount, and total to `frontend/src/components/CartPage.tsx`.
-- [ ] T018 [P] [US2] Test coupon states, recalculation feedback, loading/error handling, and owner-safe client behavior in `frontend/src/components/CartPage.test.tsx` and `frontend/src/lib/cart-api.test.ts`.
+- [x] T012 [P] [US2] Add API tests for valid apply/remove, generic invalid-code errors, CSRF/auth rejection, retained prior code, and shopper isolation in `backend/tests/integration/test_promotions_api.py`.
+- [x] T013 [US2] Implement owner-scoped coupon persistence, normalization, safe failures, remove behavior, and fresh quote responses in `backend/src/services/cart_service.py`.
+- [x] T014 [US2] Add typed `POST /cart/coupon` and `DELETE /cart/coupon` routes with authenticated user and CSRF dependencies in `backend/src/api/v1/cart_routes.py`.
+- [x] T015 [P] [US2] Add same-origin coupon proxy routes in `frontend/src/app/api/cart/coupon/route.ts`.
+- [x] T016 [US2] Extend Cart types and add CSRF-protected apply/remove calls in `frontend/src/lib/cart-api.ts`.
+- [x] T017 [US2] Add accessible coupon input, eligibility feedback, remove control, applied-offer list, discount, and total to `frontend/src/components/CartPage.tsx`.
+- [x] T018 [P] [US2] Test coupon states, recalculation feedback, loading/error handling, and owner-safe client behavior in `frontend/src/components/CartPage.test.tsx` and `frontend/src/lib/cart-api.test.ts`.
 
 ## Phase 5: User Story 3 - Fresh Checkout Price and Immutable Order Snapshot (Priority: P1)
 
@@ -56,11 +56,11 @@
 
 **Independent Test**: Change a promotion/cart condition after quoting, check out using an optional coupon code, and prove the resulting order snapshot is recalculated, immutable, and idempotent only for the same items and normalized code.
 
-- [ ] T019 [P] [US3] Add service/API tests for checkout expiry/scope re-evaluation, order subtotal/discount/snapshot, changed-code idempotency conflict, replay, and rollback in `backend/tests/unit/test_order_service.py` and `backend/tests/integration/test_order_checkout.py`.
-- [ ] T020 [US3] Recalculate promotions inside the locked checkout transaction, hash normalized coupon with item lines, and persist immutable pricing snapshot in `backend/src/services/order_service.py`.
-- [ ] T021 [US3] Accept only optional bounded coupon code and expose snapshot totals while rejecting client pricing fields in `backend/src/api/v1/order_routes.py`.
-- [ ] T022 [US3] Send the server-returned cart code, never totals, through checkout and render authoritative order/quote totals in `frontend/src/lib/order-api.ts`, `frontend/src/components/CheckoutFlow.tsx`, and `frontend/src/components/CheckoutForm.tsx`.
-- [ ] T023 [P] [US3] Test checkout coupon forwarding, order totals, and immutable success rendering in `frontend/src/components/CheckoutFlow.test.tsx` and `frontend/src/components/CheckoutForm.test.tsx`.
+- [x] T019 [P] [US3] Add service/API tests for checkout expiry/scope re-evaluation, order subtotal/discount/snapshot, changed-code idempotency conflict, replay, and rollback in `backend/tests/unit/test_order_service.py` and `backend/tests/integration/test_order_checkout.py`.
+- [x] T020 [US3] Recalculate promotions inside the locked checkout transaction, hash normalized coupon with item lines, and persist immutable pricing snapshot in `backend/src/services/order_service.py`.
+- [x] T021 [US3] Accept only optional bounded coupon code and expose snapshot totals while rejecting client pricing fields in `backend/src/api/v1/order_routes.py`.
+- [x] T022 [US3] Send the server-returned cart code, never totals, through checkout and render authoritative order/quote totals in `frontend/src/lib/order-api.ts`, `frontend/src/components/CheckoutFlow.tsx`, and `frontend/src/components/CheckoutForm.tsx`.
+- [x] T023 [P] [US3] Test checkout coupon forwarding, order totals, and immutable success rendering in `frontend/src/components/CheckoutFlow.test.tsx` and `frontend/src/components/CheckoutForm.test.tsx`.
 
 ## Phase 6: User Story 4 - Assistant Answers from Promotion Results (Priority: P2)
 
@@ -68,11 +68,11 @@
 
 **Independent Test**: Run deterministic assistant requests with mocked/provider-call assertions and verify each price/eligibility value equals the promotion/cart service result.
 
-- [ ] T024 [P] [US4] Add route tests for active-offer questions, laptop scope, read-only `Can I use SAVE10?`, explicit apply/remove, and invented-discount prompts in `backend/tests/unit/test_assistant_router.py`.
-- [ ] T025 [US4] Add deterministic `COUPON_APPLY` and `COUPON_REMOVE` routing and bounded code/category extraction in `backend/src/services/assistant_router.py`.
-- [ ] T026 [P] [US4] Add assistant tests proving service calls, no mutation for read-only checks, no RAG/provider pricing, correct total, safe invalid response, and user isolation in `backend/tests/unit/test_commerce_assistant.py`.
-- [ ] T027 [US4] Connect PROMOTIONS, COUPON_APPLY, and COUPON_REMOVE to available/evaluate/apply/remove/cart pricing services in `backend/src/services/commerce_assistant.py`.
-- [ ] T028 [US4] Render authoritative offer, coupon evaluation, and discounted cart result data in `frontend/src/app/assistant/page.tsx` and cover it in `frontend/src/app/assistant/page.test.tsx`.
+- [x] T024 [P] [US4] Add route tests for active-offer questions, laptop scope, read-only `Can I use SAVE10?`, explicit apply/remove, and invented-discount prompts in `backend/tests/unit/test_assistant_router.py`.
+- [x] T025 [US4] Add deterministic `COUPON_APPLY` and `COUPON_REMOVE` routing and bounded code/category extraction in `backend/src/services/assistant_router.py`.
+- [x] T026 [P] [US4] Add assistant tests proving service calls, no mutation for read-only checks, no RAG/provider pricing, correct total, safe invalid response, and user isolation in `backend/tests/unit/test_commerce_assistant.py`.
+- [x] T027 [US4] Connect PROMOTIONS, COUPON_APPLY, and COUPON_REMOVE to available/evaluate/apply/remove/cart pricing services in `backend/src/services/commerce_assistant.py`.
+- [x] T028 [US4] Render authoritative offer, coupon evaluation, and discounted cart result data in `frontend/src/app/assistant/page.tsx` and cover it in `frontend/src/app/assistant/page.test.tsx`.
 
 ## Phase 7: User Story 5 - Synthetic Promotion Data and Offline Evaluation (Priority: P1)
 
@@ -80,23 +80,23 @@
 
 **Independent Test**: Run unit seed ownership tests and then the production-like evaluator against an explicitly verified local/test loopback database, with all scenario keys true.
 
-- [ ] T029 [P] [US5] Add repeatability, promotion collision, reset ownership, and unrelated-row preservation tests in `backend/tests/unit/test_production_like_seed.py`.
-- [ ] T030 [US5] Add deterministic active percentage/fixed, expired, future, threshold, category, product, user-targeted, and competing promotion entries to `backend/src/seed/production_like_v1.json` without changing product/user IDs.
-- [ ] T031 [US5] Build, upsert, validate ownership, and safely reset only deterministic seed-owned promotions in `backend/src/seed/production_like.py`.
-- [ ] T032 [P] [US5] Add routing and promotion evaluator cases A-M, including code validity, thresholds, exact math, winner selection, mutation, user isolation, and injection resistance in `backend/evals/datasets/commerce_production_like_v1.json`.
-- [ ] T033 [US5] Exercise real PromotionService, CartService, OrderService, and CommerceAssistantService for every new scenario in `backend/src/evals/production_like.py` and report pass counts.
+- [x] T029 [P] [US5] Add repeatability, promotion collision, reset ownership, and unrelated-row preservation tests in `backend/tests/unit/test_production_like_seed.py`.
+- [x] T030 [US5] Add deterministic active percentage/fixed, expired, future, threshold, category, product, user-targeted, and competing promotion entries to `backend/src/seed/production_like_v1.json` without changing product/user IDs.
+- [x] T031 [US5] Build, upsert, validate ownership, and safely reset only deterministic seed-owned promotions in `backend/src/seed/production_like.py`.
+- [x] T032 [P] [US5] Add routing and promotion evaluator cases A-M, including code validity, thresholds, exact math, winner selection, mutation, user isolation, and injection resistance in `backend/evals/datasets/commerce_production_like_v1.json`.
+- [x] T033 [US5] Exercise real PromotionService, CartService, OrderService, and CommerceAssistantService for every new scenario in `backend/src/evals/production_like.py` and report pass counts.
 
 ## Phase 8: Cross-Cutting Validation and Independent Review
 
 **Purpose**: Complete privacy-safe logging, full validation, browser flow, and the ten requested design/security challenges.
 
-- [ ] T034 [P] Add bounded promotion log fields to the JSON allowlist and emit safe operation/result/duration logs without raw codes or prompts in `backend/src/core/observability.py` and `backend/src/services/promotion_service.py`.
-- [ ] T035 [P] Test log allowlisting and prove raw coupon, prompt, credentials, and payment data are absent in `backend/tests/unit/test_observability.py` and `backend/tests/unit/test_promotion_service.py`.
-- [ ] T036 Run the promotion evaluator and execute every step in `specs/009-promotions-discount-engine/quickstart.md` with synthetic users in the shared local browser; record totals and verify no HTTP 500/503.
-- [ ] T037 Run migration graph/SQL checks, focused and full pytest, Ruff, Black, and compileall in `backend/` against isolated test resources only.
-- [ ] T038 Run focused/full Jest, TypeScript, lint, scoped Prettier, and Next.js build for `frontend/` without mass-formatting unrelated files.
-- [ ] T039 Review all ten PROMO invariants and the independent questions in `specs/009-promotions-discount-engine/spec.md`; record findings and resolve any legitimate defect in its owning source/test files.
-- [ ] T040 Review `git diff --check`, changed-file scope, and final worktree in `specs/009-promotions-discount-engine/quickstart.md`; leave changes uncommitted and unpublished.
+- [x] T034 [P] Add bounded promotion log fields to the JSON allowlist and emit safe operation/result/duration logs without raw codes or prompts in `backend/src/core/observability.py` and `backend/src/services/promotion_service.py`.
+- [x] T035 [P] Test log allowlisting and prove raw coupon, prompt, credentials, and payment data are absent in `backend/tests/unit/test_observability_logging.py` and `backend/tests/unit/test_promotion_service.py`.
+- [x] T036 Run the promotion evaluator and complete the synthetic browser journey. Local desktop/mobile browser work covers offer lookup, coupon apply, unknown/expired rejection, quantity repricing, removal, owner-specific order rendering, and a second-shopper switch proving coupon/cart isolation. A desktop browser checkout also created an authoritative pending order/payment through an isolated fake provider and verified order history; Playwright fulfilled the Stripe-shaped destination locally, so no external Stripe session or charge was created.
+- [x] T037 Run migration graph/SQL checks, focused and full pytest, Ruff, Black, and compileall in `backend/` against isolated test resources only.
+- [x] T038 Run focused/full Jest, TypeScript, lint, scoped Prettier, and Next.js build for `frontend/` without mass-formatting unrelated files.
+- [x] T039 Review all ten PROMO invariants and the independent questions in `specs/009-promotions-discount-engine/spec.md`; record findings and resolve any legitimate defect in its owning source/test files.
+- [x] T040 Review `git diff --check`, changed-file scope, and final worktree against the quickstart. Commit/push only the explicitly authorized milestone to the existing branch; do not create a new PR, merge, or deploy.
 
 ## Dependencies and Execution Order
 

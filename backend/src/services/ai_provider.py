@@ -12,6 +12,24 @@ from src.services.ai_governance import (
 )
 
 
+def normalize_term(token: str) -> str:
+    """Normalize common English inflections for deterministic local matching."""
+    token = token.lower()
+    if len(token) > 4 and token.endswith("ies"):
+        return token[:-3] + "y"
+    if len(token) > 4 and token.endswith("es"):
+        token = token[:-1]
+    elif len(token) > 3 and token.endswith("s"):
+        token = token[:-1]
+    if len(token) > 4 and token.endswith("ed"):
+        token = token[:-2]
+    elif len(token) > 5 and token.endswith("ing"):
+        token = token[:-3]
+    if len(token) > 5 and token.endswith("e"):
+        token = token[:-1]
+    return token
+
+
 @dataclass(frozen=True)
 class Evidence:
     chunk_id: str
@@ -53,9 +71,12 @@ class GroundedAnswerProvider:
 
     injection_patterns = (
         r"ignore\s+(?:all\s+)?(?:previous| prior| earlier)\s+instructions?",
+        r"forget\s+(?:everything|all\s+(?:previous|prior)\s+instructions?)\s+(?:above|before|earlier)",
         r"disregard\s+(?:all\s+)?(?:previous|prior|earlier)\s+(?:directives|instructions?)",
         r"(?:system|developer)\s*(?:message|prompt|instruction)",
         r"(?:reveal|show| disclose)\s+(?:the\s+)?(?:secret|api\s*key|password|token)",
+        r"(?:export|dump|send|email|print)\s+(?:all\s+)?(?:customer|shopper|user)\s+(?:orders?|records?|data)",
+        r"(?:call|invoke|use)\s+(?:the\s+)?(?:get_orders|get_order_status|add_to_cart|apply_promotion)\b",
         r"(?:change|switch|use)\s+(?:the\s+)?(?:provider|model)",
         r"follow\s+these\s+instructions",
         r"you\s+are\s+now\s+(?:the\s+)?(?:system|developer)",
@@ -83,7 +104,21 @@ class GroundedAnswerProvider:
         "my",
         "on",
         "this",
+        "another",
+        "document",
+        "in",
+        "private",
+        "user",
+        "users",
     }
+
+    @classmethod
+    def content_terms(cls, text: str) -> set[str]:
+        return {
+            normalize_term(token)
+            for token in re.findall(r"[a-z0-9]+", text.lower())
+            if token not in cls.stopwords
+        }
 
     @classmethod
     def normalize_untrusted_text(cls, text: str) -> str:
@@ -124,11 +159,11 @@ class GroundedAnswerProvider:
             return ProviderAnswer(
                 "I couldn't use the retrieved content safely to answer that.", False, 0
             )
-        question_terms = set(re.findall(r"[a-z0-9]+", question.lower())) - self.stopwords
+        question_terms = self.content_terms(question)
         minimum_matching_terms = 2 if len(question_terms) > 2 else 1
         relevant = []
         for item in safe:
-            matching_terms = question_terms & set(re.findall(r"[a-z0-9]+", item.text.lower()))
+            matching_terms = question_terms & self.content_terms(item.text)
             if len(matching_terms) >= minimum_matching_terms:
                 relevant.append(item)
         if not relevant:

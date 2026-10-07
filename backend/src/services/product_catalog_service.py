@@ -46,7 +46,17 @@ class ProductCatalogService:
         )
         lookup = await self.cache.get_page(skip, limit) if is_default_query else None
         if lookup and lookup.page is not None:
-            return lookup.page
+            ids = [UUID(value) for value in lookup.page.product_ids]
+            current = await self.repository.get_active_products_by_ids(ids) if ids else []
+            products_by_id = {
+                (product["id"] if isinstance(product, dict) else product.id): product
+                for product in current
+            }
+            ordered = [
+                products_by_id[product_id] for product_id in ids if product_id in products_by_id
+            ]
+            total = await self.repository.count_active_products()
+            return ProductPageResponse(items=ordered, skip=skip, limit=limit, total=total)
 
         if is_default_query:
             products = await self.repository.get_products(skip=skip, limit=limit)
@@ -66,7 +76,16 @@ class ProductCatalogService:
             )
         page = ProductPageResponse(items=products, skip=skip, limit=limit, total=total)
         if is_default_query and lookup:
-            await self.cache.set_page(skip, limit, lookup.generation, page)
+            await self.cache.set_page(
+                skip,
+                limit,
+                lookup.generation,
+                [
+                    str(product["id"] if isinstance(product, dict) else product.id)
+                    for product in products
+                ],
+                total,
+            )
         return page
 
     async def search_products(

@@ -88,9 +88,7 @@ async def queue_payment_notification(
     return tuple(queued)
 
 
-async def requeue_failed_payment_emails(
-    db: AsyncSession, request_id: str
-) -> int:
+async def requeue_failed_payment_emails(db: AsyncSession, request_id: str) -> int:
     """Rebuild failed payment-success emails after an explicit local operator retry."""
     if not request_id or len(request_id) > 128:
         raise ValueError("A valid request ID is required")

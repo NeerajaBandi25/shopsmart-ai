@@ -21,3 +21,15 @@ These short notes explain implemented behavior and point to its source. Use `.fa
 17. [Transactional email flow](17_EMAIL_NOTIFICATION_FLOW.md)
 
 Supplemental notes cover [homepage discovery](16_HOME_DISCOVERY_FLOW.md), [trust boundaries](17_TRUST_BOUNDARIES.md), and [local operations](18_LOCAL_OPERATIONS.md).
+# ShopSmart engineering learning path
+
+The existing commerce flow documents are followed by the AI shopping platform guides:
+
+- [18. Shopping mission engine](18_SHOPPING_MISSION_ENGINE.md)
+- [19. Recommendation ranking](19_RECOMMENDATION_RANKING.md)
+- [20. Personalization](20_PERSONALIZATION.md)
+- [21. AI guardrails](21_AI_GUARDRAILS.md)
+- [22. AI evaluations](22_AI_EVALS.md)
+- [23. Redis AI runtime](23_REDIS_AI_RUNTIME.md)
+- [24. LLM tracing](24_LLM_TRACING.md)
+- [25. AI production operations](25_AI_PRODUCTION_OPERATIONS.md)

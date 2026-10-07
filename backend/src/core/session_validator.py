@@ -1,7 +1,7 @@
 """Session validation logic with inactivity timeout."""
 
-from datetime import datetime, timedelta, timezone
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
