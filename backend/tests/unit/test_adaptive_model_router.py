@@ -139,6 +139,21 @@ async def test_redis_timeout_is_probed_once_per_request_state(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_expired_local_eval_score_returns_neutral_default(monkeypatch):
+    monkeypatch.setattr(router_module, "get_redis_client", lambda: None)
+    model = "expired-score/model:free"
+    state = ModelRuntimeState()
+    await state.record_eval(model, "PRODUCT_SEARCH", 0.95)
+
+    with router_module._LOCAL_STATE_LOCK:
+        router_module._LOCAL_STATE[(model, "PRODUCT_SEARCH")]["expires_at"] = 0
+
+    snapshot = await state.snapshot(model, "PRODUCT_SEARCH")
+
+    assert snapshot["eval_score"] == 0.5
+
+
+@pytest.mark.asyncio
 async def test_redis_zero_scores_and_rates_override_stale_process_state(monkeypatch):
     class RedisSnapshot:
         async def mget(self, *_keys):

@@ -4,14 +4,14 @@ ShopSmart defaults to `AI_MODEL_ROUTING_MODE=ADAPTIVE_FREE` when using OpenRoute
 
 The rank is deterministic: task-specific eval score (50%), recent reliability (25%), 429 avoidance (15%), and latency (10%). A zero task score means the model failed the benchmark's objective quality gate and is excluded from ranked candidates. If Redis becomes unavailable during a request, routing switches to local state after one failed probe for that request; the next request probes Redis again. Redis stores a three-minute catalog cache and expiring model keys:
 
-| Key | Value | TTL |
-| --- | --- | --- |
-| `ai:model:<id>:health` | healthy/degraded | 5 minutes |
-| `ai:model:<id>:latency` | latest successful request latency in milliseconds | 1 hour |
-| `ai:model:<id>:429_rate` | rolling 429 fraction | 15 minutes |
-| `ai:model:<id>:failure_rate` | rolling failure fraction | 15 minutes |
-| `ai:model:<id>:circuit_state` | closed/half_open/open | 1 minute |
-| `ai:model:<id>:eval_score:<task>` | latest controlled task score | 1 day |
+| Key                               | Value                                             | TTL        |
+| --------------------------------- | ------------------------------------------------- | ---------- |
+| `ai:model:<id>:health`            | healthy/degraded                                  | 5 minutes  |
+| `ai:model:<id>:latency`           | latest successful request latency in milliseconds | 1 hour     |
+| `ai:model:<id>:429_rate`          | rolling 429 fraction                              | 15 minutes |
+| `ai:model:<id>:failure_rate`      | rolling failure fraction                          | 15 minutes |
+| `ai:model:<id>:circuit_state`     | closed/half_open/open                             | 1 minute   |
+| `ai:model:<id>:eval_score:<task>` | latest controlled task score                      | 1 day      |
 
 The Redis counter window is shared across workers. When Redis is unconfigured or unavailable, the same signals use a bounded process-local fallback; model selection remains deterministic, while health history lasts only for the process lifetime.
 
@@ -31,11 +31,11 @@ The streaming adapter pins the same model, includes provider usage when availabl
 
 A credentialed benchmark ran through the ShopSmart backend against three currently eligible free models and three synthetic cases. No case mutates commerce state. The strict quality gate requires 1.0 for each objective metric in this deliberately small initial suite; all candidates failed, so these measurements are diagnostic and are not evidence that a candidate is production-qualified.
 
-| Model | Tool correctness | Mission extraction | Constraint accuracy | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Gate |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `apodex/apodex-1.1-mini:free` | 1.00 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 3,606 ms | 7,517 / 627 | 0 | 0 | FAIL |
-| `cohere/north-mini-code:free` | 0.67 | 0.00 | 1.00 | 0.50 | 0.00 | 0.33 | 7,772 ms | 3,111 / 725 | 0 | 0 | FAIL |
-| `dots-studio/dots-3-note-preview:free` | 0.67 | 0.00 | 1.00 | 0.50 | 0.00 | 0.33 | 15,405 ms | 5,304 / 784 | 1 timeout | 0 | FAIL |
+| Model                                  | Tool correctness | Mission extraction | Constraint accuracy | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Gate |
+| -------------------------------------- | ---------------: | -----------------: | ------------------: | --------: | -------------: | ---------: | -----------: | --------------: | ----------------: | ---: | ---- |
+| `apodex/apodex-1.1-mini:free`          |             1.00 |               1.00 |                1.00 |      0.50 |           0.00 |       0.67 |     3,606 ms |     7,517 / 627 |                 0 |    0 | FAIL |
+| `cohere/north-mini-code:free`          |             0.67 |               0.00 |                1.00 |      0.50 |           0.00 |       0.33 |     7,772 ms |     3,111 / 725 |                 0 |    0 | FAIL |
+| `dots-studio/dots-3-note-preview:free` |             0.67 |               0.00 |                1.00 |      0.50 |           0.00 |       0.33 |    15,405 ms |     5,304 / 784 |         1 timeout |    0 | FAIL |
 
 The suite exposed a coverage weakness as well as model weaknesses: the ranking case currently expects exact synthetic product-name reproduction from a ranking-only tool call. Keep its failure visible while improving the golden case to measure structured recommendation choice and evidence. Redis was unavailable during the first live run, so that process could not persist benchmark scores for a later process.
 
@@ -43,31 +43,31 @@ The suite exposed a coverage weakness as well as model weaknesses: the ranking c
 
 The first benchmark version incorrectly used the aggregate model gate when publishing every task score. This meant a model with a failed comparison case also lost its passing search and mission scores. Score publication now gates each task using only objective metrics represented by that task's cases, while the aggregate report retains its full-suite gate. The benchmark was rerun against the same three free models on 2026-10-06 after this change:
 
-| Model | Tool correctness | Mission extraction | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Task gates |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `apodex/apodex-1.1-mini:free` | 1.00 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 3,685 ms | 7,517 / 661 | 0 | 0 | search PASS, advice PASS, compare FAIL |
-| `cohere/north-mini-code:free` | 0.67 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 6,262 ms | 3,111 / 752 | 0 | 0 | search PASS, advice PASS, compare FAIL |
-| `dots-studio/dots-3-note-preview:free` | 1.00 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 6,315 ms | 6,481 / 846 | 0 | 0 | search PASS, advice PASS, compare FAIL |
+| Model                                  | Tool correctness | Mission extraction | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Task gates                             |
+| -------------------------------------- | ---------------: | -----------------: | ----------: | --------: | -------------: | ---------: | -----------: | --------------: | ----------------: | ---: | -------------------------------------- |
+| `apodex/apodex-1.1-mini:free`          |             1.00 |               1.00 |        1.00 |      0.50 |           0.00 |       0.67 |     3,685 ms |     7,517 / 661 |                 0 |    0 | search PASS, advice PASS, compare FAIL |
+| `cohere/north-mini-code:free`          |             0.67 |               1.00 |        1.00 |      0.50 |           0.00 |       0.67 |     6,262 ms |     3,111 / 752 |                 0 |    0 | search PASS, advice PASS, compare FAIL |
+| `dots-studio/dots-3-note-preview:free` |             1.00 |               1.00 |        1.00 |      0.50 |           0.00 |       0.67 |     6,315 ms |     6,481 / 846 |                 0 |    0 | search PASS, advice PASS, compare FAIL |
 
 All three still fail the aggregate comparison set because none grounded the rank-one synthetic product name in its final comparison synthesis. The important routing result is task-specific: valid search/advice scores survive; PRODUCT_COMPARE receives score zero and cannot rank those candidates. The complete raw report is at `backend/evals/results/adaptive-model-live-v3.json` (local runtime artifact; not committed). Redis remained unavailable, so benchmark scores used request-local fallback state and were not persisted across processes. Do not claim complete model qualification from this three-case subset.
 
 The comparison case was then made more explicit about its required grounded synthesis (name the provided rank-one item and cite its verified specs), without changing thresholds, and run again through the host-network runtime. The latest result is:
 
-| Model | Tool correctness | Mission extraction | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Task gates |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `apodex/apodex-1.1-mini:free` | 1.00 | 1.00 | 1.00 | 0.50 | 1.00 | 0.67 | 5,410 ms | 7,601 / 945 | 0 | 0 | search FAIL, advice PASS, compare PASS |
-| `cohere/north-mini-code:free` | 1.00 | 0.00 | 1.00 | 1.00 | 1.00 | 0.67 | 8,441 ms | 4,127 / 1,019 | 0 | 0 | search PASS, advice FAIL, compare PASS |
-| `dots-studio/dots-3-note-preview:free` | 0.67 | 1.00 | 1.00 | 0.00 | 0.00 | 0.33 | 5,837 ms | 5,057 / 864 | 0 | 0 | search FAIL, advice PASS, compare FAIL |
+| Model                                  | Tool correctness | Mission extraction | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Task gates                             |
+| -------------------------------------- | ---------------: | -----------------: | ----------: | --------: | -------------: | ---------: | -----------: | --------------: | ----------------: | ---: | -------------------------------------- |
+| `apodex/apodex-1.1-mini:free`          |             1.00 |               1.00 |        1.00 |      0.50 |           1.00 |       0.67 |     5,410 ms |     7,601 / 945 |                 0 |    0 | search FAIL, advice PASS, compare PASS |
+| `cohere/north-mini-code:free`          |             1.00 |               0.00 |        1.00 |      1.00 |           1.00 |       0.67 |     8,441 ms |   4,127 / 1,019 |                 0 |    0 | search PASS, advice FAIL, compare PASS |
+| `dots-studio/dots-3-note-preview:free` |             0.67 |               1.00 |        1.00 |      0.00 |           0.00 |       0.33 |     5,837 ms |     5,057 / 864 |                 0 |    0 | search FAIL, advice PASS, compare FAIL |
 
 No candidate passed the full three-case aggregate. The per-task gates now preserve useful measured routes for search, advice, and comparison rather than marking every model unusable. Because Redis was still unavailable, cross-process score persistence and live reuse remain unverified. This three-case set is a bounded routing smoke, not a broad estimate of model quality; the complete local output is `backend/evals/results/adaptive-model-live-v4.json` and is excluded from Git.
 
 The final live run added an explicit catalog-grounding instruction to the search case, retaining the same exact-match scoring and unchanged thresholds. Apodex passed the complete three-case suite:
 
-| Model | Tool correctness | Mission extraction | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Aggregate gate |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `apodex/apodex-1.1-mini:free` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 4,643 ms | 7,639 / 943 | 0 | 0 | PASS (.9923 score) |
-| `cohere/north-mini-code:free` | 1.00 | 0.00 | 1.00 | 1.00 | 1.00 | 0.67 | 8,466 ms | 4,165 / 974 | 0 | 0 | FAIL: mission extraction, completion |
-| `dots-studio/dots-3-note-preview:free` | 1.00 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 6,997 ms | 6,603 / 941 | 0 | 0 | FAIL: comparison grounding/recommendation, completion |
+| Model                                  | Tool correctness | Mission extraction | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Provider failures | 429s | Aggregate gate                                        |
+| -------------------------------------- | ---------------: | -----------------: | ----------: | --------: | -------------: | ---------: | -----------: | --------------: | ----------------: | ---: | ----------------------------------------------------- |
+| `apodex/apodex-1.1-mini:free`          |             1.00 |               1.00 |        1.00 |      1.00 |           1.00 |       1.00 |     4,643 ms |     7,639 / 943 |                 0 |    0 | PASS (.9923 score)                                    |
+| `cohere/north-mini-code:free`          |             1.00 |               0.00 |        1.00 |      1.00 |           1.00 |       0.67 |     8,466 ms |     4,165 / 974 |                 0 |    0 | FAIL: mission extraction, completion                  |
+| `dots-studio/dots-3-note-preview:free` |             1.00 |               1.00 |        1.00 |      0.50 |           0.00 |       0.67 |     6,997 ms |     6,603 / 941 |                 0 |    0 | FAIL: comparison grounding/recommendation, completion |
 
 Apodex passed PRODUCT_SEARCH, PRODUCT_ADVICE, and PRODUCT_COMPARE gates, while its runner-up models remain gated per task. This is evidence for the current three-case routing smoke only; expand the cases before treating these scores as a broad quality estimate. Redis remained unavailable, so benchmark scores could not be published across processes in this run. Full raw output: `backend/evals/results/adaptive-model-live-v5.json` (local, not committed).
 
@@ -75,10 +75,49 @@ Apodex passed PRODUCT_SEARCH, PRODUCT_ADVICE, and PRODUCT_COMPARE gates, while i
 
 Dataset v2 doubles the controlled cases to six: two catalog searches (including phone price conversion and stock filtering), two mission extractions (including student portability), and two ranked recommendations (including a best-value/lower-cost trade-off). Mission scoring now evaluates requested soft fields as well as desired-use labels. The quality gates remain unchanged at 1.0 for objective checks and zero provider failures/rate limits.
 
-| Model | Tool | Mission | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Failures / 429s | Gate |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `apodex/apodex-1.1-mini:free` | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 970 ms | 0 / 0 | 6 / 6 | FAIL: HTTP 429 on every case |
-| `cohere/north-mini-code:free` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 5,892 ms | 7,922 / 2,121 | 0 / 0 | PASS (.9902 score) |
-| `dots-studio/dots-3-note-preview:free` | 1.00 | 1.00 | 1.00 | 0.50 | 0.00 | 0.67 | 7,947 ms | 12,696 / 1,547 | 0 / 0 | FAIL: compare synthesis |
+| Model                                  | Tool | Mission | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Failures / 429s | Gate                         |
+| -------------------------------------- | ---: | ------: | ----------: | --------: | -------------: | ---------: | -----------: | --------------: | --------------: | ---------------------------- |
+| `apodex/apodex-1.1-mini:free`          | 0.00 |    0.00 |        0.00 |      0.00 |           0.00 |       0.00 |       970 ms |           0 / 0 |           6 / 6 | FAIL: HTTP 429 on every case |
+| `cohere/north-mini-code:free`          | 1.00 |    1.00 |        1.00 |      1.00 |           1.00 |       1.00 |     5,892 ms |   7,922 / 2,121 |           0 / 0 | PASS (.9902 score)           |
+| `dots-studio/dots-3-note-preview:free` | 1.00 |    1.00 |        1.00 |      0.50 |           0.00 |       0.67 |     7,947 ms |  12,696 / 1,547 |           0 / 0 | FAIL: compare synthesis      |
 
 This run used ShopSmart's provider adapter and captured upstream HTTP 429 for all six Apodex cases; it did not infer a connectivity failure. Cohere passed all six synthetic cases, while Dots passed search/advice and failed both comparison syntheses. Redis was unavailable, so the model scores were not reusable across processes. This is a stronger but still bounded evaluation, not a general quality guarantee. Raw local report: `backend/evals/results/adaptive-model-live-v6.json` (excluded from Git).
+
+## Rank-order quality check and refreshed six-case run (2026-10-06)
+
+Recommendation quality now requires every expected candidate name to appear in the case's expected rank order. This closes the earlier presence-only gap; it is a deterministic coverage/order proxy, not a semantic judge of the explanation. The strict objective thresholds above are unchanged.
+
+The six-case dataset was rerun through ShopSmart's OpenRouter provider adapter after this scoring change. This replaces v6 as the current recommendation-order measurement:
+
+| Model                                  | Tool | Mission | Constraints | Grounding |         Recommendation/order | Completion | Mean latency | Tokens in / out | Failures / 429s | Task gates                        |   Aggregate |
+| -------------------------------------- | ---: | ------: | ----------: | --------: | ---------------------------: | ---------: | -----------: | --------------: | --------------: | --------------------------------- | ----------: |
+| `apodex/apodex-1.1-mini:free`          | 1.00 |    1.00 |        1.00 |      1.00 | 1.00 (2/2 comparison orders) |       1.00 |     4,007 ms |  14,696 / 1,892 |           0 / 0 | search, advice, compare PASS      | 0.9933 PASS |
+| `cohere/north-mini-code:free`          | 1.00 |    0.50 |        1.00 |      1.00 | 1.00 (2/2 comparison orders) |       0.83 |    10,374 ms |   7,922 / 1,873 |           0 / 0 | search, compare PASS; advice FAIL | 0.8910 FAIL |
+| `dots-studio/dots-3-note-preview:free` | 1.00 |    1.00 |        1.00 |      0.75 | 0.50 (1/2 comparison orders) |       0.83 |     8,088 ms |  12,682 / 2,285 |           0 / 0 | search, advice PASS; compare FAIL | 0.8699 FAIL |
+
+The live report was written to `.factory/runtime/adaptive-model-live-v7.json` (local-only). Redis timed out during state publication, so these scores were not established as cross-process routing state in this run. One candidate passing this bounded synthetic suite is not a broad production quality guarantee.
+
+## Mission exclusions and expanded ten-case run (2026-10-06)
+
+Dataset v3 adds four cases to broaden the task mix: a fully bounded price/stock/sort search, explicit exclusion of gaming for a development/office mission, student/creative portability and design preferences, and a travel/development recommendation trade-off. Mission scoring now checks forbidden use cases as well as required labels and soft fields. The v3 run used the same strict thresholds and rank-order comparator as v7:
+
+| Model                                  | Tool | Mission | Constraints | Grounding | Recommendation | Completion | Mean latency | Tokens in / out | Failures / 429s | Task gates                        |   Aggregate |
+| -------------------------------------- | ---: | ------: | ----------: | --------: | -------------: | ---------: | -----------: | --------------: | --------------: | --------------------------------- | ----------: |
+| `apodex/apodex-1.1-mini:free`          | 0.90 |    1.00 |        0.67 |      0.83 |           1.00 |       0.90 |     3,405 ms |  21,654 / 3,357 |           0 / 0 | advice, compare PASS; search FAIL | 0.8760 FAIL |
+| `cohere/north-mini-code:free`          | 1.00 |    1.00 |        0.67 |      0.83 |           1.00 |       0.90 |     6,594 ms |  12,391 / 2,936 |           0 / 0 | advice, compare PASS; search FAIL | 0.8957 FAIL |
+| `dots-studio/dots-3-note-preview:free` | 1.00 |    1.00 |        1.00 |      0.67 |           0.33 |       0.80 |     8,608 ms |  19,970 / 3,481 |           0 / 0 | search, advice PASS; compare FAIL | 0.8323 FAIL |
+
+All three models correctly honored the explicit no-gaming mission exclusion and extracted the added student/creative preferences. The added full-bound search exposed constraint/tool-argument errors from Apodex and Cohere; Dots missed grounded rank-one names in two recommendation cases. No candidate passed the aggregate v3 gates. Raw report: `.factory/runtime/adaptive-model-live-v8.json` (local-only). Redis timed out during score publication, so these eval values were not proven reusable across processes.
+
+
+## Repeated ten-case benchmark and persistence verification (2026-10-07)
+
+Dataset v3 was run twice per case against the three ranked candidates through the ShopSmart benchmark runner (10 cases, 20 model-case evaluations per candidate). This repeat run makes variance visible; every candidate failed the strict aggregate quality gate. The Redis check performs a direct read-after-write of the task-score keys, so process-local fallback state cannot be mistaken for Redis persistence.
+
+| Model | Score | Tool correctness | Mission extraction | Constraints | Grounding | Recommendation | Completion / reliability | Mean latency | Tokens in / out | Provider failures / 429s | Aggregate gate |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `apodex/apodex-1.1-mini:free` | 0.8320 | 0.90 | 1.00 | 1.00 | 0.6667 | 0.50 | 0.80 | 3,812 ms | 43,372 / 7,003 | 0 / 0 | FAIL: tool, grounding, recommendation, completion |
+| `cohere/north-mini-code:free` | 0.8708 | 1.00 | 0.875 | 0.6667 | 0.8333 | 1.00 | 0.85 | 7,279 ms | 24,782 / 6,094 | 0 / 0 | FAIL: mission, constraints, grounding, completion |
+| `dots-studio/dots-3-note-preview:free` | 0.7318 | 0.95 | 1.00 | 0.8333 | 0.4167 | 0.3333 | 0.65 | 7,395 ms | 38,610 / 6,482 | 0 / 0 | FAIL: tool, constraints, grounding, recommendation, completion |
+
+All candidates had zero provider failures and zero 429 responses in this run. Redis eval-score persistence was `unavailable` (`TimeoutError`), `verified=false`, for nine model/task scores. The report is `.factory/runtime/adaptive-model-live-v10.json` (local-only). Treat the model scores as diagnostic measurements, not reusable routing state or production qualification. Basic host/API connectivity was not retested.

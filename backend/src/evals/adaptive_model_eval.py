@@ -8,8 +8,10 @@ import time
 from pathlib import Path
 
 from pydantic import ValidationError
+from redis.exceptions import RedisError
 
 from src.core.config import settings
+from src.core.redis_client import get_redis_client
 from src.services.adaptive_model_router import AdaptiveFreeModelRouter, ModelRuntimeState
 from src.services.ai_gateway import OpenAICompatibleProvider
 from src.services.ai_governance import PolicyViolation, ProviderUnavailable
@@ -20,7 +22,7 @@ from src.services.assistant_tools import (
     tool_schemas,
 )
 
-DATASET = Path(__file__).parents[2] / "evals" / "datasets" / "adaptive_model_cases_v2.json"
+DATASET = Path(__file__).parents[2] / "evals" / "datasets" / "adaptive_model_cases_v3.json"
 QUALITY_THRESHOLDS = {
     "tool_call_correctness": 1.0,
     "mission_extraction": 1.0,
@@ -29,6 +31,57 @@ QUALITY_THRESHOLDS = {
     "recommendation_quality": 1.0,
     "completion_success_rate": 1.0,
 }
+MAX_BENCHMARK_REPEATS = 3
+
+
+def _repeat_cases(cases: list[dict], repeats: int) -> list[dict]:
+    """Repeat each golden case in stable order for a bounded reliability sample."""
+    return [
+        {**case, "repeat_index": repeat_index}
+        for repeat_index in range(1, repeats + 1)
+        for case in cases
+    ]
+
+
+async def _verify_eval_score_persistence(
+    expected_scores: dict[tuple[str, str], float],
+) -> dict[str, str | bool | int]:
+    """Read score keys directly from Redis, avoiding process-local state fallback."""
+    if not expected_scores:
+        return {"status": "no_scores", "verified": False, "score_count": 0}
+    client = get_redis_client()
+    if client is None:
+        return {
+            "status": "not_configured",
+            "verified": False,
+            "score_count": len(expected_scores),
+        }
+    score_keys = [
+        ModelRuntimeState._key(model_id) + ":eval_score:" + ModelRuntimeState._task(task_type)
+        for model_id, task_type in expected_scores
+    ]
+    try:
+        values = await client.mget(score_keys)
+    except (RedisError, TimeoutError, TypeError, ValueError) as exc:
+        return {
+            "status": "unavailable",
+            "verified": False,
+            "score_count": len(expected_scores),
+            "error_type": type(exc).__name__,
+        }
+    mismatches = 0
+    for expected, actual in zip(expected_scores.values(), values):
+        try:
+            matches = actual is not None and abs(float(actual) - expected) < 1e-6
+        except (TypeError, ValueError):
+            matches = False
+        mismatches += int(not matches)
+    return {
+        "status": "verified" if mismatches == 0 else "mismatch",
+        "verified": mismatches == 0,
+        "score_count": len(expected_scores),
+        "mismatch_count": mismatches,
+    }
 
 
 def quality_gate_failures(metrics: dict[str, float]) -> list[str]:
@@ -87,6 +140,17 @@ def _case_score(
     return sum(values[key] * weight for key, weight in active.items()) / denominator
 
 
+def _recommendation_order_correct(response: str, expected_terms: list[str]) -> bool:
+    """Require exact catalog names to appear in the expected rank order.
+
+    This deterministic proxy verifies coverage and ordering, not whether the
+    natural-language explanation is semantically persuasive.
+    """
+    normalized = response.casefold()
+    positions = [normalized.find(term.casefold()) for term in expected_terms]
+    return all(position >= 0 for position in positions) and positions == sorted(positions)
+
+
 def _ensure_case_score(case: dict, sample: dict) -> None:
     """Provider failures still need a zero case score so reporting can complete."""
     if "eval_score" not in sample:
@@ -125,25 +189,35 @@ def _mission_expectation_result(case: dict, parsed_arguments) -> tuple[bool, lis
     field_checks = {
         name: getattr(parsed_arguments, name, object()) == value for name, value in fields.items()
     }
+    forbidden_checks = {
+        name: name not in actual for name in case.get("mission_forbidden_use_cases", [])
+    }
     return (
-        expected.issubset(actual) and all(field_checks.values()),
+        expected.issubset(actual) and all(field_checks.values()) and all(forbidden_checks.values()),
         sorted(expected - actual),
         {
-            name: {
-                "expected": value,
-                "actual": getattr(parsed_arguments, name, None),
-                "matched": field_checks[name],
-            }
-            for name, value in fields.items()
+            "fields": {
+                name: {
+                    "expected": value,
+                    "actual": getattr(parsed_arguments, name, None),
+                    "matched": field_checks[name],
+                }
+                for name, value in fields.items()
+            },
+            "forbidden_use_cases": forbidden_checks,
         },
     )
 
 
-async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -> dict:
+async def run_benchmark(
+    model_ids: list[str] | None = None, *, limit: int = 3, repeats: int = 2
+) -> dict:
     if not settings.openrouter_api_key:
         raise PolicyViolation("OpenRouter benchmark requires OPENROUTER_API_KEY")
     if limit < 1 or limit > 10:
         raise PolicyViolation("Benchmark limit must be between 1 and 10 models")
+    if repeats < 1 or repeats > MAX_BENCHMARK_REPEATS:
+        raise PolicyViolation(f"Benchmark repeats must be between 1 and {MAX_BENCHMARK_REPEATS}")
     router = AdaptiveFreeModelRouter()
     available = {model.model_id for model in await router._discover()}
     if model_ids is None:
@@ -160,7 +234,9 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
         raise PolicyViolation("Every benchmark model must be a discovered free tool-capable model")
     if not selected:
         raise ProviderUnavailable("OpenRouter discovery returned no eligible free tool models")
-    cases = json.loads(DATASET.read_text(encoding="utf-8"))["cases"]
+    dataset = json.loads(DATASET.read_text(encoding="utf-8"))
+    dataset_cases = dataset["cases"]
+    cases = _repeat_cases(dataset_cases, repeats)
     tools = tool_schemas(include_private=False, include_knowledge=False)
     provider = OpenAICompatibleProvider(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -169,16 +245,20 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
     )
     state = ModelRuntimeState()
     report = {
-        "dataset": "adaptive-model-cases-v2",
+        "dataset": dataset["version"],
+        "case_count": len(dataset_cases),
+        "repeats": repeats,
         "quality_thresholds": QUALITY_THRESHOLDS,
         "models": {},
     }
+    expected_eval_scores: dict[tuple[str, str], float] = {}
     for model_id in selected:
         samples = []
         for case in cases:
             started = time.perf_counter()
             sample = {
                 "task_type": case["task_type"],
+                "repeat_index": case["repeat_index"],
                 "expected_tool": case["expected_tool"],
                 "called_tools": [],
                 "success": False,
@@ -247,7 +327,7 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
                     (
                         mission_ok,
                         sample["mission_missing"],
-                        sample["mission_field_checks"],
+                        sample["mission_checks"],
                     ) = _mission_expectation_result(case, parsed_arguments)
                     sample["mission_extraction"] = float(mission_ok)
                 synthesis_ok = True
@@ -287,9 +367,8 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
                     grounded = all(
                         term.casefold() in final for term in case.get("grounding_terms", [])
                     )
-                    recommended = all(
-                        term.casefold() in final for term in case.get("recommendation_terms", [])
-                    )
+                    recommendation_terms = case.get("recommendation_terms", [])
+                    recommended = _recommendation_order_correct(final, recommendation_terms)
                     sample["missing_grounding_terms"] = [
                         term
                         for term in case.get("grounding_terms", [])
@@ -302,6 +381,8 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
                     ]
                     sample["grounding"] = float(grounded)
                     sample["recommendation_quality"] = float(recommended)
+                    if recommendation_terms:
+                        sample["recommendation_order_correct"] = recommended
                     synthesis_ok = bool(response_turn.text.strip()) and grounded
                     if case.get("recommendation_terms"):
                         synthesis_ok = synthesis_ok and recommended
@@ -429,6 +510,8 @@ async def run_benchmark(model_ids: list[str] | None = None, *, limit: int = 3) -
                 else 0.0
             )
             await state.record_eval(model_id, task_type, task_score)
+            expected_eval_scores[(model_id, task_type)] = task_score
+    report["eval_state_persistence"] = await _verify_eval_score_persistence(expected_eval_scores)
     return report
 
 
@@ -439,12 +522,18 @@ def main() -> None:
         help="Optional comma-separated discovered model ids (maximum 3 by default)",
     )
     parser.add_argument("--limit", type=int, default=3, help="Maximum models to compare (1-10)")
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=2,
+        help=f"Controlled repeats per dataset case (1-{MAX_BENCHMARK_REPEATS})",
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     model_ids = (
         [item.strip() for item in args.models.split(",") if item.strip()] if args.models else None
     )
-    result = asyncio.run(run_benchmark(model_ids, limit=args.limit))
+    result = asyncio.run(run_benchmark(model_ids, limit=args.limit, repeats=args.repeats))
     encoded = json.dumps(result, indent=2, sort_keys=True)
     print(encoded)
     if args.output:

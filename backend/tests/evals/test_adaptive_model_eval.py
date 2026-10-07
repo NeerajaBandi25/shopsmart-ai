@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from src.evals.adaptive_model_eval import (
     DATASET,
     QUALITY_THRESHOLDS,
@@ -8,20 +10,75 @@ from src.evals.adaptive_model_eval import (
     _completion_success,
     _ensure_case_score,
     _mission_expectation_result,
+    _recommendation_order_correct,
+    _repeat_cases,
+    _verify_eval_score_persistence,
     quality_gate_failures,
     task_quality_gate_failures,
 )
 
 
+@pytest.mark.asyncio
+async def test_eval_score_persistence_reads_directly_from_redis(monkeypatch):
+    from src.services.adaptive_model_router import ModelRuntimeState
+
+    scores = {
+        ("verified/search:free", "PRODUCT_SEARCH"): 0.82,
+        ("verified/advice:free", "PRODUCT_ADVICE"): 1.0,
+    }
+    expected = [
+        ModelRuntimeState._key(model) + ":eval_score:" + ModelRuntimeState._task(task)
+        for model, task in scores
+    ]
+
+    class RedisWithScores:
+        async def mget(self, keys):
+            assert keys == expected
+            return ["0.82", "1.0"]
+
+    monkeypatch.setattr("src.evals.adaptive_model_eval.get_redis_client", lambda: RedisWithScores())
+
+    result = await _verify_eval_score_persistence(scores)
+
+    assert result == {
+        "status": "verified",
+        "verified": True,
+        "score_count": 2,
+        "mismatch_count": 0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_eval_score_persistence_reports_unavailable_without_leaking_connection_details(
+    monkeypatch,
+):
+    import src.evals.adaptive_model_eval as eval_module
+
+    class UnavailableRedis:
+        async def mget(self, _keys):
+            raise TimeoutError("redis://private-user:secret@127.0.0.1:6379/15")
+
+    monkeypatch.setattr(eval_module, "get_redis_client", lambda: UnavailableRedis())
+
+    result = await _verify_eval_score_persistence({("model:free", "PRODUCT_SEARCH"): 0.5})
+
+    assert result == {
+        "status": "unavailable",
+        "verified": False,
+        "score_count": 1,
+        "error_type": "TimeoutError",
+    }
+
+
 def test_adaptive_model_eval_dataset_scores_tool_mission_grounding_and_recommendations():
     dataset = json.loads(Path(DATASET).read_text(encoding="utf-8"))
-    assert dataset["version"] == "adaptive-model-cases-v2"
+    assert dataset["version"] == "adaptive-model-cases-v3"
     assert {item["task_type"] for item in dataset["cases"]} == {
         "PRODUCT_SEARCH",
         "PRODUCT_ADVICE",
         "PRODUCT_COMPARE",
     }
-    assert len(dataset["cases"]) == 6
+    assert len(dataset["cases"]) == 10
     mission_case = next(item for item in dataset["cases"] if item.get("mission_expectations"))
 
     perfect = _case_score(mission_case, True, True, True, False, False)
@@ -52,6 +109,20 @@ def test_adaptive_model_eval_dataset_scores_tool_mission_grounding_and_recommend
     )
 
 
+def test_benchmark_repeats_all_cases_in_stable_order_without_mutating_dataset():
+    cases = [{"id": "search"}, {"id": "mission"}]
+
+    repeated = _repeat_cases(cases, 2)
+
+    assert [(case["id"], case["repeat_index"]) for case in repeated] == [
+        ("search", 1),
+        ("mission", 1),
+        ("search", 2),
+        ("mission", 2),
+    ]
+    assert cases == [{"id": "search"}, {"id": "mission"}]
+
+
 def test_mission_eval_checks_soft_preference_fields_as_well_as_use_cases():
     case = {
         "mission_expectations": ["student"],
@@ -64,6 +135,36 @@ def test_mission_eval_checks_soft_preference_fields_as_well_as_use_cases():
 
     assert _mission_expectation_result(case, complete)[0]
     assert not _mission_expectation_result(case, missing_soft_preference)[0]
+
+
+def test_mission_eval_respects_explicitly_forbidden_use_cases():
+    case = {
+        "mission_expectations": ["software_development", "office"],
+        "mission_forbidden_use_cases": ["gaming"],
+    }
+    from src.services.assistant_tools import UnderstandMissionArgs
+
+    correct = UnderstandMissionArgs(desired_use_cases=["software_development", "office"])
+    contradictory = UnderstandMissionArgs(
+        desired_use_cases=["software_development", "office", "gaming"]
+    )
+
+    assert _mission_expectation_result(case, correct)[0]
+    result = _mission_expectation_result(case, contradictory)
+    assert not result[0]
+    assert result[2]["forbidden_use_cases"] == {"gaming": False}
+
+
+def test_recommendation_quality_requires_expected_rank_order_and_all_candidates():
+    expected = ["Benchmark Atlas Pro", "Benchmark Cedar Air"]
+
+    assert _recommendation_order_correct(
+        "Benchmark Atlas Pro is the top fit; Benchmark Cedar Air costs less.", expected
+    )
+    assert not _recommendation_order_correct(
+        "Benchmark Cedar Air costs less; Benchmark Atlas Pro is the top fit.", expected
+    )
+    assert not _recommendation_order_correct("Benchmark Atlas Pro is the top fit.", expected)
 
 
 def test_adaptive_model_quality_gate_requires_perfect_objective_cases_and_reliability():
